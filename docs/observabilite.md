@@ -157,6 +157,18 @@ Changer `VITE_SENTRY_DSN` sans rebuild front = SDK absent du bundle.
 
 `SENTRY_AUTH_TOKEN` : uniquement au **build** front (source maps). Jamais dans `.env` (`env_file` l’injecterait au backend). Sans token, le build réussit ; les `.map` sont supprimés ; la stack front reste minifiée.
 
+Le bundle et l’upload utilisent **le même** nom (`VITE_SENTRY_RELEASE`, sinon `SENTRY_RELEASE`, sinon le SHA git court). Sans ce nom commun, les maps partent sur une release que le navigateur n’envoie pas.
+
+Vérifier en local (pas de route `/sentry-test`) :
+
+```bash
+cd frontend
+SENTRY_AUTH_TOKEN='…' npm run build
+```
+
+Le log doit afficher `[sentry] release=<sha ou nom> upload=oui`, puis les `.map` disparaissent de `dist/`. Dans Sentry, la release du même nom a des artifacts. Un event capturé par ce build doit montrer `src/…` et pas seulement `assets/main.js`. Sans token : `upload=non`, le build passe, les maps ne sont pas envoyées.
+
+
 ### 3. Smoke sans route de test
 
 SDK SPA seulement : `/`, `/login`, `/app/*` — pas `/confidentialite` ni `/faq`.

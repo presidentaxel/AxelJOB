@@ -129,7 +129,7 @@ Sentry (apres DSN colles, [AXE-371](https://linear.app/axel-project/issue/AXE-37
 - [ ] Alerte email high-priority active sur `axel-job-frontend` et `axel-job-backend`.
 - [ ] Alerte email tag `flow=billing` active sur `axel-job-backend` (events warning AXE-370).
 - [ ] Aucun contenu de CV / e-mail dans l'issue ouverte ; `user` = UUID ou absent.
-- [ ] Source maps : stack front lisible seulement si `SENTRY_AUTH_TOKEN` etait present au **build** (jamais dans `.env`).
+- [ ] Source maps : stack front lisible seulement si `SENTRY_AUTH_TOKEN` etait present au **build** (jamais dans `.env`). Le nom de release du bundle et de l'upload est le meme (`VITE_SENTRY_RELEASE`, sinon `SENTRY_RELEASE`, sinon SHA git).
 
 Pour les commandes d'exploitation quotidiennes, voir `docs/ops-commands.md`.
 
