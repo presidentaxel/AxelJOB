@@ -11,6 +11,7 @@ import {
 import { buildOnboardingImportPersist } from '../lib/onboardingImportPersist.js';
 import '../styles/OnboardingWizard.css';
 import CvImportLoadingOverlay from './CvImportLoadingOverlay.jsx';
+import Button from './ui/Button.jsx';
 
 const STEPS = ['Importer', 'Vérifier', 'C\'est parti'];
 
@@ -224,15 +225,17 @@ export default function OnboardingWizard({
                   disabled={loading}
                   {...analyticsAttrs('onboarding-paste-input-text', 'paste', 'tertiary', 'input')}
                 />
-                <button
+                <Button
                   type="button"
-                  className="button button-primary onb-btn-parse"
+                  variant="primary"
+                  className="onb-btn-parse"
                   onClick={handleTextImport}
                   disabled={loading || !cvText.trim()}
+                  loading={loading && method === 'text'}
                   {...analyticsAttrs('onboarding-paste-cta-parse', 'paste', 'secondary', 'cta')}
                 >
                   {loading && method === 'text' ? 'Analyse en cours…' : 'Analyser mon CV'}
-                </button>
+                </Button>
               </details>
             </div>
 
@@ -316,9 +319,9 @@ export default function OnboardingWizard({
             </div>
 
             <div className="onb-actions">
-              <button type="button" className="button button-primary" onClick={handleConfirmProfile} disabled={loading} {...analyticsAttrs('onboarding-review-cta-confirm', 'review', 'primary', 'cta')}>
+              <Button type="button" variant="primary" onClick={handleConfirmProfile} disabled={loading} loading={loading} {...analyticsAttrs('onboarding-review-cta-confirm', 'review', 'primary', 'cta')}>
                 {loading ? 'Sauvegarde…' : 'On continue'}
-              </button>
+              </Button>
             </div>
           </div>
         )}
@@ -336,12 +339,12 @@ export default function OnboardingWizard({
               Colle une annonce et l'IA fera le reste.
             </p>
             <div className="onb-actions">
-              <button type="button" className="button button-primary button--lg" onClick={handleLaunch} {...analyticsAttrs('onboarding-done-cta-launch', 'done', 'primary', 'cta')}>
+              <Button type="button" variant="primary" size="lg" onClick={handleLaunch} {...analyticsAttrs('onboarding-done-cta-launch', 'done', 'primary', 'cta')}>
                 Créer mon CV adapté
-              </button>
-              <button type="button" className="button ds-button ds-button--link onb-actions__link" onClick={handleGoToProfile} {...analyticsAttrs('onboarding-done-cta-profil', 'done', 'secondary', 'cta')}>
+              </Button>
+              <Button type="button" variant="link" className="onb-actions__link" onClick={handleGoToProfile} {...analyticsAttrs('onboarding-done-cta-profil', 'done', 'secondary', 'cta')}>
                 Compléter mon profil d&apos;abord
-              </button>
+              </Button>
             </div>
           </div>
         )}

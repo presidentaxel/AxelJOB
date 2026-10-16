@@ -1021,7 +1021,8 @@ export default function FreeCanvasBlock({
   const autoHeight = validBlock
     && isAutoHeightBlockType(type)
     && !blockStyle?.lock_geometry
-    && !blockStyle?.nowrap;
+    && !blockStyle?.nowrap
+    && !blockStyle?.lock_height;
 
   const reportHeight = useCallback((newHmm) => {
     if (!autoHeight || typeof onBlockAutoHeight !== 'function' || !id) return;
@@ -1174,6 +1175,7 @@ export default function FreeCanvasBlock({
           editing ? 'free-canvas-block__inner--editing' : '',
           autoHeight ? 'free-canvas-block__inner--content-fit' : '',
           supportsBlockEffects ? 'free-canvas-block__inner--shape-effects' : '',
+          (type === 'title' || blockStyle?.role === 'heading') ? 'free-canvas-block__inner--heading' : '',
         ].filter(Boolean).join(' ')}
         style={innerTypography}
         onPointerDown={editing ? handleInnerPointerDown : undefined}

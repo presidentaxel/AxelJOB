@@ -166,4 +166,4 @@ def test_requirements_pin_sentry_sdk() -> None:
     from pathlib import Path
 
     text = Path("backend/requirements.txt").read_text(encoding="utf-8")
-    assert "sentry-sdk[fastapi]==2.68.1" in text
+    assert "sentry-sdk[fastapi]==2.71.0" in text
