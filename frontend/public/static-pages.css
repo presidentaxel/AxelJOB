@@ -168,7 +168,7 @@ a.content-source:hover {
 .content-cta .button,
 .content-cta .btn { display: inline-flex; align-items: center; padding: 0.75rem 1.5rem; font-size: 1rem; font-weight: 600; background: var(--bg); color: var(--text); border: none; border-radius: var(--radius); cursor: pointer; text-decoration: none; }
 .content-cta .button:hover,
-.content-cta .btn:hover { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(0,0,0,0.2); }
+.content-cta .btn:hover { background: var(--bg); color: var(--text); transform: translateY(-1px); box-shadow: 0 4px 14px rgba(0,0,0,0.2); }
 
 .content-footer { padding: 1.5rem; background: var(--bg-page); border-top: 1px solid var(--border); }
 .content-footer-copy { margin: 0 0 1rem; text-align: center; font-size: 0.875rem; color: var(--muted); max-width: 900px; margin-left: auto; margin-right: auto; }

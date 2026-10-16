@@ -329,7 +329,10 @@ a.content-source:hover {
 }
 
 .content-cta .ds-button:hover:not(:disabled),
+.content-cta .ds-button:active:not(:disabled),
 .content-cta .btn:hover:not(:disabled) {
+  background: var(--bg);
+  color: var(--text);
   transform: translateY(-1px);
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2);
 }
