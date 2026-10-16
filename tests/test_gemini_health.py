@@ -95,6 +95,34 @@ def test_staying_down_does_not_alert_again(monkeypatch) -> None:
     assert take_gemini_down_alert() is None
 
 
+def test_dev_simulation_alerts_once_and_skips_the_network(monkeypatch) -> None:
+    monkeypatch.setattr("backend.config.IS_PRODUCTION", False)
+    monkeypatch.setenv("GEMINI_HEALTH_SIMULATE", "billing_prepay")
+    called = {"n": 0}
+
+    def generate() -> None:
+        called["n"] += 1
+
+    down = probe_gemini(force=True, generate=generate)
+    assert called["n"] == 0
+    assert down["status"] == "down"
+    assert down["reason"] == "billing_prepay"
+    assert "Simulation dev" in down["detail"]
+    alert = take_gemini_down_alert()
+    assert alert is not None and "billing_prepay" in alert
+    probe_gemini(force=True, generate=generate)
+    assert take_gemini_down_alert() is None
+
+
+def test_simulation_is_ignored_in_production(monkeypatch) -> None:
+    monkeypatch.setattr("backend.config.IS_PRODUCTION", True)
+    monkeypatch.setenv("GEMINI_HEALTH_SIMULATE", "billing_prepay")
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+    snap = probe_gemini(force=True, generate=lambda: None)
+    assert snap["status"] == "ok"
+    assert take_gemini_down_alert() is None
+
+
 def test_snapshot_includes_cached_probe(monkeypatch) -> None:
     monkeypatch.setenv("GEMINI_API_KEY", "test-key")
     monkeypatch.delenv("AI_FEATURES_ENABLED", raising=False)
