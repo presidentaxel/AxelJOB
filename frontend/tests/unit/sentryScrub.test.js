@@ -65,6 +65,8 @@ test('vite plugin + pas de MODE + maps supprimées Dockerfile / nginx', async ()
   assert.equal(sentry.includes('import.meta.env.MODE'), false);
   assert.match(sentry, /VITE_SENTRY_ENVIRONMENT/);
   assert.match(sentry, /replaysSessionSampleRate: 0/);
+  assert.match(vite, /resolveSentryReleaseName/);
+  assert.match(vite, /import\.meta\.env\.VITE_SENTRY_RELEASE/);
   assert.match(docker, /SENTRY_AUTH_TOKEN/);
   assert.match(docker, /find \/app\/dist -name '\*\.map' -delete/);
   assert.equal(/ENV SENTRY_AUTH_TOKEN/.test(docker.split('FROM nginx')[1] || ''), false);
