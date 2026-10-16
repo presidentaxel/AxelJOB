@@ -1495,11 +1495,21 @@ def _parse_cv_text_with_ai(text: str, user_id: str | None = None) -> dict:
         try:
             r = client.models.generate_content(model=model_id, contents=prompt, config=cfg)
         except Exception as exc:
-            logger.warning("_parse_cv_text_with_ai: %s tentative %d: %s", model_id, attempt, exc)
+            from backend.gemini_health import gemini_failure_detail, scrub_gemini_text
+
+            logger.warning(
+                "_parse_cv_text_with_ai: %s tentative %d: %s",
+                model_id,
+                attempt,
+                scrub_gemini_text(str(exc)),
+            )
             if attempt < len(models_to_try) - 1:
                 time.sleep(0.5)
                 continue
-            raise HTTPException(status_code=502, detail="Erreur Gemini lors de l'import.")
+            raise HTTPException(
+                status_code=502,
+                detail=gemini_failure_detail(exc, "Erreur Gemini lors de l'import."),
+            )
         if r and getattr(r, "text", None):
             break
         logger.warning(
