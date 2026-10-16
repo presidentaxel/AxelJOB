@@ -67,13 +67,13 @@ Un seul `primary` par zone.
 
 Pas de variant `outline` : le markup CSS `.button-pill-outline` reste un **alias de `secondary`**, pas une clé JS.
 
-## Alias CSS legacy — critère de suppression
+## Alias CSS legacy
 
-`buttonClassName` pose encore `button` + `button-primary` (ou l’équivalent variant) **en plus** des classes `ds-*`. Sans date de sortie, le double système devient permanent.
+`buttonClassName` ne pose plus `button` ni `button-primary`. Le markup React est `ds-button ds-button--*`.
 
-Les alias sont retirés de `buttonClassName` (et les sélecteurs `.button-primary` / `.button-pill-outline` de `buttons.css`) quand **plus aucune occurrence de `.button-primary` ne subsiste dans `frontend/src/`**, hors le helper lui-même et les sélecteurs d’alias dans `frontend/src/styles/app/buttons.css`.
+`frontend/src/styles/ds-legacy-aliases.css` ne contient pas de sélecteurs de bouton : il mappe encore les variables `--color-*` et `--radius-*` vers `--ds-*`. Ne plus y ajouter de hex.
 
-Jusque-là : ne plus ajouter de markup `button-primary` ; passer par `<Button>` ou `buttonClassName()`.
+Les pages statiques (`frontend/public/*.html`, premier HTML de `index.html`) gardent `class="button button-primary"` avec leur CSS dédié (`landing-static.css`, `static-pages.css`). Ce n’est pas le helper React.
 
 ## Input
 

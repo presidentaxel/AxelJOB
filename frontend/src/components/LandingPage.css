@@ -140,13 +140,13 @@
   color: inherit;
 }
 
-.landing-mobile-cta.button {
+.landing-mobile-cta.ds-button {
   padding: 0.4rem 0.85rem;
   font-size: 0.8rem;
 }
 
 @media (min-width: 1024px) {
-  .landing-mobile-cta.button {
+  .landing-mobile-cta.ds-button {
     display: none;
   }
 }
@@ -316,7 +316,7 @@
   padding-top: 0.5rem;
 }
 
-.landing-nav-drawer-cta .button {
+.landing-nav-drawer-cta .ds-button {
   width: 100%;
   justify-content: center;
 }
@@ -365,7 +365,7 @@
   color: var(--color-body-muted);
 }
 
-/* CTA hero = button-primary pill avec ombre légère */
+/* CTA hero : pill avec ombre légère */
 .landing-cta-hero {
   padding: 0.875rem 1.75rem;
   font-size: 1rem;
@@ -711,12 +711,12 @@
 }
 
 /* Boutons sur fond aubergine → blanc inverted */
-.landing-cta-bottom .button-primary {
+.landing-cta-bottom .ds-button--primary {
   background: var(--color-on-primary);
   color: var(--color-primary);
 }
 
-.landing-cta-bottom .button-primary:hover:not(:disabled) {
+.landing-cta-bottom .ds-button--primary:hover:not(:disabled) {
   background: var(--color-canvas-lavender);
 }
 
@@ -772,12 +772,12 @@
 }
 
 /* Bouton CTA dans la card Pro aubergine */
-.pricing-card--pro .button-primary {
+.pricing-card--pro .ds-button--primary {
   background: var(--color-on-primary);
   color: var(--color-primary);
 }
 
-.pricing-card--pro .button-primary:hover:not(:disabled) {
+.pricing-card--pro .ds-button--primary:hover:not(:disabled) {
   background: var(--color-canvas-lavender);
 }
 
