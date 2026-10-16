@@ -171,28 +171,29 @@ export async function apiPostStream(path, body, { onMessage, signal } = {}) {
     for (const raw of lines) {
       const line = raw.trim();
       if (!line) continue;
-      try {
-        const parsed = JSON.parse(line);
-        if (onMessage) {
-          onMessage(parsed);
-          await _yieldForStreamUi(parsed);
-        }
-      } catch {
-        // ignore malformed stream line
+      const parsed = _parseStreamLine(line);
+      if (!parsed) continue;
+      if (onMessage) {
+        onMessage(parsed);
+        await _yieldForStreamUi(parsed);
       }
     }
   }
   const tail = (buffer || '').trim();
   if (tail) {
-    try {
-      const parsed = JSON.parse(tail);
-      if (onMessage) {
-        onMessage(parsed);
-        await _yieldForStreamUi(parsed);
-      }
-    } catch {
-      // ignore malformed trailing line
+    const parsed = _parseStreamLine(tail);
+    if (parsed && onMessage) {
+      onMessage(parsed);
+      await _yieldForStreamUi(parsed);
     }
+  }
+}
+
+function _parseStreamLine(line) {
+  try {
+    return JSON.parse(line);
+  } catch {
+    return null;
   }
 }
 
