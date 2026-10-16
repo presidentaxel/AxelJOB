@@ -73,7 +73,7 @@ Contrat : `docs/design-system.md`. Tokens : `frontend/src/design/tokens.json` (`
 - Un composant ne reference jamais un hex ni une primitive (`color.neutral.900`).
 - CTA : `<Button variant="primary" size="md" />` → `ds-button ds-button--primary ds-button--md`.
 - Champs : `<Input invalid />` + `.ds-field-error`.
-- Alias transitoires `button button-primary` encore acceptes. Pas de `btn btn-primary`.
+- Pas d'alias `button button-primary` sur un CTA React. Pas de `btn btn-primary`.
 - Controles metier (`btn-add`, `btn-icon`) hors contrat.
 
 ---

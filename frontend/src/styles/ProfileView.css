@@ -65,7 +65,6 @@
   .profile-header-actions {
     flex-direction: column;
   }
-  .profile-header-actions .button,
   .profile-header-actions .ds-button,
   .profile-header-actions .btn,
   .profile-header-actions .btn-import-cv {
@@ -1027,7 +1026,7 @@
   gap: 0.65rem;
 }
 
-.import-merge-actions .button-primary {
+.import-merge-actions .ds-button--primary {
   min-width: 9rem;
 }
 
