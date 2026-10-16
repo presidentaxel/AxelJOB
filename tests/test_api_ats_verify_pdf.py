@@ -138,7 +138,7 @@ class TestHandleVerifyPdfGenerate(unittest.TestCase):
     def test_generates_pdf_from_free_canvas_layout(self):
         try:
             import weasyprint  # noqa: F401
-        except ImportError:
+        except (ImportError, OSError):
             self.skipTest("WeasyPrint indisponible")
         body = VerifyPdfBody(cv=_cv(), layout=_starter_layout())
         payload = handle_verify_pdf(body)
