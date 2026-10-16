@@ -190,12 +190,10 @@ print('flushed')
 
 ```javascript
 (function () {
-  const c = window.__SENTRY__;
-  if (!c) { console.warn('Sentry absent (DSN vide ou page statique)'); return; }
-  const client = (typeof c.getClient === 'function' && c.getClient())
-    || c.defaultClient
-    || (c.hub && c.hub.getClient && c.hub.getClient());
-  if (!client) { console.warn('Client introuvable — ne plus tester .hub seul (SDK v10)'); return; }
+  const root = window.__SENTRY__;
+  const carrier = root && root.version && root[root.version];
+  const client = carrier && carrier.acs && carrier.acs.getClient && carrier.acs.getClient();
+  if (!client) { console.warn('Sentry absent (DSN vide ou page statique)'); return; }
   const opts = client.getOptions ? client.getOptions() : {};
   console.log('Sentry OK', { env: opts.environment, release: opts.release });
   client.captureMessage('AXE-371 recette smoke frontend', 'error');
