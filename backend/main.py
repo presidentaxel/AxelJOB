@@ -63,6 +63,7 @@ from backend.config import (
 )
 from backend.cv_html_render import render_cv_html as _render_cv_html
 from backend.rate_limit import check_rate_limit, rate_limit_max_adapt
+from backend.services.support_ticket import support_ticket_failure_detail
 from backend.template_registry import DEFAULT_TEMPLATE_ID
 
 _thread_pool = ThreadPoolExecutor(max_workers=thread_pool_max_workers())
@@ -2382,10 +2383,10 @@ class SupportTicketBody(BaseModel):
 
 def _send_support_ticket_email(
     to_support: str, user_email: str, subject: str, message: str
-) -> bool:
-    """Envoie un email au support avec le ticket (Reply-To: user_email pour répondre par mail)."""
+) -> str | None:
+    """Envoie le ticket. None si envoyé, sinon le message à montrer à l'utilisateur."""
     if not RESEND_API_KEY or not to_support:
-        return False
+        return support_ticket_failure_detail(None, production=IS_PRODUCTION)
     try:
         import resend
 
@@ -2461,10 +2462,10 @@ def _send_support_ticket_email(
         }
         resend.Emails.send(params)
         logger.info("Support ticket email sent to %s from %s", to_support, user_email)
-        return True
+        return None
     except Exception as e:
         logger.exception("Resend support ticket email failed: %s", e)
-        return False
+        return support_ticket_failure_detail(e, production=IS_PRODUCTION)
 
 
 @app.post("/api/support-ticket")
@@ -2489,11 +2490,9 @@ def api_support_ticket(request: Request, body: SupportTicketBody):
         raise HTTPException(status_code=400, detail="Message trop long.")
     if not SUPPORT_EMAIL:
         raise HTTPException(status_code=503, detail="Support non configuré (SUPPORT_EMAIL).")
-    if not _send_support_ticket_email(SUPPORT_EMAIL, user_email, subject, message):
-        raise HTTPException(
-            status_code=503,
-            detail="Envoi du ticket impossible. Réessaie ou contacte-nous par email.",
-        )
+    send_error = _send_support_ticket_email(SUPPORT_EMAIL, user_email, subject, message)
+    if send_error:
+        raise HTTPException(status_code=503, detail=send_error)
     return {"ok": True, "email": user_email}
 
 
