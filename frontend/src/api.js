@@ -10,6 +10,7 @@ import {
   saveBlobWithPreferredMethod,
   triggerBlobDownload,
 } from './lib/blobDownload.js';
+import { httpDetailMessage } from './lib/httpDetailMessage.js';
 
 export {
   closePreopenedDownloadWindow,
@@ -64,9 +65,7 @@ async function parseErrorResponse(r) {
   try {
     data = JSON.parse(text);
     const detail = data?.detail;
-    msg = Array.isArray(detail)
-      ? (detail[0]?.msg || JSON.stringify(detail))
-      : (detail || data?.error || msg);
+    msg = httpDetailMessage(detail, data?.error || msg);
   } catch {
     if (text?.trim()) msg = text.trim();
   }
@@ -90,7 +89,7 @@ export async function apiGet(path) {
     let data = null;
     try {
       data = JSON.parse(text);
-      msg = data.detail || data.error || msg;
+      msg = httpDetailMessage(data.detail, data.error || msg);
     } catch {
       /* body not JSON */
     }

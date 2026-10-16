@@ -493,9 +493,20 @@ def tick_system_and_db() -> None:
         DB_LATENCY_MS.set(ms)
 
 
+def _dispatch_gemini_down_alert() -> None:
+    from backend.gemini_health import take_gemini_down_alert
+
+    message = take_gemini_down_alert()
+    if not message or not _alert_can_send("gemini_down"):
+        return
+    _send_alert_email("[AxeL Job] Gemini indisponible", message)
+    _append_alert_log("gemini_down", message)
+
+
 def evaluate_alerts() -> None:
     if not MONITORING_ALERT_ENABLED:
         return
+    _dispatch_gemini_down_alert()
 
     now = time.time()
     win = max(30.0, float(MONITORING_ALERT_5XX_WINDOW_SEC))
@@ -772,6 +783,31 @@ def recent_error_summary(window_sec: float = 300.0) -> dict[str, Any]:
     }
 
 
+def _gemini_health_for_snapshot() -> dict[str, Any]:
+    try:
+        from backend.gemini_health import probe_gemini
+
+        return probe_gemini()
+    except Exception:
+        logger.exception("gemini health snapshot skipped")
+        return {
+            "status": "down",
+            "reason": "unknown",
+            "detail": "Sonde indisponible.",
+            "checked_at": None,
+            "model": "",
+        }
+
+
+def _probe_gemini_quietly() -> None:
+    try:
+        from backend.gemini_health import probe_gemini
+
+        probe_gemini()
+    except Exception:
+        logger.exception("gemini health probe skipped")
+
+
 def get_admin_snapshot() -> dict[str, Any]:
     with _lock:
         active = len(_active_sub_last_seen)
@@ -823,6 +859,7 @@ def get_admin_snapshot() -> dict[str, Any]:
             "latency_ms": _last_db_check.get("ms"),
             "last_check_ts": _last_db_check.get("ts"),
         },
+        "gemini_health": _gemini_health_for_snapshot(),
         "http_since_process_start": {
             "top_routes": top_routes(35),
             "last_5m": recent_error_summary(300),
@@ -854,6 +891,7 @@ async def monitoring_ticker_loop() -> None:
     while True:
         try:
             tick_system_and_db()
+            _probe_gemini_quietly()
             evaluate_alerts()
             await asyncio.sleep(45)
         except asyncio.CancelledError:
