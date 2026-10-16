@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import Button from '../ui/Button.jsx';
 
 import {
   apiGet,
@@ -2042,13 +2043,13 @@ function CvEditorBeta({
         <div className="cv-editor-beta-load-error-card">
           <h2 id="cv-beta-load-err-title">Profil inaccessible</h2>
           <p>{profileLoadError}</p>
-          <button
+          <Button
             type="button"
-            className="button button-primary"
+            variant="primary"
             onClick={() => setProfileLoadAttempt((k) => k + 1)}
           >
             Réessayer
-          </button>
+          </Button>
         </div>
       </div>
     );
