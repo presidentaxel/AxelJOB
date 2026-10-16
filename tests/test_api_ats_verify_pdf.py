@@ -137,18 +137,23 @@ class TestHandleVerifyPdf(unittest.TestCase):
 def _weasyprint_can_render() -> bool:
     try:
         import weasyprint  # noqa: F401
+    except ImportError:
+        return False
+    except OSError:
+        return False
 
-        from backend.services.generator import generer_pdf_bytes_from_html
+    from backend.services.generator import generer_pdf_bytes_from_html
 
+    try:
         generer_pdf_bytes_from_html(
             "<html><body><p>ping</p></body></html>",
             Path(__file__).resolve().parents[1],
             {},
             {},
         )
-        return True
-    except Exception:
+    except (ImportError, OSError):
         return False
+    return True
 
 
 class TestHandleVerifyPdfGenerate(unittest.TestCase):

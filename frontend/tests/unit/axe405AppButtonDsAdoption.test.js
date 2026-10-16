@@ -11,8 +11,14 @@ import { fileURLToPath } from 'node:url';
 const FRONTEND_ROOT = fileURLToPath(new URL('../..', import.meta.url));
 const SRC = path.join(FRONTEND_ROOT, 'src');
 
-const LEGACY_BUTTON_CLASS_RE =
-  /(?:className|class)\s*=\s*(?:["'`][^"'`]*|\{\s*["'`][^"'`]*)\bbutton-(?:primary|secondary|tertiary|ghost|success)\b/;
+const LEGACY_VARIANTS = 'primary|secondary|tertiary|ghost|link|danger|success';
+const LEGACY_BUTTON_CLASS_RE = new RegExp(
+  String.raw`\bbutton-(?:${LEGACY_VARIANTS})\b`,
+);
+const CLASSNAME_ATTR_RE = new RegExp(
+  String.raw`className\s*=\s*(?:"(?:\\.|[^"])*"|'(?:\\.|[^'])*'|\`(?:\\.|[^\`])*\`|\{\s*(?:"(?:\\.|[^"])*"|'(?:\\.|[^'])*'|\`(?:\\.|[^\`])*\`)\s*\})`,
+  'gs',
+);
 
 const SKIP = new Set([
   path.join(SRC, 'lib', 'buttonClassName.js'),
@@ -38,11 +44,12 @@ test('frontend/src n’a plus de className button button-* hors helper', async (
     if (SKIP.has(file)) continue;
     const text = await readFile(file, 'utf8');
     const rel = path.relative(SRC, file);
-    text.split('\n').forEach((line, idx) => {
-      if (LEGACY_BUTTON_CLASS_RE.test(line)) {
-        offenders.push(`${rel}:${idx + 1}:${line.trim()}`);
+    for (const match of text.matchAll(CLASSNAME_ATTR_RE)) {
+      if (LEGACY_BUTTON_CLASS_RE.test(match[0])) {
+        const line = text.slice(0, match.index).split('\n').length;
+        offenders.push(`${rel}:${line}:${match[0].replace(/\s+/g, ' ').trim()}`);
       }
-    });
+    }
   }
   assert.deepEqual(offenders, []);
 });
