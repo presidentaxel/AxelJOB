@@ -192,7 +192,7 @@ print('flushed')
 (function () {
   const root = window.__SENTRY__;
   const carrier = root && root.version && root[root.version];
-  const client = carrier && carrier.acs && carrier.acs.getClient && carrier.acs.getClient();
+  const client = carrier && carrier.defaultCurrentScope && carrier.defaultCurrentScope.getClient();
   if (!client) { console.warn('Sentry absent (DSN vide ou page statique)'); return; }
   const opts = client.getOptions ? client.getOptions() : {};
   console.log('Sentry OK', { env: opts.environment, release: opts.release });
