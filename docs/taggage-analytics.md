@@ -455,7 +455,7 @@ Attributs HTML types :
 
 ```html
 <a href="/login"
-   class="button button-primary"
+   class="ds-button ds-button--primary ds-button--md"
    data-attr="home-hero-cta-signup"
    data-track="cta"
    data-zone="hero"
