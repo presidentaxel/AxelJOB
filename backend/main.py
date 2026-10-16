@@ -51,6 +51,7 @@ from backend.config import (
     STRIPE_SECRET_KEY,
     STRIPE_WEBHOOK_SECRET,
     SUPPORT_ADMIN_EMAILS,
+    SUPPORT_ADMIN_USER_IDS,
     SUPPORT_EMAIL,
     USE_SUPABASE,
     USE_SUPABASE_PG,
@@ -2506,8 +2507,11 @@ def api_support_ticket(request: Request, body: SupportTicketBody):
     return {"ok": True, "email": user_email}
 
 
-def _is_support_admin(email: str | None) -> bool:
-    """True si l'email fait partie des admins support (réponses via l'app)."""
+def _is_support_admin(email: str | None, user_id: str | None = None) -> bool:
+    """True si l'email, ou l'UID en dev, fait partie des admins support."""
+    uid = (user_id or "").strip()
+    if uid and uid in SUPPORT_ADMIN_USER_IDS and not IS_PRODUCTION:
+        return True
     if not email:
         return False
     e = email.strip().lower()
@@ -2517,9 +2521,9 @@ def _is_support_admin(email: str | None) -> bool:
 
 
 def _require_support_admin(request: Request) -> None:
-    """JWT valide + email dans SUPPORT_ADMIN_EMAILS ou égal à SUPPORT_EMAIL."""
-    _require_user_id(request)
-    if not _is_support_admin(_get_user_email_from_jwt(request)):
+    """JWT valide + email admin, ou UID listé hors production."""
+    user_id = _require_user_id(request)
+    if not _is_support_admin(_get_user_email_from_jwt(request), user_id):
         raise HTTPException(status_code=403, detail="Accès réservé aux administrateurs.")
 
 
@@ -2591,9 +2595,9 @@ class SupportReplyBody(BaseModel):
 @app.post("/api/support-reply")
 def api_support_reply(request: Request, body: SupportReplyBody):
     """Envoie une réponse support à un utilisateur (template HTML). Réservé aux admins support (SUPPORT_ADMIN_EMAILS ou SUPPORT_EMAIL)."""
-    _require_user_id(request)
+    user_id = _require_user_id(request)
     user_email = _get_user_email_from_jwt(request)
-    if not _is_support_admin(user_email):
+    if not _is_support_admin(user_email, user_id):
         raise HTTPException(status_code=403, detail="Accès réservé au support.")
     to_email = (body.to_email or "").strip()
     message = (body.message or "").strip()
@@ -2646,7 +2650,7 @@ def api_usage(request: Request):
         adaptations_limit = FREE_ADAPTATIONS_LIMIT
     applications_limit = 999999 if (plan == "pro" or no_paywall) else FREE_APPLICATIONS_LIMIT
     user_email = _get_user_email_from_jwt(request)
-    is_support = _is_support_admin(user_email)
+    is_support = _is_support_admin(user_email, user_id)
     stripe_subscription = None
     if user_id and STRIPE_SECRET_KEY and plan == "pro" and not no_paywall:
         try:
