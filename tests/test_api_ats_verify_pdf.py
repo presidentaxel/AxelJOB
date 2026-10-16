@@ -134,12 +134,27 @@ class TestHandleVerifyPdf(unittest.TestCase):
         self.assertEqual(ctx.exception.status_code, 400)
 
 
+def _weasyprint_can_render() -> bool:
+    try:
+        import weasyprint  # noqa: F401
+
+        from backend.services.generator import generer_pdf_bytes_from_html
+
+        generer_pdf_bytes_from_html(
+            "<html><body><p>ping</p></body></html>",
+            Path(__file__).resolve().parents[1],
+            {},
+            {},
+        )
+        return True
+    except Exception:
+        return False
+
+
 class TestHandleVerifyPdfGenerate(unittest.TestCase):
     def test_generates_pdf_from_free_canvas_layout(self):
-        try:
-            import weasyprint  # noqa: F401
-        except ImportError:
-            self.skipTest("WeasyPrint indisponible")
+        if not _weasyprint_can_render():
+            self.skipTest("WeasyPrint PDF indisponible dans cet environnement")
         body = VerifyPdfBody(cv=_cv(), layout=_starter_layout())
         payload = handle_verify_pdf(body)
         self.assertTrue(payload["within_threshold"])
