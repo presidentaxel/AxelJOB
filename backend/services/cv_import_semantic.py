@@ -476,26 +476,26 @@ def annotate_structural_blocks(
 
             if hit is None:
                 conf = 0.0
-                bind: list[str] = []
+                contact_bind: list[str] = []
                 if _EMAIL_RE.search(text) or (email and email in text.lower()):
                     conf += 0.8
-                    bind.append("email")
+                    contact_bind.append("email")
                 if _PHONE_RE.search(text):
                     conf += 0.8
-                    bind.append("telephone")
+                    contact_bind.append("telephone")
                 ville = (cv.get("ville") or "").strip().lower()
                 if ville and len(ville) >= 3 and ville in text.lower():
-                    bind.append("ville")
+                    contact_bind.append("ville")
                 linkedin = (cv.get("linkedin") or "").strip().lower()
                 if linkedin and len(linkedin) >= 6 and linkedin in text.lower():
-                    bind.append("linkedin")
-                if conf >= min_confidence and bind:
+                    contact_bind.append("linkedin")
+                if conf >= min_confidence and contact_bind:
                     hit = {
                         "block_id": bid,
                         "type": "contact",
                         "kind": "contact",
                         "confidence": min(1.0, conf),
-                        "bind": bind,
+                        "bind": contact_bind,
                     }
 
             if hit and float(hit.get("confidence") or 0) >= min_confidence:
