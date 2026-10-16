@@ -259,7 +259,6 @@ Une alerte email part **une fois** quand le statut passe de `ok` à `down` pour 
 | `GEMINI_HEALTH_INTERVAL_SEC` | Intervalle minimum entre deux sondes (plancher 60 s, défaut 600). |
 | `AI_FEATURES_ENABLED` | Vide ou absent = IA active. `0` = pas d’appel, statut `dégradé` / `disabled`. |
 | `MONITORING_ALERT_ENABLED` | `1` pour envoyer l’email ok → down. |
-| `GEMINI_HEALTH_SIMULATE` | Hors production : `billing_prepay`, `auth` ou `quota`. Force la carte en down et une seule alerte, sans appel Gemini. Retirer la variable et redémarrer l’API pour revenir au vrai statut. |
 
 Après un rechargement Prepay dans AI Studio : ouvrir `/app/monitoring` et attendre la prochaine sonde (ou redémarrer l’API, la première sonde part au premier snapshot). Le statut doit revenir à **OK**. Un import CV qui échoue encore renvoie un 502 dont `detail.reason` vaut `billing_prepay`, `auth`, `quota`, `model` ou `unknown`, et `detail.message` reste « Erreur Gemini lors de l'import. »
 

@@ -16,11 +16,6 @@ from backend.config import GEMINI_MODEL_DEFAULT
 
 _KEY_RE = re.compile(r"AIza[0-9A-Za-z\-_]{8,}")
 _ALERT_REASONS = frozenset({"billing_prepay", "auth", "quota"})
-_SIM_DETAILS = {
-    "billing_prepay": "Simulation dev : crédit Prepay à zéro.",
-    "auth": "Simulation dev : clé refusée.",
-    "quota": "Simulation dev : quota dépassé.",
-}
 _lock = threading.Lock()
 _state: dict[str, Any] = {
     "status": "degraded",
@@ -107,9 +102,6 @@ def probe_gemini(
         return gemini_health_snapshot()
 
     moment = time.time() if now is None else now
-    simulated = _apply_dev_simulation(moment)
-    if simulated is not None:
-        return simulated
     if not _ai_features_enabled():
         return _store("degraded", "disabled", "AI_FEATURES_ENABLED=0", moment)
     if not os.environ.get("GEMINI_API_KEY", "").strip():
@@ -126,31 +118,6 @@ def probe_gemini(
         detail = scrub_gemini_text(str(exc)) or reason
         return _store("down", reason, detail, moment)
     return _store("ok", "ok", "Sonde generate_content réussie.", moment)
-
-
-def _dev_simulate_reason() -> str | None:
-    """Hors production uniquement. GEMINI_HEALTH_SIMULATE=billing_prepay|auth|quota."""
-    from backend.config import IS_PRODUCTION
-
-    if IS_PRODUCTION:
-        return None
-    raw = os.environ.get("GEMINI_HEALTH_SIMULATE", "").strip().lower()
-    if raw in ("1", "down", "true", "yes", "on"):
-        return "billing_prepay"
-    if raw in _SIM_DETAILS:
-        return raw
-    return None
-
-
-def _apply_dev_simulation(moment: float) -> dict[str, Any] | None:
-    reason = _dev_simulate_reason()
-    if not reason:
-        return None
-    if _previous_status is None:
-        _store("ok", "ok", "Baseline avant simulation.", moment)
-    if _previous_status == "down":
-        return gemini_health_snapshot()
-    return _store("down", reason, _SIM_DETAILS[reason], moment)
 
 
 def _ai_features_enabled() -> bool:
