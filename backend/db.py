@@ -523,10 +523,11 @@ def upload_canvas_asset_to_storage(user_safe_id: str, image_bytes: bytes, filena
     _ensure_cv_photos_bucket(sb)
     safe_name = "".join(c for c in filename if c.isalnum() or c in "._-") or "asset.jpg"
     path = f"{user_safe_id}/canvas/{safe_name}"
+    content_type = "image/png" if safe_name.lower().endswith(".png") else "image/jpeg"
     sb.storage.from_(CV_PHOTOS_BUCKET).upload(
         path=path,
         file=image_bytes,
-        file_options={"content-type": "image/jpeg", "upsert": "true"},
+        file_options={"content-type": content_type, "upsert": "true"},
     )
     return _signed_url(sb, CV_PHOTOS_BUCKET, path) or ""
 

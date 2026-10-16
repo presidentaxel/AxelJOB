@@ -52,6 +52,7 @@ export default function OnboardingWizard({
   const [layoutHint, setLayoutHint] = useState('');
   const [cvText, setCvText] = useState('');
   const [importStepIndex, setImportStepIndex] = useState(0);
+  const [importProgress, setImportProgress] = useState(0);
   const fileRef = useRef(null);
   const importCleanupRef = useRef(null);
 
@@ -67,9 +68,11 @@ export default function OnboardingWizard({
     setPersistBody(null);
     setLoading(true);
     setImportStepIndex(0);
+    setImportProgress(0);
     if (importCleanupRef.current) importCleanupRef.current();
     importCleanupRef.current = startImportLoadingAnimation(setImportStepIndex, {
       steps: ONBOARDING_IMPORT_STEPS,
+      setProgress: setImportProgress,
     });
     try {
       const data = await requestFn();
@@ -365,6 +368,7 @@ export default function OnboardingWizard({
       {analyzing && (
         <CvImportLoadingOverlay
           stepIndex={importStepIndex}
+          progress={importProgress}
           steps={ONBOARDING_IMPORT_STEPS}
           title="Analyse de ton CV en cours"
           subtitle="On lit ton document, puis on structure le profil. Ça peut prendre jusqu’à une minute."

@@ -124,7 +124,8 @@ function unionBox(blocks) {
  */
 export function classifyStructuralTextBlock(block, cv = {}, { pageHeightMm = 297 } = {}) {
   if (!block || block.type !== 'text') return null;
-  const text = decodeStructuralText(block.content);
+  // Les balises (gras partiel, couleur) ne comptent pas dans la longueur.
+  const text = decodeStructuralText(String(block.content || '').replace(/<[^>]+>/g, ' '));
   if (!text) return null;
 
   // Titres : ligne entière = libellé (pas un mot-clé dans une phrase corps).
@@ -176,19 +177,9 @@ export function classifyStructuralTextBlock(block, cv = {}, { pageHeightMm = 297
     }
   }
 
-  const titre = String(cv?.titre_professionnel || '').trim().toLowerCase();
-  if (titre && text.toLowerCase().includes(titre) && text.length <= 80) {
-    const lower = text.toLowerCase();
-    const looksLikeName = (prenom && lower.includes(prenom)) || (nom && lower.includes(nom));
-    if (!looksLikeName) {
-      return {
-        type: 'identity',
-        confidence: 0.82,
-        kind: 'identity',
-        bindPaths: ['titre_professionnel'],
-      };
-    }
-  }
+  // Le titre sur sa propre ligne reste du texte. Le promouvoir en second
+  // widget identity le fait supprimer (un seul identity en tête de page)
+  // alors que le widget du nom ne l'affiche pas.
 
   // Contact : email / téléphone.
   let contactConf = 0;
@@ -207,11 +198,64 @@ export const BIND_MODE_IN_PLACE = 'inPlace';
 export const BIND_MODE_ABSORB = 'absorb';
 
 function contactBindPaths(block) {
-  const text = decodeStructuralText(block.content);
+  const text = decodeStructuralText(String(block.content || '').replace(/<[^>]+>/g, ' '));
   const paths = [];
   if (EMAIL_RE.test(text)) paths.push('email');
   if (PHONE_RE.test(text)) paths.push('telephone');
   return paths;
+}
+
+const PDF_COLOR_SPAN_RE = /<span\s+style="([^"]*)">([\s\S]*?)<\/span>/gi;
+
+/** Fragments dont la couleur diffère de la couleur de bloc. */
+export function colorRunsFromPdfHtml(html) {
+  const source = String(html || '');
+  const runs = [];
+  let cursor = 0;
+  let match;
+  PDF_COLOR_SPAN_RE.lastIndex = 0;
+  while ((match = PDF_COLOR_SPAN_RE.exec(source))) {
+    const colorMatch = /(?:^|;)\s*color:\s*(#[0-9a-fA-F]{6})/i.exec(match[1]);
+    const between = source.slice(cursor, match.index).replace(/<[^>]+>/g, '');
+    cursor = PDF_COLOR_SPAN_RE.lastIndex;
+    if (!colorMatch) continue;
+    const text = match[2].replace(/<[^>]+>/g, '');
+    const color = colorMatch[1].toLowerCase();
+    const prev = runs[runs.length - 1];
+    if (prev && prev.color === color && !between.trim()) prev.text += text;
+    else runs.push({ text, color });
+  }
+  return runs.filter((run) => run.text.trim().length >= 2);
+}
+
+/** Couleur d'un champ si un fragment PDF du même texte en porte une. */
+export function colorFromPdfRuns(runs, value) {
+  if (!Array.isArray(runs)) return '';
+  const needle = String(value || '').trim().toLowerCase();
+  if (needle.length < 2) return '';
+  const digits = needle.replace(/\D/g, '');
+  for (const run of runs) {
+    const compact = String(run?.text || '').replace(/\s+/g, ' ').trim().toLowerCase();
+    if (!compact) continue;
+    if (compact.includes(needle) || (compact.length >= 3 && needle.includes(compact))) {
+      return String(run.color || '');
+    }
+    const runDigits = compact.replace(/\D/g, '');
+    if (
+      digits.length >= 6
+      && runDigits.length >= 6
+      && (runDigits.includes(digits) || digits.includes(runDigits))
+    ) {
+      return String(run.color || '');
+    }
+  }
+  return '';
+}
+
+function withPdfColorRuns(baseBlock, style) {
+  const runs = colorRunsFromPdfHtml(baseBlock?.content);
+  if (!runs.length) return style;
+  return { ...style, color_runs: runs };
 }
 
 function preservedPdfStyle(baseBlock, extra = {}) {
@@ -256,7 +300,7 @@ function toInPlaceBlock(baseBlock, classification) {
     h: baseBlock.h,
     z: baseBlock.z,
     bind,
-    style: preservedPdfStyle(baseBlock),
+    style: withPdfColorRuns(baseBlock, preservedPdfStyle(baseBlock)),
   };
 }
 
@@ -344,6 +388,29 @@ function pickBetterBlock(current, candidate, preferTop) {
     if (dy > 0.5) return current;
   }
   return visualScore(candidate) > visualScore(current) ? candidate : current;
+}
+
+function overlapRatio(a, b) {
+  const ax1 = Number(a.x) || 0;
+  const ay1 = Number(a.y) || 0;
+  const ax2 = ax1 + (Number(a.w) || 0);
+  const ay2 = ay1 + (Number(a.h) || 0);
+  const bx1 = Number(b.x) || 0;
+  const by1 = Number(b.y) || 0;
+  const bx2 = bx1 + (Number(b.w) || 0);
+  const by2 = by1 + (Number(b.h) || 0);
+  const iw = Math.max(0, Math.min(ax2, bx2) - Math.max(ax1, bx1));
+  const ih = Math.max(0, Math.min(ay2, by2) - Math.max(ay1, by1));
+  const area = Math.min(Math.max(0, ax2 - ax1) * Math.max(0, ay2 - ay1), Math.max(0, bx2 - bx1) * Math.max(0, by2 - by1));
+  return area > 0 ? (iw * ih) / area : 0;
+}
+
+function titleFragmentOverlaps(textNorm, titreValue) {
+  const compact = (value) => String(value || '').replace(/[^a-z0-9à-ÿ]+/gi, ' ').trim();
+  const text = compact(textNorm);
+  const titre = compact(titreValue);
+  if (text.length < 6 || titre.length < 6) return false;
+  return titre.includes(text) || text.includes(titre);
 }
 
 function isShortReprintOf(textNorm, values) {
@@ -446,16 +513,28 @@ export function pruneInPlaceImportDuplicates(layout, cv = {}) {
       if (
         block.type === 'text'
         && titreValue.length >= 2
-        && titreIdentities.some((idb) => isNearBlock(block, idb))
-        && isShortReprintOf(textNorm, [titreValue])
+        && (isShortReprintOf(textNorm, [titreValue]) || titleFragmentOverlaps(textNorm, titreValue))
+        && titreIdentities.some((idb) => overlapRatio(block, idb) >= 0.18)
       ) {
         dropIds.add(block.id);
         continue;
       }
-      if (block.type === 'text' && contactKept.some((cb) => isNearBlock(block, cb, 56, 80))
-        && isShortReprintOf(textNorm, contactValues)) {
-        dropIds.add(block.id);
-        continue;
+      if (block.type === 'text' && isShortReprintOf(textNorm, contactValues)) {
+        const phoneNorm = normImportText(phone);
+        const emailNorm = normImportText(email);
+        const matchesPhone = phoneNorm.length >= 3 && isShortReprintOf(textNorm, [phoneNorm]);
+        const matchesEmail = emailNorm.length >= 3 && isShortReprintOf(textNorm, [emailNorm]);
+        const covered = contactKept.some((cb) => {
+          if (!isNearBlock(block, cb, 8, 40)) return false;
+          const paths = sortedBindPaths(cb);
+          if (matchesPhone && paths.includes('telephone')) return true;
+          if (matchesEmail && paths.includes('email')) return true;
+          return false;
+        });
+        if (covered) {
+          dropIds.add(block.id);
+          continue;
+        }
       }
       if (block.type === 'text' && titleKept.some((tb) => {
         const titleNorm = normImportText(tb.content);
@@ -511,7 +590,7 @@ function isGutterMarker(block) {
 
 function isListBodyLine(block) {
   const text = normImportText(block.content);
-  if (text.length < 10) return false;
+  if (text.length < 3) return false;
   const italic = Boolean(block.style?.italic || block.style?.font_style === 'italic');
   if (italic && text.length < 28) return false;
   if (block.style?.bold && JOB_TITLE_DASH_RE.test(text) && text.length < 90) return false;
@@ -520,7 +599,12 @@ function isListBodyLine(block) {
 
 function snapMarkerToTextLine(marker, text) {
   const mh = Number(marker.h) || 0;
-  const th = Number(text.h) || 0;
+  const content = String(text.content || '');
+  const multiline = content.toLowerCase().includes('<br>') || text.style?.multiline;
+  const size = Number(text.style?.font_size) || 10;
+  const th = multiline
+    ? Math.max(size * (25.4 / 72) * 1.2, 3.2)
+    : (Number(text.h) || 0);
   const ty = Number(text.y) || 0;
   return { ...marker, y: Math.round(Math.max(0, ty + (th - mh) / 2) * 100) / 100 };
 }
@@ -555,28 +639,66 @@ export function alignImportGutterMarkers(layout) {
       const mx = Number(colMarkers[0].x) || 0;
       const mw = Number(colMarkers[0].w) || 0;
       const markerRight = mx + mw;
+      const inColumn = (block) => {
+        const tx = Number(block.x) || 0;
+        return tx >= markerRight - 1 && tx - markerRight <= MAX_GUTTER_GAP_MM;
+      };
+      const hosts = blocks
+        .filter((b) => (
+          (b.type === 'text' || b.type === 'title' || b.type === 'contact' || b.type === 'identity')
+          && !isGutterMarker(b)
+          && inColumn(b)
+        ))
+        .sort((a, b) => (Number(a.y) || 0) - (Number(b.y) || 0));
       const colTexts = targets
-        .filter((t) => {
-          const tx = Number(t.x) || 0;
-          return tx >= markerRight - 1 && tx - markerRight <= MAX_GUTTER_GAP_MM;
-        })
+        .filter((t) => inColumn(t))
         .sort((a, b) => (Number(a.y) || 0) - (Number(b.y) || 0));
       let body = colTexts.filter((t) => isListBodyLine(t));
       if (body.length < Math.max(1, Math.floor(colMarkers.length * 0.6))) {
         body = colTexts.filter((t) => {
           const text = normImportText(t.content);
           const italic = Boolean(t.style?.italic || t.style?.font_style === 'italic');
-          return text.length >= 10 && !(italic && text.length < 28);
+          return text.length >= 3 && !(italic && text.length < 28);
         });
       }
-      const n = Math.min(colMarkers.length, body.length);
-      for (let i = 0; i < n; i += 1) {
-        const marker = colMarkers[i];
-        const text = body[i];
-        if (Math.abs((Number(text.y) || 0) - (Number(marker.y) || 0)) > MAX_BULLET_ALIGN_DY_MM + 6) {
+      const used = new Set();
+      for (const marker of colMarkers) {
+        const my = (Number(marker.y) || 0) + (Number(marker.h) || 0) / 2;
+        const containing = hosts.filter((block) => {
+          if (used.has(block.id)) return false;
+          const ty = Number(block.y) || 0;
+          const th = Number(block.h) || 0;
+          return my >= ty - 0.4 && my <= ty + th;
+        });
+        containing.sort((a, b) => {
+          const ay = (Number(a.y) || 0) + (Number(a.h) || 0) / 2;
+          const by = (Number(b.y) || 0) + (Number(b.h) || 0) / 2;
+          return Math.abs(ay - my) - Math.abs(by - my);
+        });
+        const host = containing[0];
+        if (host) {
+          used.add(host.id);
+          snapped.set(marker.id, snapMarkerToTextLine(marker, host));
           continue;
         }
-        snapped.set(marker.id, snapMarkerToTextLine(marker, text));
+        let best = null;
+        let bestDy = null;
+        for (const text of body) {
+          if (used.has(text.id)) continue;
+          const ty = Number(text.y) || 0;
+          const th = Number(text.h) || 0;
+          const inside = my >= ty - 0.4 && my <= ty + th;
+          const dy = Math.abs(ty - (Number(marker.y) || 0));
+          if (!inside && dy > MAX_BULLET_ALIGN_DY_MM) continue;
+          const score = inside ? dy : dy + 20;
+          if (best == null || score < bestDy) {
+            best = text;
+            bestDy = score;
+          }
+        }
+        if (!best) continue;
+        used.add(best.id);
+        snapped.set(marker.id, snapMarkerToTextLine(marker, best));
       }
     }
 
@@ -716,25 +838,21 @@ export function bindStructuralTextToSemanticBlocks(layout, cv = {}, {
       boundCount += 1;
     }
 
-    // 3) Titre professionnel PDF resté en `text` à côté de l’identité sémantique
-    // (le preset identity rebind aussi titre_professionnel → ghosting).
+    // 3) Réimpression PDF seulement si le widget affiche déjà ce champ
+    // et recouvre la ligne. Un titre sur la ligne d'en dessous reste visible.
     const identityBoxes = semanticNew.filter((b) => b.type === 'identity');
     if (identityBoxes.length) {
       const titre = decodeStructuralText(cv?.titre_professionnel).toLowerCase();
       const name = decodeStructuralText(
         `${cv?.prenom || cv?.first_name || ''} ${cv?.nom || cv?.last_name || ''}`,
       ).toLowerCase();
+      const showsField = (idb, field, line) => (
+        Array.isArray(idb.bind) && idb.bind.includes(field) && overlapRatio(line, idb) >= 0.18
+      );
       for (const block of textBlocks) {
         if (consumed.has(block.id)) continue;
         const text = decodeStructuralText(block.content).toLowerCase();
         if (!text || text.length < 4) continue;
-        const by = Number(block.y) || 0;
-        const near = identityBoxes.some((idb) => {
-          const iy = Number(idb.y) || 0;
-          const ih = Number(idb.h) || 0;
-          return by < iy + ih + 16 && by > iy - 10;
-        });
-        if (!near) continue;
         const compact = (value) => String(value || '')
           .replace(/[\s|/·•\-–—_.,;:!?«»"'()]+/g, ' ')
           .trim();
@@ -760,7 +878,13 @@ export function bindStructuralTextToSemanticBlocks(layout, cv = {}, {
             || (textC.includes(nameC) && textC.length <= nameC.length + 12)
           ),
         );
-        if (titreHit || nameHit) consumed.add(block.id);
+        const coveredByTitle = titreHit && identityBoxes.some((idb) => (
+          showsField(idb, 'titre_professionnel', block)
+        ));
+        const coveredByName = nameHit && identityBoxes.some((idb) => (
+          showsField(idb, 'prenom', block) || showsField(idb, 'nom', block)
+        ));
+        if (coveredByTitle || coveredByName) consumed.add(block.id);
       }
     }
 

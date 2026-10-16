@@ -3,8 +3,12 @@ import test from 'node:test';
 
 import {
   cvFromImportPayload,
+  CV_IMPORT_STEPS,
+  CV_IMPORT_STEP_DURATIONS_MS,
   extractImportApiResponse,
   finishImportLoadingAnimation,
+  importProgressForElapsed,
+  importStepForElapsed,
   isSparseImportedCv,
   ONBOARDING_IMPORT_STEPS,
   onboardingImportErrorMessage,
@@ -73,6 +77,20 @@ test('AXE-341: messages d’erreur d’analyse à l’onboarding', () => {
     onboardingImportErrorMessage({ status: 400, message: 'PDF scanné.' }),
     'PDF scanné.',
   );
+});
+
+test('import : les premières étapes durent plus longtemps et la barre ne se fige pas à 83 %', () => {
+  const holdAt = CV_IMPORT_STEP_DURATIONS_MS.slice(0, CV_IMPORT_STEPS.length - 2)
+    .reduce((sum, ms) => sum + ms, 0);
+  assert.ok(holdAt >= 35000);
+  assert.equal(importStepForElapsed(1000), 0);
+  assert.equal(importStepForElapsed(holdAt - 1), CV_IMPORT_STEPS.length - 3);
+  assert.equal(importStepForElapsed(holdAt + 5000), CV_IMPORT_STEPS.length - 2);
+  const atHold = importProgressForElapsed(holdAt);
+  const later = importProgressForElapsed(holdAt + 20000);
+  assert.ok(atHold < 90);
+  assert.ok(later > atHold);
+  assert.ok(later < 100);
 });
 
 test('AXE-341: finishImportLoadingAnimation respecte la liste d’étapes', () => {

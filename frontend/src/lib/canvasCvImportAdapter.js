@@ -534,8 +534,10 @@ export function cleanupImportedImageOverlays(layout) {
     if (!targets.length) return page;
 
     for (const img of images) {
+      if (img.style?.vector_fill) continue;
       for (const other of blocks) {
         if (other.type !== 'icon' && other.type !== 'shape:circle') continue;
+        if (other.style?.photo_plate) continue;
         const side = Math.max(Number(other.w) || 0, Number(other.h) || 0);
         if (other.type === 'shape:circle' && side < 12) continue;
         if (blockOverlapRatio(other, img, 0.18) >= 0.18) {
@@ -549,6 +551,8 @@ export function cleanupImportedImageOverlays(layout) {
         return false;
       }
       if (block.type === 'shape:circle') {
+        // Pastille claire plus grande que le portrait : l'anneau autour de la photo.
+        if (block.style?.photo_plate) return true;
         const side = Math.max(Number(block.w) || 0, Number(block.h) || 0);
         if (side >= 12 && targets.some((img) => blockOverlapRatio(block, img, 0.18) >= 0.18)) {
           return false;
@@ -570,7 +574,8 @@ export function applyImportedRoundImageShapes(layout) {
     ...page,
     blocks: (page.blocks || []).map((block) => {
       if (block.type !== 'image' && block.type !== 'photo') return block;
-      if (block.style?.shape === 'circle') return block;
+      if (block.style?.vector_fill) return block;
+      if (block.style?.shape === 'circle' || block.style?.shape === 'rect') return block;
       const w = Number(block.w) || 0;
       const h = Number(block.h) || 0;
       if (!isSquarePhotoSized(w, h)) return block;

@@ -3,6 +3,7 @@ import '../styles/ProfileView.css';
 
 export default function CvImportLoadingOverlay({
   stepIndex = 0,
+  progress,
   title = 'Analyse de ton CV en cours',
   subtitle = '',
   steps = CV_IMPORT_STEPS,
@@ -10,7 +11,10 @@ export default function CvImportLoadingOverlay({
   const labels = Array.isArray(steps) && steps.length ? steps : CV_IMPORT_STEPS;
   const total = labels.length;
   const safeIndex = Math.min(Math.max(0, stepIndex), Math.max(0, total - 1));
-  const pct = total > 0 ? Math.min(100, Math.round(((safeIndex + 1) / total) * 100)) : 0;
+  const fromStep = total > 0 ? Math.min(100, Math.round(((safeIndex + 1) / total) * 100)) : 0;
+  const pct = safeIndex >= total - 1
+    ? 100
+    : (typeof progress === 'number' ? Math.min(96, Math.max(0, Math.round(progress))) : fromStep);
 
   return (
     <div className="import-cv-loading-overlay" role="status" aria-live="polite" aria-busy="true">

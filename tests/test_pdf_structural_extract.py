@@ -3,13 +3,25 @@
 import unittest
 
 from backend.services.pdf_structural_extract import (
+    _cleanup_image_overlay_blocks,
+    _collapse_tracked_caps,
+    _contrast_ratio,
     _extract_shape_blocks,
     _float_rgb_to_hex,
     _frame_strips_from_rects,
+    _image_paint_opacity,
     _int_color_to_hex,
+    _is_hidden_ats_text,
     _is_near_white,
     _join_line_span_texts,
+    _merge_baseline_fragments,
+    _photo_circle_geometry,
+    _photo_plate_blocks,
+    _pixmap_is_blank_plate,
+    _spans_to_html,
+    coalesce_text_runs,
     extract_layout_from_pdf,
+    visible_text_excluding_hidden_ats,
 )
 
 MM_PER_PT = 25.4 / 72.0
@@ -55,6 +67,13 @@ class ColorHelpersTest(unittest.TestCase):
         self.assertTrue(_is_near_white("#ffffff"))
         self.assertTrue(_is_near_white("#fefefe"))
         self.assertFalse(_is_near_white("#1e2a3a"))
+
+    def test_hidden_ats_is_low_contrast_micro_text(self):
+        self.assertTrue(_is_hidden_ats_text(2.0, "#efeff0", "#ffffff"))
+        self.assertTrue(_is_hidden_ats_text(5.0, "#ffffff", "#ffffff"))
+        self.assertFalse(_is_hidden_ats_text(11.0, "#ffffff", "#2d3358"))
+        self.assertFalse(_is_hidden_ats_text(10.0, "#1a1a1a", "#ffffff"))
+        self.assertGreater(_contrast_ratio("#1a1a1a", "#ffffff"), 1.8)
 
 
 class ExtractLayoutTest(unittest.TestCase):
@@ -233,6 +252,150 @@ class ExtractLayoutTest(unittest.TestCase):
         lines = [b for b in layout["pages"][0]["blocks"] if b["type"] == "shape:line"]
         self.assertGreaterEqual(len(lines), 1)
 
+    def test_collapse_tracked_caps(self):
+        self.assertEqual(_collapse_tracked_caps("ALT E R NANT"), "ALTERNANT")
+        self.assertEqual(_collapse_tracked_caps("ESSEC Business School"), "ESSEC Business School")
+
+    def test_merge_keeps_columns_and_joins_words(self):
+        words = [
+            {
+                "x0": 249,
+                "y0": 151,
+                "x1": 305,
+                "y1": 162,
+                "spans": [{"text": "Conception ", "size": 10, "flags": 0, "font": "OpenSans"}],
+            },
+            {
+                "x0": 313,
+                "y0": 151,
+                "x1": 325,
+                "y1": 162,
+                "spans": [{"text": "et ", "size": 10, "flags": 0, "font": "OpenSans"}],
+            },
+            {
+                "x0": 333,
+                "y0": 151,
+                "x1": 380,
+                "y1": 162,
+                "spans": [{"text": "rédaction", "size": 10, "flags": 0, "font": "OpenSans"}],
+            },
+        ]
+        # Trois lignes qui commencent aux mêmes x → deux colonnes, pas une phrase.
+        columns = []
+        for i in range(3):
+            y = 400 + i * 16
+            columns.append(
+                {
+                    "x0": 80,
+                    "y0": y,
+                    "x1": 130,
+                    "y1": y + 11,
+                    "spans": [{"text": f"202{i}", "size": 10, "flags": 0, "font": "OpenSans"}],
+                }
+            )
+            columns.append(
+                {
+                    "x0": 150,
+                    "y0": y,
+                    "x1": 280,
+                    "y1": y + 11,
+                    "spans": [{"text": f"Ecole {i}", "size": 10, "flags": 0, "font": "OpenSans"}],
+                }
+            )
+        merged = _merge_baseline_fragments([*words, *columns])
+        texts = ["".join(s["text"] for s in frag["spans"]) for frag in merged]
+        self.assertTrue(any("Conception" in t and "rédaction" in t for t in texts))
+        self.assertEqual(sum(1 for t in texts if t.startswith("202")), 3)
+        self.assertEqual(sum(1 for t in texts if t.startswith("Ecole")), 3)
+
+        # Dernier mot d'une phrase longue, posé sur l'ancre des dates : même ligne.
+        wrapped = [
+            {
+                "x0": 80,
+                "y0": 500,
+                "x1": 143,
+                "y1": 511,
+                "spans": [
+                    {
+                        "text": "Writing weekly advertisement emails to 1800 ",
+                        "size": 8,
+                        "flags": 0,
+                        "font": "OpenSans",
+                    }
+                ],
+            },
+            {
+                "x0": 150,
+                "y0": 500,
+                "x1": 200,
+                "y1": 511,
+                "spans": [{"text": "subscribers,", "size": 8, "flags": 0, "font": "OpenSans"}],
+            },
+        ]
+        wrapped_merged = _merge_baseline_fragments([*columns, *wrapped])
+        wrapped_text = ["".join(s["text"] for s in frag["spans"]) for frag in wrapped_merged]
+        self.assertTrue(any("1800" in t and "subscribers" in t for t in wrapped_text))
+
+    def test_coalesce_paragraph_and_keeps_separate_bullets(self):
+        style = {"font_size": 11, "color": "#ffffff", "bold": False, "italic": False}
+        summary = [
+            {
+                "type": "text",
+                "content": "Ligne une du resume",
+                "x": 100,
+                "y": 4,
+                "w": 90,
+                "h": 5,
+                "style": style,
+            },
+            {
+                "type": "text",
+                "content": "ligne deux du resume",
+                "x": 100,
+                "y": 9,
+                "w": 90,
+                "h": 5,
+                "style": style,
+            },
+        ]
+        bullet_style = {"font_size": 10, "color": "#111111", "bold": False, "italic": False}
+        bullets = [
+            {"type": "shape:circle", "x": 80, "y": 20, "w": 1.2, "h": 1.2},
+            {
+                "type": "text",
+                "content": "Premiere puce debut",
+                "x": 84,
+                "y": 20,
+                "w": 80,
+                "h": 4,
+                "style": bullet_style,
+            },
+            {
+                "type": "text",
+                "content": "suite de la premiere puce",
+                "x": 84,
+                "y": 24,
+                "w": 70,
+                "h": 4,
+                "style": bullet_style,
+            },
+            {"type": "shape:circle", "x": 80, "y": 30, "w": 1.2, "h": 1.2},
+            {
+                "type": "text",
+                "content": "Deuxieme puce seule",
+                "x": 84,
+                "y": 30,
+                "w": 80,
+                "h": 4,
+                "style": bullet_style,
+            },
+        ]
+        out = coalesce_text_runs([*summary, *bullets])
+        texts = [b["content"] for b in out if b["type"] == "text"]
+        self.assertTrue(any("Ligne une" in t and "ligne deux" in t and "<br>" in t for t in texts))
+        self.assertTrue(any("Premiere puce" in t and "suite de la premiere" in t for t in texts))
+        self.assertTrue(any(t == "Deuxieme puce seule" for t in texts))
+
     def test_join_line_span_texts_inserts_space_after_colon(self):
         spans = [
             {"text": "Organisation :", "bbox": (40, 100, 120, 112)},
@@ -344,6 +507,179 @@ class ExtractLayoutTest(unittest.TestCase):
         self.assertLess(abs(bullets[0]["y"] - expected), 0.4)
         title = next(b for b in blocks if "HeForShe" in (b.get("content") or ""))
         self.assertGreater(bullets[0]["y"], title["y"] + 2)
+
+    def test_hidden_ats_keywords_stay_out_of_the_layout(self):
+        import fitz
+
+        doc = fitz.open()
+        page = doc.new_page(width=595, height=842)
+        page.draw_rect(fitz.Rect(0, 0, 595, 80), color=None, fill=(0.18, 0.20, 0.35))
+        page.insert_text((40, 40), "Camille Martin", fontsize=16, color=(1, 1, 1))
+        page.insert_text(
+            (40, 120),
+            "Experience en gestion de projet et analyse de donnees pour des equipes produit.",
+            fontsize=11,
+            color=(0.1, 0.1, 0.1),
+        )
+        page.insert_text(
+            (40, 780),
+            "mots cles caches pour un parseur automatique de candidatures",
+            fontsize=2,
+            color=(0.94, 0.94, 0.94),
+        )
+        data = doc.tobytes()
+        doc.close()
+
+        layout = extract_layout_from_pdf(data)
+        self.assertIsNotNone(layout)
+        blob = " ".join(
+            str(block.get("content") or "") for page in layout["pages"] for block in page["blocks"]
+        )
+        self.assertIn("Camille Martin", blob)
+        self.assertIn("gestion de projet", blob)
+        self.assertNotIn("parseur automatique", blob)
+
+        visible, hidden = visible_text_excluding_hidden_ats(data)
+        self.assertGreaterEqual(hidden, 1)
+        self.assertIn("Camille Martin", visible)
+        self.assertNotIn("parseur automatique", visible)
+
+    def test_weight_stays_uniform_inside_a_word(self):
+        island = _spans_to_html(
+            [
+                {"text": "Bia", "font": "DMSans-Regular", "flags": 0},
+                {"text": "nca", "font": "DMSans-Bold", "flags": 16},
+            ]
+        )
+        self.assertNotIn("<strong>", island)
+        self.assertIn("Bianca", island)
+        mixed = _spans_to_html(
+            [
+                {"text": "Hello ", "font": "DMSans-Bold", "flags": 16},
+                {"text": "world", "font": "DMSans-Regular", "flags": 0},
+            ]
+        )
+        self.assertIn("<strong>Hello</strong>", mixed)
+        self.assertNotIn("<strong>world</strong>", mixed)
+        self.assertIn("world", mixed)
+
+    def test_minority_color_stays_on_its_fragment(self):
+        html = _spans_to_html(
+            [
+                {"text": "EDGAR", "font": "Montserrat-Bold", "flags": 16, "color": 0x545454},
+                {"text": " ", "font": "Montserrat-Bold", "flags": 16, "color": 0x163853},
+                {"text": "PRADEL", "font": "Montserrat-Bold", "flags": 16, "color": 0x163853},
+            ]
+        )
+        self.assertIn("color:#545454", html)
+        self.assertIn("EDGAR", html)
+        self.assertNotIn("color:#163853", html)
+        self.assertIn("PRADEL", html)
+        links = _spans_to_html(
+            [
+                {"text": "12 rue des Lilas ", "font": "Times", "flags": 0, "color": 0x000000},
+                {"text": "ada@exemple.fr", "font": "Times", "flags": 0, "color": 0x0000FF},
+            ]
+        )
+        self.assertIn("color:#0000ff", links)
+        self.assertNotIn("color:#000000", links)
+        self.assertIn("12 rue des Lilas", links)
+
+    def test_named_weight_is_not_forced_to_bold(self):
+        medium = _spans_to_html(
+            [{"text": "Amélie", "font": "Montserrat-Medium", "flags": 4, "size": 30}]
+        )
+        self.assertIn("font-weight:500", medium)
+        self.assertNotIn("<strong>", medium)
+        semibold = _spans_to_html(
+            [{"text": "Contact", "font": "Montserrat-SemiBold", "flags": 20, "size": 15}]
+        )
+        self.assertIn("font-weight:600", semibold)
+        self.assertNotIn("<strong>", semibold)
+        bold = _spans_to_html(
+            [{"text": "Titre", "font": "Montserrat-Bold", "flags": 16, "size": 12}]
+        )
+        self.assertIn("<strong>", bold)
+
+    def test_white_circle_behind_a_photo_stays_a_plate(self):
+        import fitz
+
+        doc = fitz.open()
+        page = doc.new_page(width=300, height=300)
+        page.draw_circle(fitz.Point(100, 80), 36, color=None, fill=(1, 1, 1))
+        _clips, plates = _photo_circle_geometry(doc, page)
+        self.assertTrue(plates)
+        cx, cy, radius, color = plates[0]
+        self.assertAlmostEqual(cx, 100, delta=4)
+        self.assertAlmostEqual(cy, 80, delta=4)
+        self.assertAlmostEqual(radius, 36, delta=4)
+        self.assertEqual(color, "#ffffff")
+
+        photo = {
+            "type": "image",
+            "x": 28.0,
+            "y": 20.0,
+            "w": 20.0,
+            "h": 20.0,
+            "style": {"shape": "circle"},
+        }
+        # Le cercle test fait ~25 mm de diamètre ; la photo est plus petite et concentrique.
+        scale = 25.4 / 72
+        photo["x"] = (cx - 28) * scale
+        photo["y"] = (cy - 28) * scale
+        photo["w"] = 56 * scale
+        photo["h"] = 56 * scale
+        plates_out = _photo_plate_blocks([photo], plates[:1], scale)
+        self.assertEqual(len(plates_out), 1)
+        self.assertTrue(plates_out[0]["style"]["photo_plate"])
+        kept = _cleanup_image_overlay_blocks([*plates_out, photo])
+        self.assertTrue(any(b.get("style", {}).get("photo_plate") for b in kept))
+        self.assertEqual(photo["style"]["shape"], "circle")
+
+    def test_blank_white_cutout_is_not_a_shape(self):
+        import fitz
+
+        white = fitz.Pixmap(fitz.csRGB, 20, 40, bytes([250, 250, 250]) * 20 * 40, False)
+        self.assertTrue(_pixmap_is_blank_plate(white))
+        dark = fitz.Pixmap(fitz.csRGB, 20, 20, bytes([30, 40, 80]) * 20 * 20, False)
+        self.assertFalse(_pixmap_is_blank_plate(dark))
+
+    def test_image_keeps_graphics_state_opacity(self):
+        import fitz
+
+        src = fitz.open()
+        src_page = src.new_page(width=200, height=200)
+        pix = fitz.Pixmap(fitz.csRGB, 8, 8, bytes([70, 120, 180]) * 64, False)
+        src_page.insert_image(fitz.Rect(0, 0, 200, 200), pixmap=pix)
+        doc = fitz.open()
+        page = doc.new_page(width=595, height=842)
+        page.insert_text(
+            (40, 70),
+            "Experience professionnelle en gestion de projet et en analyse de donnees.",
+            fontsize=12,
+        )
+        page.show_pdf_page(fitz.Rect(0, 180, 500, 700), src, 0)
+        page.clean_contents()
+        gs_xref = doc.get_new_xref()
+        doc.update_object(gs_xref, "<< /Type /ExtGState /ca 0.4 >>")
+        page_obj = doc.xref_object(page.xref)
+        page_obj = page_obj.replace(
+            "/XObject <<",
+            f"/ExtGState << /Fade {gs_xref} 0 R >>\n    /XObject <<",
+            1,
+        )
+        doc.update_object(page.xref, page_obj)
+        import re
+
+        contents_xref = int(re.search(r"/Contents\s+(\d+)\s+0\s+R", page_obj).group(1))
+        stream = doc.xref_stream(contents_xref)
+        doc.update_stream(contents_xref, stream.replace(b"/fzFrm0 Do", b"/Fade gs\n/fzFrm0 Do"))
+        opacities = _image_paint_opacity(doc, page)
+        doc.close()
+        src.close()
+
+        self.assertTrue(opacities)
+        self.assertAlmostEqual(next(iter(opacities.values())), 0.4, places=2)
 
 
 if __name__ == "__main__":

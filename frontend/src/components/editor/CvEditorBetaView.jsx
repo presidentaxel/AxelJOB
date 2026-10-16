@@ -263,6 +263,7 @@ function CvEditorBeta({
   const [importChooser, setImportChooser] = useState(null);
   const [importChooserConfirming, setImportChooserConfirming] = useState(false);
   const [importStepIndex, setImportStepIndex] = useState(0);
+  const [importProgress, setImportProgress] = useState(0);
   const [importError, setImportError] = useState('');
   const [importToast, setImportToast] = useState('');
   const [editHintOpen, setEditHintOpen] = useState(false);
@@ -942,9 +943,12 @@ function CvEditorBeta({
     setStartupPromptOpen(false);
     setImportLoading(true);
     setImportStepIndex(0);
+    setImportProgress(0);
     setImportError('');
     if (importCleanupRef.current) importCleanupRef.current();
-    importCleanupRef.current = startImportLoadingAnimation(setImportStepIndex);
+    importCleanupRef.current = startImportLoadingAnimation(setImportStepIndex, {
+      setProgress: setImportProgress,
+    });
     try {
       const result = await importFn();
       finishImportLoadingAnimation(setImportStepIndex);
@@ -2666,6 +2670,7 @@ function CvEditorBeta({
       {importLoading && (
         <CvImportLoadingOverlay
           stepIndex={importStepIndex}
+          progress={importProgress}
           title="Import & adaptation Canva en cours"
           subtitle="Analyse en cours - cela peut prendre jusqu'à une minute pour un PDF complexe."
         />

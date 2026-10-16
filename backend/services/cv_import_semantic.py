@@ -456,29 +456,46 @@ def annotate_structural_blocks(
                     if has_p and has_n:
                         conf += 0.15
                     if conf >= min_confidence:
+                        # Uniquement les champs présents sur CETTE ligne. Le titre
+                        # sur la ligne d'en dessous ne doit pas être avalé par le nom.
+                        bind = []
+                        if has_p:
+                            bind.append("prenom")
+                        if has_n:
+                            bind.append("nom")
+                        titre = (cv.get("titre_professionnel") or "").strip().lower()
+                        if titre and titre in lower:
+                            bind.append("titre_professionnel")
                         hit = {
                             "block_id": bid,
                             "type": "identity",
                             "kind": "identity",
                             "confidence": min(1.0, conf),
-                            "bind": ["prenom", "nom", "titre_professionnel"],
+                            "bind": bind or ["prenom", "nom"],
                         }
 
             if hit is None:
                 conf = 0.0
-                if _EMAIL_RE.search(text):
+                bind: list[str] = []
+                if _EMAIL_RE.search(text) or (email and email in text.lower()):
                     conf += 0.8
+                    bind.append("email")
                 if _PHONE_RE.search(text):
-                    conf += 0.35
-                if email and email in text.lower():
-                    conf += 0.1
-                if conf >= min_confidence:
+                    conf += 0.8
+                    bind.append("telephone")
+                ville = (cv.get("ville") or "").strip().lower()
+                if ville and len(ville) >= 3 and ville in text.lower():
+                    bind.append("ville")
+                linkedin = (cv.get("linkedin") or "").strip().lower()
+                if linkedin and len(linkedin) >= 6 and linkedin in text.lower():
+                    bind.append("linkedin")
+                if conf >= min_confidence and bind:
                     hit = {
                         "block_id": bid,
                         "type": "contact",
                         "kind": "contact",
                         "confidence": min(1.0, conf),
-                        "bind": ["email", "telephone", "linkedin", "ville"],
+                        "bind": bind,
                     }
 
             if hit and float(hit.get("confidence") or 0) >= min_confidence:

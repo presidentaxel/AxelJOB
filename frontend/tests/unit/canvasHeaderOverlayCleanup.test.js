@@ -771,7 +771,9 @@ test('bindStructuralTextToSemanticBlocks absorbe le titre PDF voisin', () => {
   const { layout: out } = bindStructuralTextToSemanticBlocks(layout, CV);
   const types = out.pages[0].blocks.map((b) => b.type);
   assert.ok(types.includes('identity'));
-  assert.equal(out.pages[0].blocks.some((b) => b.id === 'title'), false);
+  const title = out.pages[0].blocks.find((b) => b.id === 'title');
+  assert.equal(title?.type, 'text');
+  assert.match(title.content, /Étudiant ESSEC/);
 });
 
 test('isDarkCssColor : navy vs crème', () => {

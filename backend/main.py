@@ -755,7 +755,9 @@ def _materialize_canvas_image(user_id: str, image_bytes: bytes, mime: str) -> st
     safe_id = "".join(c for c in (user_id or "") if c.isalnum() or c in "_-") or "user"
     from PIL import Image
 
-    img = Image.open(BytesIO(image_bytes)).convert("RGB")
+    img = Image.open(BytesIO(image_bytes))
+    has_alpha = img.mode in ("RGBA", "LA") or (img.mode == "P" and "transparency" in img.info)
+    img = img.convert("RGBA" if has_alpha else "RGB")
     w, h = img.size
     max_side = 1200
     if w > max_side or h > max_side:
@@ -764,10 +766,15 @@ def _materialize_canvas_image(user_id: str, image_bytes: bytes, mime: str) -> st
         resample = getattr(Image, "Resampling", Image).LANCZOS
         img = img.resize(new_size, resample)
     buffer = BytesIO()
-    img.save(buffer, "JPEG", quality=85, optimize=True)
+    if has_alpha:
+        img.save(buffer, "PNG", optimize=True)
+        ext = "png"
+    else:
+        img.save(buffer, "JPEG", quality=85, optimize=True)
+        ext = "jpg"
     buffer.seek(0)
     out_bytes = buffer.getvalue()
-    asset_name = f"canvas_{uuid_module.uuid4().hex[:16]}.jpg"
+    asset_name = f"canvas_{uuid_module.uuid4().hex[:16]}.{ext}"
     if USE_SUPABASE:
         from backend.db import upload_canvas_asset_to_storage
 
@@ -777,6 +784,40 @@ def _materialize_canvas_image(user_id: str, image_bytes: bytes, mime: str) -> st
     dest = uploads_dir / asset_name
     dest.write_bytes(out_bytes)
     return f"assets/uploads/{safe_id}/{asset_name}"
+
+
+def _materialize_layout_data_urls(
+    layout: dict[str, Any] | None, user_id: str | None
+) -> dict[str, Any] | None:
+    """Remplace les data URL d'un layout importé par des fichiers assets/.
+
+    Le canvas refuse les data URL (XSS). Sans cette étape, photo et logos
+    s'affichent comme le mot « Image ».
+    """
+    if not layout or not user_id:
+        return layout
+    import base64
+    import re
+
+    data_re = re.compile(r"^data:(image/(?:png|jpeg|jpg|webp));base64,([A-Za-z0-9+/=\s]+)$", re.I)
+    for page in layout.get("pages") or []:
+        if not isinstance(page, dict):
+            continue
+        for block in page.get("blocks") or []:
+            if not isinstance(block, dict) or block.get("type") != "image":
+                continue
+            src = block.get("image_src") if isinstance(block.get("image_src"), str) else ""
+            match = data_re.match(src.strip())
+            if not match:
+                continue
+            try:
+                raw = base64.b64decode(re.sub(r"\s+", "", match.group(2)))
+                mime = match.group(1).lower().replace("image/jpg", "image/jpeg")
+                block["image_src"] = _materialize_canvas_image(user_id, raw, mime)
+            except Exception as exc:
+                logger.warning("import layout image non stockée: %s", exc)
+                block["image_src"] = ""
+    return layout
 
 
 def _sanitize_cv_layout_field(body: dict[str, Any], user_id: str) -> dict[str, Any]:
@@ -1423,7 +1464,17 @@ def _extract_text_from_pdf(file_bytes: bytes) -> str:
             if text:
                 pages.append(text)
         pdf.close()
-        return "\n\n".join(pages)
+        text = "\n\n".join(pages)
+        from backend.services.pdf_structural_extract import visible_text_excluding_hidden_ats
+
+        visible, hidden_count = visible_text_excluding_hidden_ats(file_bytes)
+        if hidden_count and len(visible) >= 40:
+            logger.info(
+                "PDF import: %s ligne(s) de mots-clés ATS masqués retirées du texte",
+                hidden_count,
+            )
+            return visible
+        return text
     except Exception as e:
         logger.warning("PDF extraction error: %s", e)
         capture_business_event(
@@ -1713,6 +1764,7 @@ def api_cv_import_file(request: Request, file: UploadFile = File(...)):
 
             block_annotations = annotate_structural_blocks(structural_layout, cv)
             structural_layout = attach_annotations_to_layout(structural_layout, block_annotations)
+            structural_layout = _materialize_layout_data_urls(structural_layout, user_id)
 
     structural_blocks = (
         sum(len(p.get("blocks", [])) for p in structural_layout.get("pages", []))

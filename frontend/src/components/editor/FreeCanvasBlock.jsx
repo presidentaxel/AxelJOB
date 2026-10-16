@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef } from 'react';
+import { fontStyleForText } from '../../lib/embeddedFontCoverage.js';
 // useRef also used by EditableRichText
 import { HiEnvelope, HiLink, HiPhone, HiLockClosed } from 'react-icons/hi2';
 import { apiUrl } from '../../api';
@@ -28,6 +29,7 @@ import {
   resolveProjets,
 } from '../../lib/freeCanvasContent.js';
 import { blockHasTypographyOverride, blockStyleToCss } from '../../lib/canvasBlockToolbar.js';
+import { colorFromPdfRuns } from '../../lib/structuralSemanticBind.js';
 import { MM_TO_PX } from '../../lib/freeCanvasScale.js';
 import { isAutoHeightBlockType, isNonSemanticBlockType } from '../../lib/cvLayoutModelV3.js';
 import { getBlockDisplayName } from '../../lib/blockInspectorSchema.js';
@@ -105,6 +107,9 @@ function SemanticBlockBody({ block, cv, editing = false }) {
       const title = showTitle ? getFieldDisplayValue(cv, 'titre_professionnel') : '';
       const inlineTitle = style.header_layout === 'inline-title';
       const nameBind = ['prenom', 'nom'].filter((p) => bindIncludesPath(bind, p));
+      const prenomColor = colorFromPdfRuns(style.color_runs, prenom);
+      const nomColor = colorFromPdfRuns(style.color_runs, nom);
+      const titleColor = colorFromPdfRuns(style.color_runs, title);
       const nameEl = (showPrenom || showNom) ? (
         editing ? (
           <>
@@ -120,6 +125,12 @@ function SemanticBlockBody({ block, cv, editing = false }) {
               </CanvasEditableField>
             ) : null}
           </>
+        ) : (prenomColor || nomColor) ? (
+          <>
+            {showPrenom ? <span style={prenomColor ? { color: prenomColor } : undefined}>{prenom}</span> : null}
+            {showPrenom && showNom ? ' ' : null}
+            {showNom ? <span style={nomColor ? { color: nomColor } : undefined}>{nom}</span> : null}
+          </>
         ) : (
           <BlockText>
             {resolveBoundText(cv, nameBind) || identityNameEmptyLabel(bind)}
@@ -133,7 +144,7 @@ function SemanticBlockBody({ block, cv, editing = false }) {
             {title || 'Titre professionnel'}
           </CanvasEditableField>
         ) : title ? (
-          <BlockText>{title}</BlockText>
+          titleColor ? <span style={{ color: titleColor }}>{title}</span> : <BlockText>{title}</BlockText>
         ) : (
           <span className="free-canvas-block__field-placeholder">Titre professionnel</span>
         )
@@ -226,7 +237,10 @@ function SemanticBlockBody({ block, cv, editing = false }) {
         if (editing) {
           return <CanvasEditableField path={path} editing>{value || placeholder}</CanvasEditableField>;
         }
-        if (value) return <BlockText>{value}</BlockText>;
+        if (value) {
+          const color = colorFromPdfRuns(style.color_runs, value);
+          return color ? <span style={{ color }}>{value}</span> : <BlockText>{value}</BlockText>;
+        }
         return <span className="free-canvas-block__field-placeholder">{placeholder}</span>;
       };
       const maybeIcon = (Icon) => (
@@ -798,14 +812,37 @@ function EditableRichText({ tag, className, style, editing, html, onAutoHeight }
   );
 }
 
+function paintedPlainText(block, cv) {
+  if (!block || typeof block !== 'object') return '';
+  if (block.type === 'identity' && cv && typeof cv === 'object') {
+    const bits = [];
+    if (bindIncludesPath(block.bind, 'prenom')) bits.push(getFieldDisplayValue(cv, 'prenom'));
+    if (bindIncludesPath(block.bind, 'nom')) bits.push(getFieldDisplayValue(cv, 'nom'));
+    if (bindIncludesPath(block.bind, 'titre_professionnel')) {
+      bits.push(getFieldDisplayValue(cv, 'titre_professionnel'));
+    }
+    return bits.filter(Boolean).join(' ');
+  }
+  if (block.type === 'contact' && cv && typeof cv === 'object') {
+    const bits = [];
+    for (const path of ['email', 'telephone', 'ville', 'linkedin']) {
+      if (bindIncludesPath(block.bind, path)) bits.push(getFieldDisplayValue(cv, path));
+    }
+    return bits.filter(Boolean).join(' ');
+  }
+  return String(block.content || '').replace(/<[^>]+>/g, '');
+}
+
 function inlineTypographyStyle(style = {}) {
   const css = {};
   if (style.font_size != null) css.fontSize = `${style.font_size}pt`;
   if (style.font_family) css.fontFamily = style.font_family;
   if (style.color) css.color = style.color;
   if (style.color_body) css.color = style.color_body;
-  if (style.bold) css.fontWeight = '700';
+  if (style.font_weight) css.fontWeight = String(style.font_weight);
+  else if (style.bold) css.fontWeight = '700';
   if (style.italic || style.font_style === 'italic') css.fontStyle = 'italic';
+  if (style.line_height) css.lineHeight = style.line_height;
   const deco = [];
   if (style.underline) deco.push('underline');
   if (style.strikethrough) deco.push('line-through');
@@ -828,7 +865,7 @@ function NonSemanticBlockBody({ block, editing = false, onAutoHeight }) {
         textAlign: style.align || 'left',
         opacity: style.opacity ?? 1,
         margin: 0,
-        minHeight: style.nowrap ? 0 : '1em',
+        minHeight: style.nowrap || style.multiline ? 0 : '1em',
         height: 'auto',
         overflow: 'visible',
       };
@@ -1006,6 +1043,7 @@ export default function FreeCanvasBlock({
   onBlockAutoHeight,
   onSelect,
   locked = false,
+  embeddedFonts = [],
 }) {
   const innerRef = useRef(null);
   const validBlock = block && typeof block === 'object';
@@ -1053,8 +1091,10 @@ export default function FreeCanvasBlock({
 
   if (!validBlock) return null;
 
-  const innerTypography = blockStyleToCss(blockStyle);
-  const typographyOverride = blockHasTypographyOverride(blockStyle);
+  const renderStyle = fontStyleForText(blockStyle, paintedPlainText(block, cv), embeddedFonts);
+  const renderBlock = renderStyle === blockStyle ? block : { ...block, style: renderStyle };
+  const innerTypography = blockStyleToCss(renderStyle);
+  const typographyOverride = blockHasTypographyOverride(renderStyle);
   const zone = blockStyle?.zone;
   const isNonSemantic = isNonSemanticBlockType(type);
   const canEdit = isCanvasInlineEditableType(type);
@@ -1140,6 +1180,7 @@ export default function FreeCanvasBlock({
       data-block-id={id}
       data-block-type={type}
       data-nowrap={blockStyle?.nowrap ? 'true' : undefined}
+      data-multiline={blockStyle?.multiline ? 'true' : undefined}
       tabIndex={interactable && !editing ? 0 : undefined}
       aria-label={interactable ? a11yLabel : undefined}
       aria-disabled={interactable && locked ? true : undefined}
@@ -1184,12 +1225,12 @@ export default function FreeCanvasBlock({
         {isNonSemantic
           ? (
             <NonSemanticBlockBody
-              block={block}
+              block={renderBlock}
               editing={editing}
               onAutoHeight={autoHeight ? reportHeight : undefined}
             />
           )
-          : <SemanticBlockBody block={block} cv={cv} editing={editing} />}
+          : <SemanticBlockBody block={renderBlock} cv={cv} editing={editing} />}
       </div>
       {locked && (
         <span className="free-canvas-block__lock-badge" title="Position verrouillée - utilisez la barre d’actions pour déverrouiller" aria-hidden>

@@ -7,8 +7,11 @@ import {
   MIN_SEMANTIC_CONFIDENCE,
   alignImportGutterMarkers,
   bindStructuralTextToSemanticBlocks,
+  colorFromPdfRuns,
+  colorRunsFromPdfHtml,
   classifyStructuralTextBlock,
   decodeStructuralText,
+  pruneInPlaceImportDuplicates,
 } from '../../src/lib/structuralSemanticBind.js';
 
 test('decodeStructuralText décode entités HTML', () => {
@@ -413,6 +416,58 @@ test('bind inPlace : titres annotés, corps PDF conservé', () => {
   assert.equal(blocks.some((b) => b.type === 'experiences'), false);
 });
 
+test('bind inPlace conserve la couleur minoritaire d un fragment', () => {
+  const layout = sanitizeLayoutV3({
+    version: 3,
+    format: 'A4',
+    grid: 'free',
+    unit: 'mm',
+    freeform: true,
+    pages: [{
+      id: 'p1',
+      blocks: [
+        {
+          id: 'name',
+          type: 'text',
+          content: '<span style="color:#545454"><strong>EDGAR</strong></span> <strong>PRADEL</strong>',
+          x: 20,
+          y: 16,
+          w: 90,
+          h: 8,
+          z: 3,
+          style: { font_size: 18, bold: true, color: '#163853' },
+        },
+        {
+          id: 'mail',
+          type: 'text',
+          content: '06 74 90 49 11 <span style="color:#0000ff">ada@exemple.fr</span>',
+          x: 20,
+          y: 28,
+          w: 120,
+          h: 5,
+          z: 3,
+          style: { font_size: 9, color: '#000000' },
+        },
+      ],
+    }],
+  });
+  const { layout: out } = bindStructuralTextToSemanticBlocks(layout, {
+    prenom: 'Edgar',
+    nom: 'Pradel',
+    email: 'ada@exemple.fr',
+    telephone: '06 74 90 49 11',
+  });
+  const blocks = out.pages[0].blocks;
+  const identity = blocks.find((b) => b.type === 'identity');
+  const contact = blocks.find((b) => b.type === 'contact');
+  assert.ok(identity);
+  assert.equal(colorFromPdfRuns(identity.style.color_runs, 'Edgar'), '#545454');
+  assert.equal(colorFromPdfRuns(identity.style.color_runs, 'Pradel'), '');
+  assert.ok(contact);
+  assert.equal(colorFromPdfRuns(contact.style.color_runs, 'ada@exemple.fr'), '#0000ff');
+  assert.equal(colorFromPdfRuns(contact.style.color_runs, '06 74 90 49 11'), '');
+});
+
 test('classifyStructuralTextBlock : bullet XP qui cite le nom → pas identity', () => {
   const hit = classifyStructuralTextBlock(
     {
@@ -742,4 +797,81 @@ test('alignImportGutterMarkers : ignore titre de poste et date au-dessus', () =>
   assert.equal(byId.c1.y, 34 + (5 - 1.5) / 2);
   assert.ok(byId.c1.y > byId.job.y + 2, 'pas calée sur le titre');
   assert.equal(byId.c2.y, 40 + (5 - 1.5) / 2);
+});
+
+test('une ligne de titre sous le nom reste du texte', () => {
+  const layout = sanitizeLayoutV3({
+    version: 3,
+    format: 'A4',
+    grid: 'free',
+    unit: 'mm',
+    freeform: true,
+    pages: [{
+      id: 'p1',
+      blocks: [
+        {
+          id: 'name',
+          type: 'text',
+          content: 'Louis Vedovato',
+          x: 45,
+          y: 1,
+          w: 40,
+          h: 7,
+          style: { font_size: 17, color: '#ffffff' },
+        },
+        {
+          id: 'role',
+          type: 'text',
+          content: 'ALTERNANT',
+          x: 45,
+          y: 8,
+          w: 32,
+          h: 5,
+          style: { font_size: 11, color: '#ffffff' },
+        },
+      ],
+    }],
+  });
+  const { layout: out } = bindStructuralTextToSemanticBlocks(layout, {
+    prenom: 'Louis',
+    nom: 'Vedovato',
+    titre_professionnel: 'ALTERNANT',
+  });
+  const role = out.pages[0].blocks.find((b) => b.id === 'role');
+  assert.equal(role?.type, 'text');
+  assert.equal(role.content, 'ALTERNANT');
+});
+
+test('prune ne retire pas un téléphone si le contact voisin ne le porte pas', () => {
+  const layout = {
+    pages: [{
+      blocks: [
+        {
+          id: 'mail',
+          type: 'contact',
+          bind: ['email'],
+          content: '',
+          x: 50,
+          y: 26,
+          w: 40,
+          h: 5,
+        },
+        {
+          id: 'phone',
+          type: 'text',
+          content: '+33 7 83 61 45 30',
+          x: 50,
+          y: 20,
+          w: 36,
+          h: 5,
+        },
+      ],
+    }],
+  };
+  const out = pruneInPlaceImportDuplicates(layout, {
+    email: 'ada@example.com',
+    telephone: '+33 7 83 61 45 30',
+  });
+  const ids = out.pages[0].blocks.map((b) => b.id);
+  assert.ok(ids.includes('phone'));
 });

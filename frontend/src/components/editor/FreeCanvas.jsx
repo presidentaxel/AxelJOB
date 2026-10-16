@@ -69,7 +69,7 @@ function EmbeddedFontFaces({ fonts }) {
       const format = cssEscapeString(f.format || 'truetype');
       return (
         `@font-face{font-family:'${family}';`
-        + `font-weight:${f.weight === 700 ? 700 : 400};`
+        + `font-weight:${[100, 200, 300, 400, 500, 600, 700, 800, 900].includes(Number(f.weight)) ? Number(f.weight) : 400};`
         + `font-style:${f.style === 'italic' ? 'italic' : 'normal'};`
         + 'font-display:swap;'
         + `src:url("${src}") format('${format}');}`
@@ -885,6 +885,7 @@ export default function FreeCanvas({
                     key={block.id}
                     block={renderBlock}
                     cv={cv}
+                    embeddedFonts={layout?.fonts}
                     selected={selectedBlockIds.includes(block.id)}
                     editing={editingBlockId === block.id}
                     dragging={draggingBlockId === block.id}

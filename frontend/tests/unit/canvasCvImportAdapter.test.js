@@ -264,6 +264,39 @@ test('applyImportedRoundImageShapes : anneau vectoriel → image en cercle', () 
   assert.equal(out.pages[0].blocks.some((b) => b.id === 'ring'), false);
 });
 
+test('applyImportedRoundImageShapes : un aplat vectoriel carré reste rectangulaire', () => {
+  const layout = {
+    pages: [{
+      id: 'p1',
+      blocks: [
+        { id: 'tri', type: 'image', x: 0, y: 0, w: 80, h: 79, z: 1, style: { shape: 'rect', vector_fill: true }, image_src: 'https://example.test/t.png' },
+        { id: 'plate', type: 'shape:circle', x: 15, y: 10, w: 50, h: 50, z: 1, style: { color: '#ffffff', photo_plate: true } },
+        { id: 'photo', type: 'image', x: 17, y: 12, w: 46, h: 46, z: 2, style: { shape: 'circle' }, image_src: 'https://example.test/p.jpg' },
+      ],
+    }],
+  };
+  const out = applyImportedRoundImageShapes(layout);
+  const tri = out.pages[0].blocks.find((b) => b.id === 'tri');
+  const plate = out.pages[0].blocks.find((b) => b.id === 'plate');
+  assert.equal(tri.style.shape, 'rect');
+  assert.equal(plate.style.photo_plate, true);
+});
+
+test('cleanupImportedImageOverlays : garde l’anneau blanc plus grand que la photo', () => {
+  const layout = {
+    pages: [{
+      id: 'p1',
+      blocks: [
+        { id: 'img', type: 'image', x: 18, y: 18, w: 28, h: 28, z: 2, style: { shape: 'circle' }, image_src: 'https://example.test/p.jpg' },
+        { id: 'plate', type: 'shape:circle', x: 15, y: 15, w: 34, h: 34, z: 1, style: { color: '#ffffff', stroke_width: 0, photo_plate: true } },
+      ],
+    }],
+  };
+  const out = cleanupImportedImageOverlays(layout);
+  assert.equal(out.pages[0].blocks.some((b) => b.id === 'plate'), true);
+  assert.equal(out.pages[0].blocks.find((b) => b.id === 'img').style.shape, 'circle');
+});
+
 test('cleanupImportedImageOverlays : supprime icône parasite sur photo', () => {
   const layout = {
     pages: [{
@@ -308,7 +341,7 @@ test('sanitizeLayoutV3 : applique le min 5×3 hors freeform', () => {
 test('sanitizeLayoutV3 : préserve les polices embarquées (@font-face)', () => {
   const fonts = [
     { family: 'PDFEmbed-Garet', weight: 700, style: 'normal', format: 'truetype', src: 'data:font/ttf;base64,AAA' },
-    { family: 'PDFEmbed-Garet', weight: 400, style: 'normal', src: 'data:font/ttf;base64,BBB' },
+    { family: 'PDFEmbed-Garet', weight: 500, style: 'normal', src: 'data:font/ttf;base64,BBB' },
     { family: '', src: 'data:...' },
   ];
   const out = sanitizeLayoutV3({ ...STRUCTURAL_LAYOUT, fonts });
@@ -316,6 +349,7 @@ test('sanitizeLayoutV3 : préserve les polices embarquées (@font-face)', () => 
   assert.equal(out.fonts[0].family, 'PDFEmbed-Garet');
   assert.equal(out.fonts[0].weight, 700);
   assert.equal(out.fonts[1].format, 'truetype');
+  assert.equal(out.fonts[1].weight, 500);
 });
 
 test('reflowColumnBlocksOnPage : ne touche pas un layout freeform', () => {
