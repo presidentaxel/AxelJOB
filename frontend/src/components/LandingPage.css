@@ -140,13 +140,13 @@
   color: inherit;
 }
 
-.landing-mobile-cta.button {
+.landing-mobile-cta.ds-button {
   padding: 0.4rem 0.85rem;
   font-size: 0.8rem;
 }
 
 @media (min-width: 1024px) {
-  .landing-mobile-cta.button {
+  .landing-mobile-cta.ds-button {
     display: none;
   }
 }
@@ -316,7 +316,7 @@
   padding-top: 0.5rem;
 }
 
-.landing-nav-drawer-cta .button {
+.landing-nav-drawer-cta .ds-button {
   width: 100%;
   justify-content: center;
 }
@@ -327,7 +327,7 @@
   padding: 5rem 0 4rem;
   background:
     radial-gradient(ellipse 70% 60% at 15% 40%, rgba(249, 223, 212, 0.55) 0%, transparent 70%),
-    radial-gradient(ellipse 55% 50% at 80% 20%, rgba(233, 216, 255, 0.55) 0%, transparent 65%),
+    radial-gradient(ellipse 55% 50% at 80% 20%, rgba(76, 110, 230, 0.22) 0%, transparent 65%),
     radial-gradient(ellipse 45% 55% at 60% 80%, rgba(198, 222, 210, 0.35) 0%, transparent 60%),
     var(--color-canvas-cream);
 }
@@ -365,7 +365,7 @@
   color: var(--color-body-muted);
 }
 
-/* CTA hero = button-primary pill avec ombre légère */
+/* CTA hero : pill avec ombre légère */
 .landing-cta-hero {
   padding: 0.875rem 1.75rem;
   font-size: 1rem;
@@ -376,7 +376,7 @@
 }
 
 .landing-cta-hero:hover {
-  box-shadow: rgba(74, 21, 75, 0.25) 0 8px 28px 0;
+  box-shadow: rgba(23, 23, 28, 0.25) 0 8px 28px 0;
 }
 
 .landing-hero-ctas {
@@ -711,12 +711,12 @@
 }
 
 /* Boutons sur fond aubergine → blanc inverted */
-.landing-cta-bottom .button-primary {
+.landing-cta-bottom .ds-button--primary {
   background: var(--color-on-primary);
   color: var(--color-primary);
 }
 
-.landing-cta-bottom .button-primary:hover:not(:disabled) {
+.landing-cta-bottom .ds-button--primary:hover:not(:disabled) {
   background: var(--color-canvas-lavender);
 }
 
@@ -757,7 +757,7 @@
 .pricing-card--pro {
   background: var(--color-primary);
   border-color: var(--color-primary);
-  box-shadow: rgba(74, 21, 75, 0.25) 0 8px 28px 0;
+  box-shadow: rgba(23, 23, 28, 0.25) 0 8px 28px 0;
 }
 
 .pricing-card--pro .pricing-plan-name,
@@ -772,12 +772,12 @@
 }
 
 /* Bouton CTA dans la card Pro aubergine */
-.pricing-card--pro .button-primary {
+.pricing-card--pro .ds-button--primary {
   background: var(--color-on-primary);
   color: var(--color-primary);
 }
 
-.pricing-card--pro .button-primary:hover:not(:disabled) {
+.pricing-card--pro .ds-button--primary:hover:not(:disabled) {
   background: var(--color-canvas-lavender);
 }
 

@@ -572,9 +572,9 @@ function SupportTicketSection() {
             <p className="support-ticket-success">
               Ticket envoyé. Tu recevras une réponse par email à <strong>{ticketEmail}</strong>.
             </p>
-            <button type="button" className="button button-secondary support-ticket-another" onClick={sendAnother}>
+            <Button type="button" variant="secondary" className="support-ticket-another" onClick={sendAnother}>
               Envoyer un autre ticket
-            </button>
+            </Button>
           </>
         ) : (
           <>
@@ -601,9 +601,9 @@ function SupportTicketSection() {
                 required
               />
               {error && <p className="support-ticket-error">{error}</p>}
-              <button type="submit" className="button button-primary support-ticket-submit" disabled={loading} {...analyticsAttrs('support-ticket-cta-submit', 'ticket', 'primary', 'cta')}>
+              <Button type="submit" variant="primary" className="support-ticket-submit" disabled={loading} loading={loading} {...analyticsAttrs('support-ticket-cta-submit', 'ticket', 'primary', 'cta')}>
                 {loading ? 'Envoi…' : 'Envoyer le ticket'}
-              </button>
+              </Button>
             </form>
           </>
         )}
@@ -649,9 +649,9 @@ function SupportReplySection() {
         {success ? (
           <>
             <p className="support-ticket-success">Message envoyé.</p>
-            <button type="button" className="button button-secondary support-ticket-another" onClick={sendAnother}>
+            <Button type="button" variant="secondary" className="support-ticket-another" onClick={sendAnother}>
               Nouvelle réponse
-            </button>
+            </Button>
           </>
         ) : (
           <>
@@ -678,9 +678,9 @@ function SupportReplySection() {
                 required
               />
               {error && <p className="support-ticket-error">{error}</p>}
-              <button type="submit" className="button button-primary support-ticket-submit" disabled={loading}>
+              <Button type="submit" variant="primary" className="support-ticket-submit" disabled={loading} loading={loading}>
                 {loading ? 'Envoi…' : 'Envoyer'}
-              </button>
+              </Button>
             </form>
           </>
         )}
@@ -3521,19 +3521,23 @@ export default function App() {
                 Colle une offre d&apos;emploi, l&apos;IA adapte ton CV. Affine par chat, puis exporte en PDF.
               </p>
               <div className="page-title-row-actions">
-                <button
+                <Button
                   type="button"
-                  className="button button-secondary button--sm btn-new-adapt-session"
+                  variant="secondary"
+                  size="sm"
+                  className="btn-new-adapt-session"
                   onClick={requestNewCandidatureWorkspace}
                   disabled={adapting}
                   title="Vider le chat et l’aperçu pour adapter ton CV à une autre offre (sans supprimer tes candidatures enregistrées)"
                   {...analyticsAttrs('cv-header-cta-new', 'header', 'secondary', 'cta')}
                 >
                   Nouvelle candidature
-                </button>
-                <button
+                </Button>
+                <Button
                   type="button"
-                  className="button button-secondary button--sm btn-new-adapt-session"
+                  variant="secondary"
+                  size="sm"
+                  className="btn-new-adapt-session"
                   onClick={async () => {
                     if (!lastAdaptRunConfig || adapting) return;
                     setChatMessages((prev) => [...prev, { role: 'user', content: 'Relancer la dernière adaptation' }]);
@@ -3547,7 +3551,7 @@ export default function App() {
                   title="Relancer la dernière adaptation avec les mêmes étapes"
                 >
                   Relancer la dernière adaptation
-                </button>
+                </Button>
               </div>
             </div>
           </header>
@@ -3557,9 +3561,9 @@ export default function App() {
                 const rem = usage.adaptations_quota_remaining ?? (usage.adaptations_limit - usage.adaptations_used);
                 return rem <= 0 ? 'Tes adaptations gratuites sont épuisées.' : `Il te reste ${rem} adaptation${rem > 1 ? 's' : ''} gratuite${rem > 1 ? 's' : ''}.`;
               })()}</span>
-              <button type="button" className="button button-primary button--sm" onClick={handleUpgradeClick} disabled={checkoutLoading} {...analyticsAttrs('cv-banner-cta-upgrade', 'banner', 'primary', 'cta')}>
+              <Button type="button" variant="primary" size="sm" onClick={handleUpgradeClick} disabled={checkoutLoading} loading={checkoutLoading} {...analyticsAttrs('cv-banner-cta-upgrade', 'banner', 'primary', 'cta')}>
                 {checkoutLoading ? '…' : 'Passer Pro - 10€/mois'}
-              </button>
+              </Button>
             </div>
           )}
           {usage && usage.adaptations_used === 0 && (
@@ -4083,8 +4087,8 @@ export default function App() {
                     </>
                   )}
                   <div className="cv-chat-export-btns">
-                    <button type="button" className="button button-success" onClick={handlePdf} disabled={exporting} {...analyticsAttrs('cv-export-cta-pdf', 'export', 'primary', 'cta')}>Télécharger le PDF</button>
-                    <button type="button" className="button button-secondary" onClick={handleExportDossier} disabled={exporting} aria-busy={exporting} {...analyticsAttrs('cv-export-cta-dossier', 'export', 'secondary', 'cta')}>
+                    <Button type="button" variant="success" onClick={handlePdf} disabled={exporting} {...analyticsAttrs('cv-export-cta-pdf', 'export', 'primary', 'cta')}>Télécharger le PDF</Button>
+                    <Button type="button" variant="secondary" onClick={handleExportDossier} disabled={exporting} loading={exporting} {...analyticsAttrs('cv-export-cta-dossier', 'export', 'secondary', 'cta')}>
                       {exporting ? (
                         <>
                           <span className="export-spinner" aria-hidden="true" />
@@ -4093,7 +4097,7 @@ export default function App() {
                       ) : (
                         typeof showDirectoryPicker === 'function' ? 'Dossier complet (choisir un dossier…)' : 'Dossier complet'
                       )}
-                    </button>
+                    </Button>
                   </div>
                   {exporting && (
                     <p className="cv-chat-export-loading" role="status">Préparation du dossier (PDF, fichiers)…</p>

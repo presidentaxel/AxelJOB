@@ -157,6 +157,18 @@ Changer `VITE_SENTRY_DSN` sans rebuild front = SDK absent du bundle.
 
 `SENTRY_AUTH_TOKEN` : uniquement au **build** front (source maps). Jamais dans `.env` (`env_file` l’injecterait au backend). Sans token, le build réussit ; les `.map` sont supprimés ; la stack front reste minifiée.
 
+Le bundle et l’upload utilisent **le même** nom (`VITE_SENTRY_RELEASE`, sinon `SENTRY_RELEASE`, sinon le SHA git court). Sans ce nom commun, les maps partent sur une release que le navigateur n’envoie pas.
+
+Vérifier en local (pas de route `/sentry-test`) :
+
+```bash
+cd frontend
+SENTRY_AUTH_TOKEN='…' npm run build
+```
+
+Le log doit afficher `[sentry] release=<sha ou nom> upload=oui`, puis les `.map` disparaissent de `dist/`. Dans Sentry, la release du même nom a des artifacts. Un event capturé par ce build doit montrer `src/…` et pas seulement `assets/main.js`. Sans token : `upload=non`, le build passe, les maps ne sont pas envoyées.
+
+
 ### 3. Smoke sans route de test
 
 SDK SPA seulement : `/`, `/login`, `/app/*` — pas `/confidentialite` ni `/faq`.
@@ -178,12 +190,10 @@ print('flushed')
 
 ```javascript
 (function () {
-  const c = window.__SENTRY__;
-  if (!c) { console.warn('Sentry absent (DSN vide ou page statique)'); return; }
-  const client = (typeof c.getClient === 'function' && c.getClient())
-    || c.defaultClient
-    || (c.hub && c.hub.getClient && c.hub.getClient());
-  if (!client) { console.warn('Client introuvable — ne plus tester .hub seul (SDK v10)'); return; }
+  const root = window.__SENTRY__;
+  const carrier = root && root.version && root[root.version];
+  const client = carrier && carrier.defaultCurrentScope && carrier.defaultCurrentScope.getClient();
+  if (!client) { console.warn('Sentry absent (DSN vide ou page statique)'); return; }
   const opts = client.getOptions ? client.getOptions() : {};
   console.log('Sentry OK', { env: opts.environment, release: opts.release });
   client.captureMessage('AXE-371 recette smoke frontend', 'error');
@@ -233,6 +243,24 @@ Voir [`docs/deploy.md`](deploy.md) §7 (bloc Sentry) et §8.
 5. [AXE-371](https://linear.app/axel-project/issue/AXE-371) coller DSN + smoke + alertes email (ce document).
 
 ---
+
+## Santé Gemini (AXE-337)
+
+Le monitoring admin (`/app/monitoring`) affiche une carte **Gemini** : `ok`, `dégradé` ou `indisponible`, avec la raison (`billing_prepay`, `quota`, `auth`, `model`, `not_configured`, `disabled`, `unknown`).
+
+La sonde fait un `generate_content` court sur `GEMINI_MODEL` (défaut `gemini-2.5-flash-lite`), au plus une fois par `GEMINI_HEALTH_INTERVAL_SEC` (défaut 600). Elle tourne dans le ticker ops et au chargement du snapshot admin. La clé n’est jamais recopiée dans le statut, le détail, ni les logs d’import.
+
+Une alerte email part **une fois** quand le statut passe de `ok` à `down` pour `billing_prepay`, `auth` ou `quota`. Le cooldown est celui des autres alertes monitoring (`MONITORING_ALERT_*`, Resend).
+
+| Variable | Rôle |
+| --- | --- |
+| `GEMINI_API_KEY` | Clé AI Studio. Absente → statut `down` / `not_configured`, sans appel réseau. |
+| `GEMINI_MODEL` | Modèle sondé. |
+| `GEMINI_HEALTH_INTERVAL_SEC` | Intervalle minimum entre deux sondes (plancher 60 s, défaut 600). |
+| `AI_FEATURES_ENABLED` | Vide ou absent = IA active. `0` = pas d’appel, statut `dégradé` / `disabled`. |
+| `MONITORING_ALERT_ENABLED` | `1` pour envoyer l’email ok → down. |
+
+Après un rechargement Prepay dans AI Studio : ouvrir `/app/monitoring` et attendre la prochaine sonde (ou redémarrer l’API, la première sonde part au premier snapshot). Le statut doit revenir à **OK**. Un import CV qui échoue encore renvoie un 502 dont `detail.reason` vaut `billing_prepay`, `auth`, `quota`, `model` ou `unknown`, et `detail.message` reste « Erreur Gemini lors de l'import. »
 
 ## Hors scope v1
 

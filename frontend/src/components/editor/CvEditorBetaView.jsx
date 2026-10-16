@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import Button from '../ui/Button.jsx';
 
 import {
   apiGet,
@@ -804,7 +805,10 @@ function CvEditorBeta({
     let importSource;
 
     if (chosenVariant?.layout) {
-      finalLayout = ensureImportLayoutHasContent(chosenVariant.layout, nextCv);
+      finalLayout = cleanupCanvasHeaderOverlays(
+        ensureImportLayoutHasContent(chosenVariant.layout, nextCv),
+        nextCv,
+      );
       recommendedTemplateId = chosenVariant.recommendedTemplateId || '';
       contentBlockCount = countContentBlocks(finalLayout);
       blockCount = chosenVariant.blockCount
@@ -824,7 +828,10 @@ function CvEditorBeta({
         visionMeta,
         annotations,
       }));
-      finalLayout = ensureImportLayoutHasContent(finalLayout, nextCv);
+      finalLayout = cleanupCanvasHeaderOverlays(
+        ensureImportLayoutHasContent(finalLayout, nextCv),
+        nextCv,
+      );
       contentBlockCount = countContentBlocks(finalLayout);
     }
 
@@ -2040,13 +2047,13 @@ function CvEditorBeta({
         <div className="cv-editor-beta-load-error-card">
           <h2 id="cv-beta-load-err-title">Profil inaccessible</h2>
           <p>{profileLoadError}</p>
-          <button
+          <Button
             type="button"
-            className="button button-primary"
+            variant="primary"
             onClick={() => setProfileLoadAttempt((k) => k + 1)}
           >
             Réessayer
-          </button>
+          </Button>
         </div>
       </div>
     );

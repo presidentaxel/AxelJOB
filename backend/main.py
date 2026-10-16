@@ -51,6 +51,7 @@ from backend.config import (
     STRIPE_SECRET_KEY,
     STRIPE_WEBHOOK_SECRET,
     SUPPORT_ADMIN_EMAILS,
+    SUPPORT_ADMIN_USER_IDS,
     SUPPORT_EMAIL,
     USE_SUPABASE,
     USE_SUPABASE_PG,
@@ -63,6 +64,7 @@ from backend.config import (
 )
 from backend.cv_html_render import render_cv_html as _render_cv_html
 from backend.rate_limit import check_rate_limit, rate_limit_max_adapt
+from backend.services.support_ticket import support_ticket_failure_detail
 from backend.template_registry import DEFAULT_TEMPLATE_ID
 
 _thread_pool = ThreadPoolExecutor(max_workers=thread_pool_max_workers())
@@ -1545,11 +1547,21 @@ def _parse_cv_text_with_ai(text: str, user_id: str | None = None) -> dict:
         try:
             r = client.models.generate_content(model=model_id, contents=prompt, config=cfg)
         except Exception as exc:
-            logger.warning("_parse_cv_text_with_ai: %s tentative %d: %s", model_id, attempt, exc)
+            from backend.gemini_health import gemini_failure_detail, scrub_gemini_text
+
+            logger.warning(
+                "_parse_cv_text_with_ai: %s tentative %d: %s",
+                model_id,
+                attempt,
+                scrub_gemini_text(str(exc)),
+            )
             if attempt < len(models_to_try) - 1:
                 time.sleep(0.5)
                 continue
-            raise HTTPException(status_code=502, detail="Erreur Gemini lors de l'import.")
+            raise HTTPException(
+                status_code=502,
+                detail=gemini_failure_detail(exc, "Erreur Gemini lors de l'import."),
+            )
         if r and getattr(r, "text", None):
             break
         logger.warning(
@@ -2434,10 +2446,10 @@ class SupportTicketBody(BaseModel):
 
 def _send_support_ticket_email(
     to_support: str, user_email: str, subject: str, message: str
-) -> bool:
-    """Envoie un email au support avec le ticket (Reply-To: user_email pour répondre par mail)."""
+) -> str | None:
+    """Envoie le ticket. None si envoyé, sinon le message à montrer à l'utilisateur."""
     if not RESEND_API_KEY or not to_support:
-        return False
+        return support_ticket_failure_detail(None, production=IS_PRODUCTION)
     try:
         import resend
 
@@ -2513,10 +2525,10 @@ def _send_support_ticket_email(
         }
         resend.Emails.send(params)
         logger.info("Support ticket email sent to %s from %s", to_support, user_email)
-        return True
+        return None
     except Exception as e:
         logger.exception("Resend support ticket email failed: %s", e)
-        return False
+        return support_ticket_failure_detail(e, production=IS_PRODUCTION)
 
 
 @app.post("/api/support-ticket")
@@ -2541,16 +2553,17 @@ def api_support_ticket(request: Request, body: SupportTicketBody):
         raise HTTPException(status_code=400, detail="Message trop long.")
     if not SUPPORT_EMAIL:
         raise HTTPException(status_code=503, detail="Support non configuré (SUPPORT_EMAIL).")
-    if not _send_support_ticket_email(SUPPORT_EMAIL, user_email, subject, message):
-        raise HTTPException(
-            status_code=503,
-            detail="Envoi du ticket impossible. Réessaie ou contacte-nous par email.",
-        )
+    send_error = _send_support_ticket_email(SUPPORT_EMAIL, user_email, subject, message)
+    if send_error:
+        raise HTTPException(status_code=503, detail=send_error)
     return {"ok": True, "email": user_email}
 
 
-def _is_support_admin(email: str | None) -> bool:
-    """True si l'email fait partie des admins support (réponses via l'app)."""
+def _is_support_admin(email: str | None, user_id: str | None = None) -> bool:
+    """True si l'email, ou l'UID en dev, fait partie des admins support."""
+    uid = (user_id or "").strip()
+    if uid and uid in SUPPORT_ADMIN_USER_IDS and not IS_PRODUCTION:
+        return True
     if not email:
         return False
     e = email.strip().lower()
@@ -2560,9 +2573,9 @@ def _is_support_admin(email: str | None) -> bool:
 
 
 def _require_support_admin(request: Request) -> None:
-    """JWT valide + email dans SUPPORT_ADMIN_EMAILS ou égal à SUPPORT_EMAIL."""
-    _require_user_id(request)
-    if not _is_support_admin(_get_user_email_from_jwt(request)):
+    """JWT valide + email admin, ou UID listé hors production."""
+    user_id = _require_user_id(request)
+    if not _is_support_admin(_get_user_email_from_jwt(request), user_id):
         raise HTTPException(status_code=403, detail="Accès réservé aux administrateurs.")
 
 
@@ -2634,9 +2647,9 @@ class SupportReplyBody(BaseModel):
 @app.post("/api/support-reply")
 def api_support_reply(request: Request, body: SupportReplyBody):
     """Envoie une réponse support à un utilisateur (template HTML). Réservé aux admins support (SUPPORT_ADMIN_EMAILS ou SUPPORT_EMAIL)."""
-    _require_user_id(request)
+    user_id = _require_user_id(request)
     user_email = _get_user_email_from_jwt(request)
-    if not _is_support_admin(user_email):
+    if not _is_support_admin(user_email, user_id):
         raise HTTPException(status_code=403, detail="Accès réservé au support.")
     to_email = (body.to_email or "").strip()
     message = (body.message or "").strip()
@@ -2689,7 +2702,7 @@ def api_usage(request: Request):
         adaptations_limit = FREE_ADAPTATIONS_LIMIT
     applications_limit = 999999 if (plan == "pro" or no_paywall) else FREE_APPLICATIONS_LIMIT
     user_email = _get_user_email_from_jwt(request)
-    is_support = _is_support_admin(user_email)
+    is_support = _is_support_admin(user_email, user_id)
     stripe_subscription = None
     if user_id and STRIPE_SECRET_KEY and plan == "pro" and not no_paywall:
         try:

@@ -10,6 +10,7 @@ import {
   saveBlobWithPreferredMethod,
   triggerBlobDownload,
 } from './lib/blobDownload.js';
+import { httpDetailMessage } from './lib/httpDetailMessage.js';
 
 export {
   closePreopenedDownloadWindow,
@@ -64,9 +65,7 @@ async function parseErrorResponse(r) {
   try {
     data = JSON.parse(text);
     const detail = data?.detail;
-    msg = Array.isArray(detail)
-      ? (detail[0]?.msg || JSON.stringify(detail))
-      : (detail || data?.error || msg);
+    msg = httpDetailMessage(detail, data?.error || msg);
   } catch {
     if (text?.trim()) msg = text.trim();
   }
@@ -90,7 +89,7 @@ export async function apiGet(path) {
     let data = null;
     try {
       data = JSON.parse(text);
-      msg = data.detail || data.error || msg;
+      msg = httpDetailMessage(data.detail, data.error || msg);
     } catch {
       /* body not JSON */
     }
@@ -171,28 +170,29 @@ export async function apiPostStream(path, body, { onMessage, signal } = {}) {
     for (const raw of lines) {
       const line = raw.trim();
       if (!line) continue;
-      try {
-        const parsed = JSON.parse(line);
-        if (onMessage) {
-          onMessage(parsed);
-          await _yieldForStreamUi(parsed);
-        }
-      } catch {
-        // ignore malformed stream line
+      const parsed = _parseStreamLine(line);
+      if (!parsed) continue;
+      if (onMessage) {
+        onMessage(parsed);
+        await _yieldForStreamUi(parsed);
       }
     }
   }
   const tail = (buffer || '').trim();
   if (tail) {
-    try {
-      const parsed = JSON.parse(tail);
-      if (onMessage) {
-        onMessage(parsed);
-        await _yieldForStreamUi(parsed);
-      }
-    } catch {
-      // ignore malformed trailing line
+    const parsed = _parseStreamLine(tail);
+    if (parsed && onMessage) {
+      onMessage(parsed);
+      await _yieldForStreamUi(parsed);
     }
+  }
+}
+
+function _parseStreamLine(line) {
+  try {
+    return JSON.parse(line);
+  } catch {
+    return null;
   }
 }
 

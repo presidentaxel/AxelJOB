@@ -104,6 +104,11 @@ SUPPORT_EMAIL = _env("SUPPORT_EMAIL")
 SUPPORT_ADMIN_EMAILS = [
     e.strip().lower() for e in _env("SUPPORT_ADMIN_EMAILS", "").split(",") if e.strip()
 ]
+# Comptes autorisés en plus des emails, uniquement hors production
+# (le login Google du compte admin ne fonctionne pas en dev).
+SUPPORT_ADMIN_USER_IDS = {
+    u.strip() for u in _env("SUPPORT_ADMIN_USER_IDS", "").split(",") if u.strip()
+}
 
 METRICS_AUTH_TOKEN = _env("METRICS_AUTH_TOKEN")
 
