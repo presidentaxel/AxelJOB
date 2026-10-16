@@ -73,7 +73,9 @@ Pas de variant `outline` : le markup CSS `.button-pill-outline` reste un **alias
 
 `frontend/src/styles/ds-legacy-aliases.css` ne contient pas de sélecteurs de bouton : il mappe encore les variables `--color-*` et `--radius-*` vers `--ds-*`. Ne plus y ajouter de hex.
 
-Les pages statiques (`frontend/public/*.html`, premier HTML de `index.html`) gardent `class="button button-primary"` avec leur CSS dédié (`landing-static.css`, `static-pages.css`). Ce n’est pas le helper React.
+Le premier HTML de `index.html` peint ses CTA avec `ds-button ds-button--*` et les variables `--ds-color-action-*` du CSS critique, pour que le rechargement de `/` n’affiche pas l’ancien bouton violet.
+
+Les pages `frontend/public/*.html` gardent `class="button button-primary"` et `static-pages.css`. Ce n’est pas le helper React.
 
 ## Input
 
