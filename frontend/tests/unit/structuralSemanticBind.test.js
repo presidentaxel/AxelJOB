@@ -8,7 +8,6 @@ import {
   alignImportGutterMarkers,
   bindStructuralTextToSemanticBlocks,
   colorFromPdfRuns,
-  colorRunsFromPdfHtml,
   classifyStructuralTextBlock,
   decodeStructuralText,
   pruneInPlaceImportDuplicates,
