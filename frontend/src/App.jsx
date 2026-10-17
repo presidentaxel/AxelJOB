@@ -1251,8 +1251,10 @@ export default function App() {
       setOnboardingChecked(false);
     }
     setProfileCvLoadError(null);
-    apiGet('/api/cv?profile=1')
+    const controller = new AbortController();
+    apiGet('/api/cv?profile=1', { signal: controller.signal })
       .then((data) => {
+        if (controller.signal.aborted) return;
         const empty = !data || (typeof data === 'object' && Object.keys(data).length === 0);
         setNeedsOnboarding(empty);
         if (data?.template_id !== undefined && (data.template_id || '').trim()) setTemplateId((data.template_id || '').trim() || 'minimal');
@@ -1261,11 +1263,15 @@ export default function App() {
           setProfileLayout(data.layout && typeof data.layout === 'object' ? data.layout : null);
         }
       })
-      .catch(() => {
-        setProfileCvLoadError('Impossible de charger ton profil. Vérifie ta connexion puis réessaie.');
+      .catch((error) => {
+        if (controller.signal.aborted || error?.name === 'AbortError') return;
+        setProfileCvLoadError('Impossible de charger ton profil. Vérifie que le serveur local tourne, puis réessaie.');
         setNeedsOnboarding(false);
       })
-      .finally(() => setOnboardingChecked(true));
+      .finally(() => {
+        if (!controller.signal.aborted) setOnboardingChecked(true);
+      });
+    return () => controller.abort();
   }, [session?.user?.id, session?.user?.email, authLoading, profileRefreshKey]);
 
   // Ancienne clé tutoriel unique → marquer les deux phases comme vues pour ce compte (évite de re-montrer le tour aux anciens utilisateurs).
