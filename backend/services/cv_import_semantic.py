@@ -535,9 +535,6 @@ def annotate_structural_blocks(
                 if _looks_like_phone(text, phone):
                     conf += 0.8
                     contact_bind.append("telephone")
-                ville = (cv.get("ville") or "").strip().lower()
-                if ville and len(ville) >= 3 and ville in text.lower():
-                    contact_bind.append("ville")
                 linkedin = (cv.get("linkedin") or "").strip().lower()
                 if linkedin and len(linkedin) >= 6 and linkedin in text.lower():
                     contact_bind.append("linkedin")
