@@ -111,6 +111,21 @@ Format de sortie : UNIQUEMENT un objet JSON, sans markdown, sans commentaire, sa
 """
 
 
+def documents_contexte_block(offre: dict | None) -> str:
+    """Bloc prompt des pièces jointes. Vide si le candidat n'en a pas joint."""
+    text = ((offre or {}).get("documents_contexte") or "").strip()
+    if not text:
+        return ""
+    return (
+        "<documents_candidat>\n"
+        "Pièces jointes fournies par le candidat (lettre, portfolio, annexes). "
+        "S'en servir seulement pour reformuler des faits déjà présents dans le CV source. "
+        "Ne rien inventer.\n"
+        f"{text}\n"
+        "</documents_candidat>\n"
+    )
+
+
 def _build_user_prompt(
     cv_base: dict, offre: dict, rapport: dict | None, output_policy: str | None = None
 ) -> str:
@@ -153,7 +168,7 @@ def _build_user_prompt(
 <competences_requises>{comp}</competences_requises>
 <description_extrait>{(offre.get("description_brute") or "")[:4000]}</description_extrait>
 </offre_emploi>
-
+{documents_contexte_block(offre)}
 {langue_cv_xml(cv_base, offre, output_policy)}
 
 <cv_source_resume>
@@ -645,7 +660,7 @@ Retourne UNIQUEMENT un JSON avec exactement les clés : resume, poste_offre (pas
 <competences_requises>{comp}</competences_requises>
 <description_extrait>{(offre.get("description_brute") or "")[:4000]}</description_extrait>
 </offre_emploi>
-
+{documents_contexte_block(offre)}
 {langue_cv_xml(cv_current, offre, output_policy)}
 
 <cv_resume_actuel>
@@ -678,7 +693,7 @@ Retourne UNIQUEMENT un JSON avec la clé : experiences (liste de {{ "id", "bulle
 <mots_cles_prioritaires>{mots}</mots_cles_prioritaires>
 <description_extrait>{(offre.get("description_brute") or "")[:4000]}</description_extrait>
 </offre_emploi>
-
+{documents_contexte_block(offre)}
 {langue_cv_xml(cv_current, offre, output_policy)}
 
 <resume_contexte>
@@ -715,7 +730,7 @@ Pas d'invention hors annonce / CV. Retourne UNIQUEMENT un JSON avec la clé : mo
 <mots_cles_prioritaires>{mots}</mots_cles_prioritaires>
 <description_extrait>{(offre.get("description_brute") or "")[:4000]}</description_extrait>
 </offre_emploi>
-
+{documents_contexte_block(offre)}
 {langue_cv_xml(cv_current, offre, output_policy)}
 
 <resume_actuel>
@@ -1019,7 +1034,7 @@ entreprise: {json.dumps(offre.get("entreprise") or "", ensure_ascii=False)}
 keywords: {json.dumps((offre.get("mots_cles_extraits") or [])[:25], ensure_ascii=False)}
 description: {json.dumps((offre.get("description_brute") or "")[:2500], ensure_ascii=False)}
 </offre>
-<cv>
+{documents_contexte_block(offre)}<cv>
 candidat (prénom nom, pour formulations naturelles - ne pas inventer d'autres infos): {json.dumps(who, ensure_ascii=False)}
 resume: {json.dumps(resume, ensure_ascii=False)}
 experiences: {json.dumps(exps, ensure_ascii=False)}

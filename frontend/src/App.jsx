@@ -37,6 +37,10 @@ import { getPdfSaveStartInDirectoryHandle } from './lib/pdfExportStartDirIdb';
 import { HiDocumentText, HiArrowDownTray, HiClipboardDocumentList, HiPencilSquare, HiChatBubbleLeftRight, HiCheck, HiSwatch, HiChevronDown, HiChevronUp, HiPlus } from 'react-icons/hi2';
 import { lazyWithChunkReload, clearChunkErrorReloadKey } from './lib/lazyChunkReload';
 import { APP_DEFAULT_ROUTE, APP_ROUTES, getViewFromPathname, isKnownAppPathname } from './lib/appRoutes';
+import {
+  ADAPT_CONTEXT_MAX_FILES,
+  adaptContextFileError,
+} from './lib/adaptContextDocs.js';
 import { syncRobotsMeta } from './lib/seoHead';
 import './App.css';
 import './styles/TemplatePicker.css';
@@ -741,6 +745,11 @@ export default function App() {
   const analyticsView = pathname.startsWith('/app') ? view : null;
   const isCvView = view === 'cv';
   const [annonce, setAnnonce] = useState('');
+  const [contextFiles, setContextFiles] = useState([]);
+  const [contextDocMeta, setContextDocMeta] = useState([]);
+  const [documentsContext, setDocumentsContext] = useState('');
+  const [contextDocError, setContextDocError] = useState('');
+  const [contextDocStatus, setContextDocStatus] = useState('');
   const [lastAdaptedCv, setLastAdaptedCv] = useState(null);
   const lastAdaptedCvRef = useRef(null);
   lastAdaptedCvRef.current = lastAdaptedCv;
@@ -941,6 +950,8 @@ export default function App() {
   const [tourDemoPreviewHtml, setTourDemoPreviewHtml] = useState('');
   const prevTourHighlightRef = useRef(false);
   const cvChatInputRef = useRef(null);
+  const contextFileInputRef = useRef(null);
+  const contextFilesRef = useRef([]);
   /** Après la 1re adaptation réussie (chat), ouvre le tutoriel phase 2 - pas au début (évite conflit avec le modal « en cours »). */
   const openPhase2AfterFirstAdaptRef = useRef(false);
 
@@ -1676,6 +1687,12 @@ export default function App() {
       /* ignore localStorage */
     }
     setAnnonce('');
+    setContextFiles([]);
+    contextFilesRef.current = [];
+    setContextDocMeta([]);
+    setDocumentsContext('');
+    setContextDocError('');
+    setContextDocStatus('');
     setLastAdaptRunConfig(null);
     setAdaptRating(null);
     setApiAdaptDone(false);
@@ -1816,7 +1833,11 @@ export default function App() {
           languageMismatch: mismatch,
           outputLanguage: restoreLang.outputLanguage,
           languageRemembered: restoreLang.remembered,
+          documentsContext: data?.documents_context || '',
         });
+        setDocumentsContext(data?.documents_context || '');
+        setContextDocMeta(Array.isArray(data?.context_documents) ? data.context_documents : []);
+        setContextDocStatus(data?.documents_context ? 'ready' : '');
         setLanguagePreviewStatus(mismatch && restoreLang.prompt ? 'idle' : mismatch ? 'idle' : 'ready');
         languagePreviewCvRef.current = null;
         lastLocalizedSourceFpRef.current = '';
@@ -2036,7 +2057,14 @@ export default function App() {
     setApplicationDetailId(null);
   };
 
-  const runPlannedAdaptation = async ({ description, selectedStepIds, source = 'chat_send', planId = null, outputLanguage = 'cv' }) => {
+  const runPlannedAdaptation = async ({
+    description,
+    selectedStepIds,
+    source = 'chat_send',
+    planId = null,
+    outputLanguage = 'cv',
+    documentsContext: runDocumentsContext = '',
+  }) => {
     try {
       adaptRunAbortRef.current?.abort();
     } catch (_) { /* ignore */ }
@@ -2074,6 +2102,7 @@ export default function App() {
         titre: posteNom || undefined,
         entreprise: entrepriseNom || undefined,
         plan_id: planId || undefined,
+        documents_context: runDocumentsContext || undefined,
         selected_step_ids: selected,
         output_language: outputLanguage === 'offer' ? 'offer' : 'cv',
         ...templateParams,
@@ -2205,6 +2234,9 @@ export default function App() {
         description,
         selectedStepIds: selectedSteps,
         source: 'redo_available',
+        documentsContext: runDocumentsContext || '',
+        planId: planId || null,
+        outputLanguage,
       });
       try {
         const key = getPersistedPlanStorageKey();
@@ -2496,12 +2528,76 @@ export default function App() {
       source: 'todo_confirm',
       planId: adaptTodoPlan.planId || null,
       outputLanguage: adaptTodoPlan.outputLanguage || 'cv',
+      documentsContext: adaptTodoPlan.documentsContext || documentsContext,
     });
+  };
+
+  const uploadContextFiles = async (files) => {
+    setContextDocStatus('uploading');
+    setContextDocError('');
+    const form = new FormData();
+    files.forEach((file) => form.append('files', file));
+    try {
+      const data = await apiPostFormData('/api/adapt-documents', form);
+      setDocumentsContext(data?.documents_context || '');
+      setContextDocMeta(Array.isArray(data?.documents) ? data.documents : []);
+      setContextDocStatus('ready');
+    } catch (e) {
+      setContextDocStatus('');
+      setContextDocError(e.message || 'Impossible d’ajouter le document.');
+      throw e;
+    }
+  };
+
+  const addContextFiles = async (list) => {
+    const picked = Array.from(list || []);
+    if (!picked.length) return;
+    const previous = contextFilesRef.current;
+    const merged = [...previous];
+    for (const file of picked) {
+      const message = adaptContextFileError(file, merged.length);
+      if (message) {
+        setContextDocError(message);
+        setContextDocStatus('');
+        return;
+      }
+      if (merged.some((item) => item.name === file.name && item.size === file.size)) continue;
+      merged.push(file);
+    }
+    if (merged.length === previous.length) return;
+    contextFilesRef.current = merged;
+    setContextFiles(merged);
+    try {
+      await uploadContextFiles(merged);
+    } catch {
+      contextFilesRef.current = previous;
+      setContextFiles(previous);
+    }
+  };
+
+  const removeContextFile = async (filename) => {
+    const previous = contextFilesRef.current;
+    const next = previous.filter((file) => file.name !== filename);
+    contextFilesRef.current = next;
+    setContextFiles(next);
+    setContextDocError('');
+    if (!next.length) {
+      setDocumentsContext('');
+      setContextDocMeta([]);
+      setContextDocStatus('');
+      return;
+    }
+    try {
+      await uploadContextFiles(next);
+    } catch {
+      contextFilesRef.current = previous;
+      setContextFiles(previous);
+    }
   };
 
   const handleChatSend = async () => {
     const text = (chatInput || '').trim();
-    if (!text || adapting || adaptPlanLoading) return;
+    if (!text || adapting || adaptPlanLoading || contextDocStatus === 'uploading') return;
     setChatInput('');
     setChatMessages((prev) => [...prev, { role: 'user', content: text }]);
     hideError();
@@ -2520,6 +2616,7 @@ export default function App() {
           description: text,
           titre: posteNom || undefined,
           entreprise: entrepriseNom || undefined,
+          documents_context: documentsContext || undefined,
         });
         const todo = Array.isArray(plan?.todo) ? plan.todo : [];
         const mismatch = Boolean(
@@ -2541,6 +2638,7 @@ export default function App() {
           languageMismatch: mismatch,
           outputLanguage: autoLang.outputLanguage,
           languageRemembered: autoLang.remembered,
+          documentsContext,
         });
         setLanguagePreviewStatus(mismatch ? 'idle' : 'ready');
         languagePreviewCvRef.current = null;
@@ -3545,6 +3643,9 @@ export default function App() {
                       description: lastAdaptRunConfig.description,
                       selectedStepIds: lastAdaptRunConfig.selectedStepIds || [],
                       source: 'redo_last_adaptation',
+                      planId: lastAdaptRunConfig.planId || null,
+                      outputLanguage: lastAdaptRunConfig.outputLanguage || 'cv',
+                      documentsContext: lastAdaptRunConfig.documentsContext || '',
                     });
                   }}
                   disabled={adapting || !lastAdaptRunConfig}
@@ -3790,6 +3891,52 @@ export default function App() {
               </div>
               {error && <div className="error cv-chat-error">{error}</div>}
               <div className="cv-chat-input-bar">
+                <div className="cv-chat-docs">
+                  <input
+                    ref={contextFileInputRef}
+                    type="file"
+                    accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                    multiple
+                    hidden
+                    onChange={(e) => {
+                      addContextFiles(e.target.files);
+                      e.target.value = '';
+                    }}
+                  />
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    disabled={adapting || adaptPlanLoading || contextDocStatus === 'uploading' || (!!adaptTodoPlan && !lastAdaptedCv)}
+                    onClick={() => contextFileInputRef.current?.click()}
+                    title="PDF ou DOCX, 8 Mo maximum, 3 fichiers"
+                  >
+                    {contextDocStatus === 'uploading' ? 'Lecture du document…' : 'Joindre un document'}
+                  </Button>
+                  <span className="cv-chat-docs-hint">PDF ou DOCX · 8 Mo · {ADAPT_CONTEXT_MAX_FILES} fichiers</span>
+                  {(contextDocMeta.length ? contextDocMeta : contextFiles).map((doc) => {
+                    const label = doc.filename || doc.name;
+                    return (
+                      <span key={label} className="cv-chat-doc-chip">
+                        {label}
+                        <button
+                          type="button"
+                          aria-label={`Retirer ${label}`}
+                          disabled={contextDocStatus === 'uploading' || adapting || (!!adaptTodoPlan && !lastAdaptedCv)}
+                          onClick={() => removeContextFile(label)}
+                        >
+                          ×
+                        </button>
+                      </span>
+                    );
+                  })}
+                  {contextDocStatus === 'ready' && (
+                    <span className="cv-chat-docs-status" role="status">Document ajouté. Il sera pris en compte dans l’adaptation.</span>
+                  )}
+                  {contextDocError && (
+                    <span className="cv-chat-docs-error" role="alert">{contextDocError}</span>
+                  )}
+                </div>
                 <textarea
                   ref={cvChatInputRef}
                   className="cv-chat-input"
@@ -3818,7 +3965,7 @@ export default function App() {
                   disabled={adapting || adaptPlanLoading || (!!adaptTodoPlan && !lastAdaptedCv)}
                   {...analyticsAttrs('cv-chat-input-offer', 'chat', 'tertiary', 'input')}
                 />
-                <button type="button" className="cv-chat-input-send" onClick={handleChatSend} disabled={adapting || adaptPlanLoading || !chatInput.trim() || (!!adaptTodoPlan && !lastAdaptedCv)} aria-label="Envoyer" {...analyticsAttrs('cv-chat-cta-send', 'chat', 'primary', 'cta')}>
+                <button type="button" className="cv-chat-input-send" onClick={handleChatSend} disabled={adapting || adaptPlanLoading || contextDocStatus === 'uploading' || !chatInput.trim() || (!!adaptTodoPlan && !lastAdaptedCv)} aria-label="Envoyer" {...analyticsAttrs('cv-chat-cta-send', 'chat', 'primary', 'cta')}>
                   <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 2L11 13"/><path d="M22 2L15 22L11 13L2 9L22 2Z"/></svg>
                 </button>
               </div>
