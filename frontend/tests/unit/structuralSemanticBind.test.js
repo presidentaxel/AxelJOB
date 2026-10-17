@@ -155,6 +155,22 @@ test('classifyStructuralTextBlock : contact via email', () => {
   assert.ok(hit.confidence >= MIN_SEMANTIC_CONFIDENCE);
 });
 
+test('classifyStructuralTextBlock : une plage de dates n est pas un téléphone', () => {
+  const hit = classifyStructuralTextBlock(
+    {
+      type: 'text',
+      content: '09/2019 - 06/2023',
+      x: 20,
+      y: 80,
+      w: 40,
+      h: 5,
+      style: {},
+    },
+    { telephone: '+33 6 11 22 33 44' },
+  );
+  assert.equal(hit, null);
+});
+
 test('bindStructuralTextToSemanticBlocks : heading + corps → experiences, freeform conservé', () => {
   const layout = sanitizeLayoutV3({
     version: 3,

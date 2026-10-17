@@ -29,7 +29,7 @@ import {
   resolveProjets,
 } from '../../lib/freeCanvasContent.js';
 import { blockHasTypographyOverride, blockStyleToCss } from '../../lib/canvasBlockToolbar.js';
-import { colorFromPdfRuns } from '../../lib/structuralSemanticBind.js';
+import { colorFromPdfRuns, stripPdfMarkup } from '../../lib/structuralSemanticBind.js';
 import { MM_TO_PX } from '../../lib/freeCanvasScale.js';
 import { isAutoHeightBlockType, isNonSemanticBlockType } from '../../lib/cvLayoutModelV3.js';
 import { getBlockDisplayName } from '../../lib/blockInspectorSchema.js';
@@ -830,7 +830,7 @@ function paintedPlainText(block, cv) {
     }
     return bits.filter(Boolean).join(' ');
   }
-  return String(block.content || '').replace(/<[^>]+>/g, '');
+  return stripPdfMarkup(block.content);
 }
 
 function inlineTypographyStyle(style = {}) {

@@ -53,6 +53,47 @@ const SECTION_HEADING_RULES = Object.freeze([
 const EMAIL_RE = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i;
 const PHONE_RE = /(?:\+?\d[\d\s().-]{7,}\d)/;
 
+/** Retire les balises en une passe jusqu'à stabilité (pas un replace unique). */
+export function stripPdfMarkup(value) {
+  let text = String(value || '');
+  let previous = null;
+  while (text !== previous) {
+    previous = text;
+    let next = '';
+    let index = 0;
+    while (index < text.length) {
+      if (text[index] !== '<') {
+        next += text[index];
+        index += 1;
+        continue;
+      }
+      const close = text.indexOf('>', index + 1);
+      if (close === -1) {
+        next += text.slice(index);
+        break;
+      }
+      index = close + 1;
+    }
+    text = next;
+  }
+  return text;
+}
+
+function digitsOnly(value) {
+  return String(value || '').replace(/\D/g, '');
+}
+
+/** Une plage « 2019 - 2023 » n'est pas un numéro. */
+function looksLikePhone(text, cv) {
+  const match = String(text || '').match(PHONE_RE);
+  if (!match) return false;
+  const digits = digitsOnly(match[0]);
+  const cvDigits = digitsOnly(cv?.telephone);
+  if (cvDigits.length >= 8 && digits.includes(cvDigits.slice(-8))) return true;
+  const rest = digitsOnly(match[0].replace(/(?:19|20)\d{2}/g, ''));
+  return rest.length >= 8 && rest.length <= 15;
+}
+
 export function decodeStructuralText(content) {
   // Une seule passe : éviter le double-unescape CodeQL
   // (`&amp;lt;` ne doit pas devenir `<`).
@@ -125,7 +166,7 @@ function unionBox(blocks) {
 export function classifyStructuralTextBlock(block, cv = {}, { pageHeightMm = 297 } = {}) {
   if (!block || block.type !== 'text') return null;
   // Les balises (gras partiel, couleur) ne comptent pas dans la longueur.
-  const text = decodeStructuralText(String(block.content || '').replace(/<[^>]+>/g, ' '));
+  const text = decodeStructuralText(stripPdfMarkup(block.content).replace(/\s+/g, ' '));
   if (!text) return null;
 
   // Titres : ligne entière = libellé (pas un mot-clé dans une phrase corps).
@@ -184,7 +225,7 @@ export function classifyStructuralTextBlock(block, cv = {}, { pageHeightMm = 297
   // Contact : email / téléphone.
   let contactConf = 0;
   if (EMAIL_RE.test(text)) contactConf += 0.55;
-  if (PHONE_RE.test(text)) contactConf += 0.35;
+  if (looksLikePhone(text, cv)) contactConf += 0.35;
   const cvEmail = String(cv?.email || '').trim().toLowerCase();
   if (cvEmail && text.toLowerCase().includes(cvEmail)) contactConf += 0.2;
   if (contactConf >= MIN_SEMANTIC_CONFIDENCE) {
@@ -198,10 +239,10 @@ export const BIND_MODE_IN_PLACE = 'inPlace';
 export const BIND_MODE_ABSORB = 'absorb';
 
 function contactBindPaths(block) {
-  const text = decodeStructuralText(String(block.content || '').replace(/<[^>]+>/g, ' '));
+  const text = decodeStructuralText(stripPdfMarkup(block.content).replace(/\s+/g, ' '));
   const paths = [];
   if (EMAIL_RE.test(text)) paths.push('email');
-  if (PHONE_RE.test(text)) paths.push('telephone');
+  if (looksLikePhone(text, null)) paths.push('telephone');
   return paths;
 }
 
@@ -216,10 +257,10 @@ export function colorRunsFromPdfHtml(html) {
   PDF_COLOR_SPAN_RE.lastIndex = 0;
   while ((match = PDF_COLOR_SPAN_RE.exec(source))) {
     const colorMatch = /(?:^|;)\s*color:\s*(#[0-9a-fA-F]{6})/i.exec(match[1]);
-    const between = source.slice(cursor, match.index).replace(/<[^>]+>/g, '');
+    const between = stripPdfMarkup(source.slice(cursor, match.index));
     cursor = PDF_COLOR_SPAN_RE.lastIndex;
     if (!colorMatch) continue;
-    const text = match[2].replace(/<[^>]+>/g, '');
+    const text = stripPdfMarkup(match[2]);
     const color = colorMatch[1].toLowerCase();
     const prev = runs[runs.length - 1];
     if (prev && prev.color === color && !between.trim()) prev.text += text;

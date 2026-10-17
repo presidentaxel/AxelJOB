@@ -92,6 +92,25 @@ _STRUCTURAL_SECTION_KEYS = frozenset(
 _EMAIL_RE = re.compile(r"[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}", re.I)
 _PHONE_RE = re.compile(r"(?:\+?\d[\d\s().-]{7,}\d)")
 
+
+def _digits(value: str) -> str:
+    return re.sub(r"\D", "", value or "")
+
+
+def _looks_like_phone(text: str, cv_phone: str) -> bool:
+    """Une plage « 2019 - 2023 » matche le motif, mais ce n'est pas un numéro."""
+    match = _PHONE_RE.search(text or "")
+    if not match:
+        return False
+    chunk = match.group(0)
+    digits = _digits(chunk)
+    cv_digits = _digits(cv_phone)
+    if len(cv_digits) >= 8 and cv_digits[-8:] in digits:
+        return True
+    rest = _digits(re.sub(r"(?:19|20)\d{2}", "", chunk))
+    return 8 <= len(rest) <= 15
+
+
 _HEADING_CLASSIFY: tuple[tuple[str, re.Pattern[str]], ...] = tuple(
     (name, pat) for name, pat in _SECTION_MARKERS if name != "identity"
 )
@@ -480,7 +499,8 @@ def annotate_structural_blocks(
                 if _EMAIL_RE.search(text) or (email and email in text.lower()):
                     conf += 0.8
                     contact_bind.append("email")
-                if _PHONE_RE.search(text):
+                phone = str(cv.get("telephone") or "")
+                if _looks_like_phone(text, phone):
                     conf += 0.8
                     contact_bind.append("telephone")
                 ville = (cv.get("ville") or "").strip().lower()

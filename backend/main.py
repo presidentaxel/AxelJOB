@@ -1469,7 +1469,11 @@ def _extract_text_from_pdf(file_bytes: bytes) -> str:
         text = "\n\n".join(pages)
         from backend.services.pdf_structural_extract import visible_text_excluding_hidden_ats
 
-        visible, hidden_count = visible_text_excluding_hidden_ats(file_bytes)
+        try:
+            visible, hidden_count = visible_text_excluding_hidden_ats(file_bytes)
+        except Exception as exc:  # noqa: BLE001 — filtre ATS facultatif
+            logger.info("PDF import: filtrage ATS ignoré: %s", exc)
+            visible, hidden_count = "", 0
         if hidden_count and len(visible) >= 40:
             logger.info(
                 "PDF import: %s ligne(s) de mots-clés ATS masqués retirées du texte",

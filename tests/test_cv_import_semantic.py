@@ -128,6 +128,42 @@ def test_annotate_structural_blocks_identity_and_heading():
     assert by_id["b3"]["type"] == "contact"
 
 
+def test_date_range_is_not_a_phone_annotation():
+    layout = {
+        "version": 3,
+        "pages": [
+            {
+                "height_mm": 297,
+                "blocks": [
+                    {
+                        "id": "dates",
+                        "type": "text",
+                        "x": 20,
+                        "y": 80,
+                        "w": 40,
+                        "h": 5,
+                        "content": "09/2019 - 06/2023",
+                    },
+                    {
+                        "id": "phone",
+                        "type": "text",
+                        "x": 20,
+                        "y": 30,
+                        "w": 50,
+                        "h": 5,
+                        "content": "+33 6 12 34 56 78",
+                    },
+                ],
+            }
+        ],
+    }
+    anns = annotate_structural_blocks(layout, {"telephone": "+33 6 12 34 56 78"})
+    by_id = {a["block_id"]: a for a in anns}
+    assert "dates" not in by_id
+    assert by_id["phone"]["type"] == "contact"
+    assert "telephone" in by_id["phone"]["bind"]
+
+
 def test_split_profil_heading_goes_to_resume_not_identity():
     text = """Ada Lovelace
 ada@example.com

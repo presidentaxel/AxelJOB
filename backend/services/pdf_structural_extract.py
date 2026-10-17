@@ -1384,48 +1384,48 @@ def _photo_circle_geometry(doc, page) -> tuple[dict[int, list[tuple]], list[tupl
             nums.clear()
             return vals
 
-        for token in tokens:
-            if token.startswith("/"):
-                last_name = token[1:]
+        for word in tokens:
+            if word.startswith("/"):
+                last_name = word[1:]
                 nums.clear()
                 continue
             try:
-                nums.append(float(token))
+                nums.append(float(word))
                 continue
             except ValueError:
                 pass
-            if token == "q":
+            if word == "q":
                 stack.append((ctm[0], list(clips[0]), fill[0]))
-            elif token == "Q":
+            elif word == "Q":
                 if stack:
                     ctm[0], clips[0], fill[0] = stack.pop()
-            elif token == "cm":
+            elif word == "cm":
                 vals = take(6)
                 if vals:
                     ctm[0] = fitz.Matrix(*vals) * ctm[0]
-            elif token == "m":
+            elif word == "m":
                 vals = take(2)
                 path = [("m", *vals)] if vals else []
-            elif token == "l":
+            elif word == "l":
                 vals = take(2)
                 if vals:
                     path.append(("l", *vals))
-            elif token == "c":
+            elif word == "c":
                 vals = take(6)
                 if vals:
                     path.append(("c", *vals))
-            elif token == "h":
+            elif word == "h":
                 nums.clear()
                 path.append(("h",))
-            elif token == "re":
+            elif word == "re":
                 vals = take(4)
                 path = [("re", *vals)] if vals else []
-            elif token in ("W", "W*"):
+            elif word in ("W", "W*"):
                 nums.clear()
                 circle = _circle_from_path(path)
                 if circle:
                     remember_clip(circle)
-            elif token in ("f", "F", "f*", "b", "b*", "B", "B*"):
+            elif word in ("f", "F", "f*", "b", "b*", "B", "B*"):
                 nums.clear()
                 circle = _circle_from_path(path)
                 if circle and fill[0]:
@@ -1444,18 +1444,18 @@ def _photo_circle_geometry(doc, page) -> tuple[dict[int, list[tuple]], list[tupl
                         ):
                             plates.append((*clip, fill[0]))
                 path = []
-            elif token in ("n", "S", "s"):
+            elif word in ("n", "S", "s"):
                 nums.clear()
                 path = []
-            elif token == "rg":
+            elif word == "rg":
                 vals = take(3)
                 if vals:
                     fill[0] = _float_rgb_to_hex(tuple(vals))
-            elif token == "g":
+            elif word == "g":
                 vals = take(1)
                 if vals:
                     fill[0] = _float_rgb_to_hex((vals[0], vals[0], vals[0]))
-            elif token == "Do" and last_name:
+            elif word == "Do" and last_name:
                 nums.clear()
                 spec = xobjects.get(last_name)
                 if not spec:
@@ -2433,7 +2433,10 @@ def _pixmap_is_blank_plate(pix) -> bool:
     ink = 0
     opaque_white = 0
     transparent = 0
-    for index in range(total):
+    step = max(1, total // 20000)
+    sampled = 0
+    for index in range(0, total, step):
+        sampled += 1
         base = index * channels
         if channels >= 3:
             red, green, blue = samples[base], samples[base + 1], samples[base + 2]
@@ -2447,11 +2450,13 @@ def _pixmap_is_blank_plate(pix) -> bool:
             opaque_white += 1
         else:
             ink += 1
-    if ink / total >= 0.08:
+    if sampled <= 0:
+        return True
+    if ink / sampled >= 0.08:
         return False
-    if transparent / total >= 0.3 and (opaque_white + ink) / total >= 0.02:
+    if transparent / sampled >= 0.3 and (opaque_white + ink) / sampled >= 0.02:
         return False
-    return opaque_white / total >= 0.65
+    return opaque_white / sampled >= 0.65
 
 
 def _resource_subsection(doc, obj_text: str, key: str) -> str | None:
@@ -2581,18 +2586,18 @@ def _image_paint_opacity(doc, page) -> dict[int, float]:
             text = stream.decode("latin1", errors="replace")
         except Exception:
             return
-        tokens = re.findall(r"/[^\s/\[\]<>()]+|[^\s]+", text)
+        words = re.findall(r"/[^\s/\[\]<>()]+|[^\s]+", text)
         stack: list[float] = []
         current = 1.0
-        for index, token in enumerate(tokens):
-            if token == "q":
+        for index, word in enumerate(words):
+            if word == "q":
                 stack.append(current)
-            elif token == "Q":
+            elif word == "Q":
                 current = stack.pop() if stack else 1.0
-            elif token == "gs" and index and tokens[index - 1].startswith("/"):
-                current = gs_ca.get(tokens[index - 1][1:], 1.0)
-            elif token == "Do" and index and tokens[index - 1].startswith("/"):
-                spec = xobjects.get(tokens[index - 1][1:])
+            elif word == "gs" and index and words[index - 1].startswith("/"):
+                current = gs_ca.get(words[index - 1][1:], 1.0)
+            elif word == "Do" and index and words[index - 1].startswith("/"):
+                spec = xobjects.get(words[index - 1][1:])
                 if not spec:
                     continue
                 xref, kind = spec
