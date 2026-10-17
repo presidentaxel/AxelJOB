@@ -29,6 +29,21 @@ class FontEmbedHelpersTest(unittest.TestCase):
         )
         root, weight, italic = _font_root_and_style("Helvetica-Oblique")
         self.assertEqual((root, weight, italic), ("Helvetica", 400, True))
+        self.assertEqual(_font_root_and_style("TimesNewRomanPSMT"), ("TimesNewRomanPS", 400, False))
+        self.assertEqual(
+            _font_root_and_style("TimesNewRomanPS-BoldMT"),
+            ("TimesNewRomanPS", 700, False),
+        )
+        self.assertEqual(
+            _font_root_and_style("TimesNewRomanPS-ItalicMT"),
+            ("TimesNewRomanPS", 400, True),
+        )
+        self.assertEqual(
+            _font_root_and_style("TimesNewRomanPS-BoldItalicMT"),
+            ("TimesNewRomanPS", 700, True),
+        )
+        self.assertEqual(_font_root_and_style("ArialMT"), ("Arial", 400, False))
+        self.assertEqual(_font_root_and_style("Arial-BoldMT"), ("Arial", 700, False))
 
     def test_embedded_family_for(self):
         roots = {"Garet"}

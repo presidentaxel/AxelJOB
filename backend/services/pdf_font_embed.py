@@ -63,14 +63,20 @@ def font_css_weight(font_name: str) -> int | None:
 
 
 def _font_root_and_style(basefont: str) -> tuple[str, int, bool]:
-    """Retourne (racine_famille, graisse CSS, italique) depuis un nom PostScript."""
+    """Retourne (racine_famille, graisse CSS, italique) depuis un nom PostScript.
+
+    ``TimesNewRomanPSMT`` et ``TimesNewRomanPS-BoldMT`` sont la même famille :
+    le romain et le gras doivent partager le ``@font-face``, sinon le navigateur
+    dessine le texte régulier avec le sous-ensemble gras et remplace les
+    lettres qui lui manquent.
+    """
     name = _strip_subset_prefix(basefont)
     low = name.lower()
     weight = font_css_weight(name) or 400
     italic = "italic" in low or "oblique" in low
-    # Racine = avant le premier séparateur de style ('-', ',', espace).
-    root = re.split(r"[-,\s]", name, maxsplit=1)[0] or "Doc"
-    root = re.sub(r"[^A-Za-z0-9]", "", root) or "Doc"
+    head = re.split(r"[-,\s_]", name, maxsplit=1)[0]
+    head = re.sub(r"MT$", "", head, flags=re.IGNORECASE)
+    root = re.sub(r"[^A-Za-z0-9]", "", head) or "Doc"
     return root, weight, italic
 
 

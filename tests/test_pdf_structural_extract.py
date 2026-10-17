@@ -14,6 +14,7 @@ from backend.services.pdf_structural_extract import (
     _is_hidden_ats_text,
     _is_near_white,
     _join_line_span_texts,
+    _line_column_fragments,
     _merge_baseline_fragments,
     _photo_circle_geometry,
     _photo_plate_blocks,
@@ -680,6 +681,71 @@ class ExtractLayoutTest(unittest.TestCase):
 
         self.assertTrue(opacities)
         self.assertAlmostEqual(next(iter(opacities.values())), 0.4, places=2)
+
+
+class ColumnSplitTest(unittest.TestCase):
+    def test_wide_space_run_splits_columns_and_keeps_them_apart(self):
+        def glyph(text, x0, x1, font, flags):
+            return {
+                "c": text,
+                "bbox": (x0, 10, x1, 20),
+            }
+
+        line = {
+            "bbox": (36, 10, 200, 22),
+            "spans": [
+                {
+                    "font": "Times-Roman",
+                    "flags": 0,
+                    "size": 10,
+                    "color": 0,
+                    "bbox": (36, 10, 80, 22),
+                    "chars": [glyph("2024", 36, 60, "Times-Roman", 0)],
+                },
+                {
+                    "font": "Times-Bold",
+                    "flags": 16,
+                    "size": 10,
+                    "color": 0,
+                    "bbox": (90, 10, 140, 22),
+                    "chars": [glyph("RWE", 90, 120, "Times-Bold", 16)],
+                },
+            ],
+        }
+        pieces = _line_column_fragments(line)
+        self.assertEqual(len(pieces), 2)
+        self.assertTrue(pieces[1]["column_break"])
+        merged = _merge_baseline_fragments(pieces)
+        texts = ["".join(span["text"] for span in frag["spans"]) for frag in merged]
+        self.assertEqual(texts, ["2024", "RWE"])
+
+    def test_bullet_line_does_not_join_the_title_above(self):
+        style = {"font_size": 10, "color": "#000000", "font_family": "Times"}
+        out = coalesce_text_runs(
+            [
+                {
+                    "type": "text",
+                    "content": "Global Employer Branding Intern",
+                    "x": 38,
+                    "y": 40,
+                    "w": 80,
+                    "h": 4,
+                    "style": style,
+                },
+                {
+                    "type": "text",
+                    "content": "• Analyzed company career websites",
+                    "x": 38.6,
+                    "y": 44.2,
+                    "w": 90,
+                    "h": 4,
+                    "style": style,
+                },
+            ]
+        )
+        texts = [b["content"] for b in out if b["type"] == "text"]
+        self.assertEqual(len(texts), 2)
+        self.assertTrue(any(t.startswith("•") for t in texts))
 
 
 if __name__ == "__main__":

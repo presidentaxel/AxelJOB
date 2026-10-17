@@ -67,11 +67,23 @@ function EmbeddedFontFaces({ fonts }) {
       if (!src) return null;
       const family = cssEscapeString(f.family);
       const format = cssEscapeString(f.format || 'truetype');
-      return (
+      const weight = [100, 200, 300, 400, 500, 600, 700, 800, 900].includes(Number(f.weight))
+        ? Number(f.weight)
+        : 400;
+      const italic = f.style === 'italic';
+      const face = (
         `@font-face{font-family:'${family}';`
-        + `font-weight:${[100, 200, 300, 400, 500, 600, 700, 800, 900].includes(Number(f.weight)) ? Number(f.weight) : 400};`
-        + `font-style:${f.style === 'italic' ? 'italic' : 'normal'};`
+        + `font-weight:${weight};`
+        + `font-style:${italic ? 'italic' : 'normal'};`
         + 'font-display:swap;'
+        + `src:url("${src}") format('${format}');}`
+      );
+      if (italic) return face;
+      // Même fichier, sans face italique : le navigateur incline le romain
+      // quand le sous-ensemble italique du PDF ne contient pas les lettres.
+      return (
+        `${face}\n@font-face{font-family:'${family}__up';`
+        + `font-weight:${weight};font-style:normal;font-display:swap;`
         + `src:url("${src}") format('${format}');}`
       );
     })

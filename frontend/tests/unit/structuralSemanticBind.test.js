@@ -171,6 +171,67 @@ test('classifyStructuralTextBlock : une plage de dates n est pas un téléphone'
   assert.equal(hit, null);
 });
 
+test('classifyStructuralTextBlock : une ligne mixte reste du texte', () => {
+  const hit = classifyStructuralTextBlock(
+    {
+      type: 'text',
+      content: '12 rue des Lilas, 75011 Paris • +33 6 11 22 33 44 • ada@example.fr - www.linkedin.com/in/ada',
+      x: 20,
+      y: 20,
+      w: 160,
+      h: 5,
+      style: {},
+    },
+    {
+      email: 'ada@example.fr',
+      telephone: '+33 6 11 22 33 44',
+      linkedin: 'www.linkedin.com/in/ada',
+      ville: 'Paris',
+    },
+  );
+  assert.equal(hit, null);
+});
+
+test('bind inPlace garde le texte quand l annotation contact effacerait des mots', () => {
+  const layout = sanitizeLayoutV3({
+    version: 3,
+    format: 'A4',
+    grid: 'free',
+    unit: 'mm',
+    freeform: true,
+    pages: [{
+      id: 'p1',
+      blocks: [{
+        id: 'line',
+        type: 'text',
+        content: '12 rue des Lilas • +33 6 11 22 33 44 • ada@example.fr',
+        x: 20,
+        y: 20,
+        w: 160,
+        h: 5,
+        z: 3,
+        style: { font_size: 10, color: '#0000ff' },
+      }],
+    }],
+  });
+  const { layout: out } = bindStructuralTextToSemanticBlocks(layout, {
+    email: 'ada@example.fr',
+    telephone: '+33 6 11 22 33 44',
+  }, {
+    annotations: [{
+      block_id: 'line',
+      type: 'contact',
+      kind: 'contact',
+      confidence: 0.95,
+      bind: ['email', 'telephone'],
+    }],
+  });
+  const block = out.pages[0].blocks.find((b) => b.id === 'line');
+  assert.equal(block.type, 'text');
+  assert.match(block.content, /rue des Lilas/);
+  assert.match(block.content, /ada@example.fr/);
+});
+
 test('bindStructuralTextToSemanticBlocks : heading + corps → experiences, freeform conservé', () => {
   const layout = sanitizeLayoutV3({
     version: 3,

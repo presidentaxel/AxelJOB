@@ -164,6 +164,52 @@ def test_date_range_is_not_a_phone_annotation():
     assert "telephone" in by_id["phone"]["bind"]
 
 
+def test_mixed_contact_line_is_not_replaced_by_a_widget():
+    layout = {
+        "version": 3,
+        "pages": [
+            {
+                "height_mm": 297,
+                "blocks": [
+                    {
+                        "id": "mixed",
+                        "type": "text",
+                        "x": 20,
+                        "y": 20,
+                        "w": 160,
+                        "h": 5,
+                        "content": (
+                            "12 rue des Lilas, 75011 Paris • +33 6 12 34 56 78 • "
+                            "ada@example.com - www.linkedin.com/in/ada"
+                        ),
+                    },
+                    {
+                        "id": "mail",
+                        "type": "text",
+                        "x": 20,
+                        "y": 30,
+                        "w": 60,
+                        "h": 5,
+                        "content": "ada@example.com",
+                    },
+                ],
+            }
+        ],
+    }
+    anns = annotate_structural_blocks(
+        layout,
+        {
+            "email": "ada@example.com",
+            "telephone": "+33 6 12 34 56 78",
+            "linkedin": "www.linkedin.com/in/ada",
+            "ville": "Paris",
+        },
+    )
+    by_id = {a["block_id"]: a for a in anns}
+    assert "mixed" not in by_id
+    assert by_id["mail"]["type"] == "contact"
+
+
 def test_split_profil_heading_goes_to_resume_not_identity():
     text = """Ada Lovelace
 ada@example.com

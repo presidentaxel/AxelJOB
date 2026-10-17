@@ -530,11 +530,119 @@ def _line_spans_kept(spans: list) -> list[dict]:
     return kept
 
 
+def _span_text(span: dict) -> str:
+    text = span.get("text")
+    if text:
+        return str(text)
+    return "".join(str(ch.get("c") or "") for ch in span.get("chars") or [])
+
+
+def _tracked_single_caps(text: str) -> bool:
+    tokens = [tok for tok in text.split(" ") if tok]
+    return bool(tokens) and all(len(tok) == 1 and tok.isupper() for tok in tokens)
+
+
+def _line_column_fragments(line: dict) -> list[dict]:
+    """Découpe une ligne PDF là où un large blanc sépare deux colonnes.
+
+    Word aligne date, poste et ville sur la même baseline avec des espaces.
+    Leurs boîtes se touchent, donc un simple écart entre spans ne les sépare pas.
+    """
+    y0, y1 = 0.0, 0.0
+    bbox = line.get("bbox") or (0, 0, 0, 0)
+    try:
+        y0 = float(bbox[1])
+        y1 = float(bbox[3])
+    except (TypeError, ValueError, IndexError):
+        y0, y1 = 0.0, 0.0
+
+    glyphs: list[tuple[dict, str, float, float]] = []
+    for span in line.get("spans") or []:
+        chars = span.get("chars") or []
+        if chars:
+            for ch in chars:
+                glyphs.append(
+                    (
+                        span,
+                        str(ch.get("c") or ""),
+                        float(ch.get("bbox", (0, 0, 0, 0))[0]),
+                        float(ch.get("bbox", (0, 0, 0, 0))[2]),
+                    )
+                )
+            continue
+        text = _span_text(span)
+        if text.strip():
+            sb = span.get("bbox") or (0, 0, 0, 0)
+            glyphs.append((span, text, float(sb[0]), float(sb[2])))
+
+    groups: list[list[tuple[dict, str, float, float]]] = []
+    group: list[tuple[dict, str, float, float]] = []
+    prev_x1: float | None = None
+    for span, text, x0, x1 in glyphs:
+        if text.isspace() or not text:
+            continue
+        gap = 0.0 if prev_x1 is None else x0 - prev_x1
+        current = "".join(part for _span, part, _a, _b in group)
+        tracked = _tracked_single_caps(current) and len(text) == 1 and text.isupper()
+        if group and gap > _COLUMN_SPLIT_GAP_PT and not tracked:
+            groups.append(group)
+            group = []
+            gap = 0.0
+        if group and gap > 0.45:
+            group.append((span, " ", x0, x0))
+        group.append((span, text, x0, x1))
+        prev_x1 = x1
+    if group:
+        groups.append(group)
+
+    fragments: list[dict] = []
+    for index, piece in enumerate(groups):
+        spans_out: list[dict] = []
+        for span, text, x0, x1 in piece:
+            key = (span.get("font"), span.get("flags"), span.get("size"), span.get("color"))
+            if spans_out and spans_out[-1].get("_key") == key:
+                spans_out[-1]["text"] += text
+                box = spans_out[-1]["bbox"]
+                spans_out[-1]["bbox"] = (box[0], box[1], max(box[2], x1), box[3])
+            else:
+                spans_out.append(
+                    {
+                        "text": text,
+                        "size": span.get("size", 10),
+                        "color": span.get("color"),
+                        "font": span.get("font", ""),
+                        "flags": span.get("flags", 0),
+                        "bbox": (x0, y0, x1, y1),
+                        "_key": key,
+                    }
+                )
+        if not spans_out:
+            continue
+        for span in spans_out:
+            span.pop("_key", None)
+        ink = [item for item in piece if item[1].strip()]
+        fragments.append(
+            {
+                "x0": ink[0][2],
+                "y0": y0,
+                "x1": ink[-1][3],
+                "y1": y1,
+                "spans": _line_spans_kept(spans_out),
+                "column_break": index > 0,
+            }
+        )
+    return fragments
+
+
 # Fragments PDF sur la même ligne de base (Canva découpe souvent un mot = une « ligne »).
 _BASELINE_TOL_PT = 2.2
 _COLUMN_ANCHOR_TOL_PT = 3.5
 _COLUMN_ANCHOR_MIN = 3
 _JOIN_GAP_PT = 22.0
+# Plus large qu'un espace entre deux mots (~2,5 pt), plus étroit qu'un trou
+# de colonne (date | poste | ville). Les lettres écartées d'un titre en
+# capitales restent dans le même fragment.
+_COLUMN_SPLIT_GAP_PT = 6.5
 _TRACKED_CAPS_RE = re.compile(r"^(?:[A-ZÀ-Ý]{1,4} +){2,}[A-ZÀ-Ý]{1,6}$")
 
 
@@ -671,6 +779,18 @@ def _merge_baseline_fragments(fragments: list[dict]) -> list[dict]:
             gap = float(nxt["x0"]) - float(current["x1"])
             size_a = float(current["spans"][0].get("size") or 10)
             size_b = float(nxt["spans"][0].get("size") or 10)
+            # Un trou de colonne (espaces de calage dans le PDF) ne se recolle pas :
+            # sinon « 2024    Poste » redevient une seule ligne.
+            if nxt.get("column_break"):
+                merged.append(current)
+                current = {
+                    "x0": nxt["x0"],
+                    "y0": nxt["y0"],
+                    "x1": nxt["x1"],
+                    "y1": nxt["y1"],
+                    "spans": list(nxt["spans"]),
+                }
+                continue
             new_column = _starts_new_column(float(nxt["x0"]), float(current["x0"]), anchors)
             # Un mot en fin de phrase peut tomber sur l'ancre de la colonne date.
             # On ne coupe que si le fragment de gauche est court (une date), pas
@@ -725,31 +845,26 @@ def _extract_text_blocks(
     char_count = 0
     fragments: list[dict] = []
     fills = _paint_fills(page)
-    data = page.get_text("dict")
+    data = page.get_text("rawdict")
     for raw_block in data.get("blocks", []):
         if raw_block.get("type") != 0:  # 0 = texte
             continue
         for line in raw_block.get("lines", []):
-            spans = [
-                span
-                for span in line.get("spans", [])
-                if str(span.get("text", "")).strip()
-                and not _span_is_hidden_ats(span, fills, font_scale)
-            ]
+            spans = []
+            for span in line.get("spans", []):
+                if not span.get("text"):
+                    span["text"] = _span_text(span)
+                if str(span.get("text", "")).strip() and not _span_is_hidden_ats(
+                    span, fills, font_scale
+                ):
+                    spans.append(span)
             if not spans:
                 continue
-            x0, y0, x1, y1 = line.get("bbox", (0, 0, 0, 0))
-            if not _join_line_span_texts(spans):
+            kept_line = {"bbox": line.get("bbox"), "spans": spans}
+            pieces = _line_column_fragments(kept_line)
+            if not pieces:
                 continue
-            fragments.append(
-                {
-                    "x0": float(x0),
-                    "y0": float(y0),
-                    "x1": float(x1),
-                    "y1": float(y1),
-                    "spans": _line_spans_kept(spans),
-                }
-            )
+            fragments.extend(pieces)
 
     for frag in _merge_baseline_fragments(fragments):
         spans = frag["spans"]
@@ -2090,6 +2205,11 @@ def _plain_text_content(block: dict) -> str:
     return raw.replace("\xa0", " ").strip()
 
 
+def _starts_with_bullet(block: dict) -> bool:
+    text = _plain_text_content(block).lstrip()
+    return bool(text) and bool(_BULLET_GLYPH_RE.fullmatch(text[0]))
+
+
 def _is_gutter_marker(block: dict) -> bool:
     """Puce visuelle isolée (cercle vectoriel, glyphe, micro-vignette)."""
     w = float(block.get("w") or 0)
@@ -2180,6 +2300,8 @@ def _text_styles_compatible(a: dict, b: dict) -> bool:
         return False
     if str(sa.get("color") or "") != str(sb.get("color") or ""):
         return False
+    if str(sa.get("font_family") or "") != str(sb.get("font_family") or ""):
+        return False
     return True
 
 
@@ -2218,6 +2340,8 @@ def coalesce_text_runs(blocks: list[dict]) -> list[dict]:
             if gap > max(1.8, float(run[-1].get("h") or 0) * 0.55):
                 break
             if gap < -1.2 or not _text_styles_compatible(run[-1], nxt):
+                break
+            if _starts_with_bullet(nxt):
                 break
             nxt_marker = _left_item_marker(nxt, markers)
             if nxt_marker is not None and nxt_marker is not opener:

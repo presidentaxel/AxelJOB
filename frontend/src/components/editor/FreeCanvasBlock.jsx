@@ -1091,7 +1091,13 @@ export default function FreeCanvasBlock({
 
   if (!validBlock) return null;
 
-  const renderStyle = fontStyleForText(blockStyle, paintedPlainText(block, cv), embeddedFonts);
+  const renderStyle = fontStyleForText(
+    blockStyle,
+    block?.type === 'text' || block?.type === 'title'
+      ? String(block.content || '')
+      : paintedPlainText(block, cv),
+    embeddedFonts,
+  );
   const renderBlock = renderStyle === blockStyle ? block : { ...block, style: renderStyle };
   const innerTypography = blockStyleToCss(renderStyle);
   const typographyOverride = blockHasTypographyOverride(renderStyle);

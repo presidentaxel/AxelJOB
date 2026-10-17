@@ -111,6 +111,28 @@ def _looks_like_phone(text: str, cv_phone: str) -> bool:
     return 8 <= len(rest) <= 15
 
 
+def _visible_plain(text: str) -> str:
+    plain = re.sub(r"<[^>]+>", " ", text or "")
+    return re.sub(r"\s+", " ", plain).strip()
+
+
+def _line_is_only_values(text: str, values: list[str], *, strip_contact: bool) -> bool:
+    """Vrai si un widget de ces champs n'efface aucun mot de la ligne."""
+    plain = _visible_plain(text).lower()
+    for value in values:
+        token = (value or "").strip().lower()
+        if len(token) >= 3:
+            plain = plain.replace(token, " ")
+    if strip_contact:
+        plain = _EMAIL_RE.sub(" ", plain)
+        plain = _PHONE_RE.sub(" ", plain)
+        plain = re.sub(r"(?:https?://|www\.)\S+", " ", plain, flags=re.IGNORECASE)
+        plain = re.sub(r"linkedin\.com/\S+", " ", plain, flags=re.IGNORECASE)
+    plain = re.sub(r"[^\w]+", " ", plain, flags=re.UNICODE)
+    plain = re.sub(r"\s+", " ", plain).strip()
+    return len(plain) <= 2
+
+
 _HEADING_CLASSIFY: tuple[tuple[str, re.Pattern[str]], ...] = tuple(
     (name, pat) for name, pat in _SECTION_MARKERS if name != "identity"
 )
@@ -474,7 +496,11 @@ def annotate_structural_blocks(
                         conf += 0.2
                     if has_p and has_n:
                         conf += 0.15
-                    if conf >= min_confidence:
+                    if conf >= min_confidence and _line_is_only_values(
+                        text,
+                        [prenom, nom, (cv.get("titre_professionnel") or "")],
+                        strip_contact=False,
+                    ):
                         # Uniquement les champs présents sur CETTE ligne. Le titre
                         # sur la ligne d'en dessous ne doit pas être avalé par le nom.
                         bind = []
@@ -509,7 +535,20 @@ def annotate_structural_blocks(
                 linkedin = (cv.get("linkedin") or "").strip().lower()
                 if linkedin and len(linkedin) >= 6 and linkedin in text.lower():
                     contact_bind.append("linkedin")
-                if conf >= min_confidence and contact_bind:
+                if (
+                    conf >= min_confidence
+                    and contact_bind
+                    and _line_is_only_values(
+                        text,
+                        [
+                            email,
+                            str(cv.get("telephone") or ""),
+                            ville,
+                            linkedin,
+                        ],
+                        strip_contact=True,
+                    )
+                ):
                     hit = {
                         "block_id": bid,
                         "type": "contact",
