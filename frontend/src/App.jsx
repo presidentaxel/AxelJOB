@@ -34,7 +34,7 @@ import AdaptLanguageChoiceDialog from './components/ui/AdaptLanguageChoiceDialog
 import { CONTACT_EMAIL, STORAGE_EXPORT_DIR, STORAGE_EXPORT_ATS_BLOCK_SNOOZE, STORAGE_PRE_EXPORT_TEMPLATE_OPTIONS_DONE, STORAGE_PDF_EXPORT_FILENAME_PATTERN, STATUT_LABELS, KANBAN_COLUMNS, getExportFolderName } from './constants';
 import { buildAdaptedPdfFilename } from './lib/pdfExportFilename';
 import { getPdfSaveStartInDirectoryHandle } from './lib/pdfExportStartDirIdb';
-import { HiDocumentText, HiArrowDownTray, HiClipboardDocumentList, HiPencilSquare, HiChatBubbleLeftRight, HiCheck, HiSwatch, HiChevronDown, HiChevronUp, HiPlus, HiPaperClip } from 'react-icons/hi2';
+import { HiDocumentText, HiArrowDownTray, HiClipboardDocumentList, HiPencilSquare, HiChatBubbleLeftRight, HiCheck, HiSwatch, HiChevronDown, HiChevronUp, HiPlus, HiOutlinePaperClip } from 'react-icons/hi2';
 import { lazyWithChunkReload, clearChunkErrorReloadKey } from './lib/lazyChunkReload';
 import { APP_DEFAULT_ROUTE, APP_ROUTES, getViewFromPathname, isKnownAppPathname } from './lib/appRoutes';
 import {
@@ -3940,6 +3940,7 @@ export default function App() {
                   variant="ghost"
                   size="sm"
                   iconOnly
+                  className="cv-chat-attach"
                   aria-label="Joindre un document"
                   title="Joindre un PDF ou un DOCX"
                   disabled={adapting || adaptPlanLoading || contextDocStatus === 'uploading' || (!!adaptTodoPlan && !lastAdaptedCv)}
@@ -3952,7 +3953,7 @@ export default function App() {
                     contextFileInputRef.current?.click();
                   }}
                 >
-                  <HiPaperClip aria-hidden="true" />
+                  <HiOutlinePaperClip size={20} aria-hidden="true" />
                 </Button>
                 <textarea
                   ref={cvChatInputRef}

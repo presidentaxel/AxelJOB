@@ -1007,6 +1007,21 @@ button.ats-score-trigger {
   box-shadow: var(--shadow-focus);
 }
 
+.cv-chat-attach.ds-button {
+  width: 36px;
+  min-width: 36px;
+  height: 36px;
+  min-height: 36px;
+  padding: 0;
+  color: var(--ds-color-text-default);
+}
+
+.cv-chat-attach.ds-button svg {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
 .cv-chat-input-send {
   width: 36px;
   height: 36px;
