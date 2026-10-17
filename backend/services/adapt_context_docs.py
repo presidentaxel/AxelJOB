@@ -88,20 +88,21 @@ def extract_adapt_context_document(
 
 
 def join_documents_context(documents: list[dict]) -> str:
-    chunks: list[str] = []
-    total = 0
+    """Répartit le plafond entre les pièces pour qu'aucune ne disparaisse."""
+    prepared: list[tuple[str, str]] = []
     for doc in documents:
         name = (doc.get("filename") or "document").strip() or "document"
         body = (doc.get("text") or "").strip()
-        piece = f"### {name}\n{body}"
-        room = MAX_CONTEXT_CHARS - total
-        if room < 40:
-            break
-        if len(piece) > room:
-            piece = piece[:room].rstrip()
-        chunks.append(piece)
-        total += len(piece) + 2
-    return "\n\n".join(chunks)
+        if body:
+            prepared.append((name, body))
+    if not prepared:
+        return ""
+    headers = sum(len(f"### {name}\n") for name, _body in prepared)
+    separators = 2 * (len(prepared) - 1)
+    room = MAX_CONTEXT_CHARS - headers - separators
+    share = max(1, room // len(prepared)) if room > 0 else 1
+    chunks = [f"### {name}\n{body[:share].rstrip()}" for name, body in prepared]
+    return "\n\n".join(chunks)[:MAX_CONTEXT_CHARS]
 
 
 def context_document_records(documents_context: str) -> list[dict]:

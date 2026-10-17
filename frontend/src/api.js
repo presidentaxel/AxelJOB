@@ -162,30 +162,44 @@ export async function apiPostStream(path, body, { onMessage, signal } = {}) {
   const reader = r.body.getReader();
   const decoder = new TextDecoder();
   let buffer = '';
-  while (true) {
-    const { value, done } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split('\n');
-    buffer = lines.pop() || '';
-    for (const raw of lines) {
-      const line = raw.trim();
-      if (!line) continue;
-      const parsed = _parseStreamLine(line);
-      if (!parsed) continue;
-      if (onMessage) {
+  const cancelReader = () => {
+    reader.cancel().catch(() => {});
+  };
+  if (signal) signal.addEventListener('abort', cancelReader);
+  try {
+    while (true) {
+      if (signal?.aborted) {
+        cancelReader();
+        const aborted = new Error('aborted');
+        aborted.name = 'AbortError';
+        throw aborted;
+      }
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+      for (const raw of lines) {
+        const line = raw.trim();
+        if (!line) continue;
+        const parsed = _parseStreamLine(line);
+        if (!parsed) continue;
+        if (onMessage) {
+          onMessage(parsed);
+          await _yieldForStreamUi(parsed);
+        }
+      }
+    }
+    const tail = (buffer || '').trim();
+    if (tail) {
+      const parsed = _parseStreamLine(tail);
+      if (parsed && onMessage) {
         onMessage(parsed);
         await _yieldForStreamUi(parsed);
       }
     }
-  }
-  const tail = (buffer || '').trim();
-  if (tail) {
-    const parsed = _parseStreamLine(tail);
-    if (parsed && onMessage) {
-      onMessage(parsed);
-      await _yieldForStreamUi(parsed);
-    }
+  } finally {
+    if (signal) signal.removeEventListener('abort', cancelReader);
   }
 }
 

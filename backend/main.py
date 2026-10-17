@@ -371,6 +371,7 @@ class AdaptPlanUpdateBody(BaseModel):
 class AdaptRefineBody(BaseModel):
     cv: dict
     instruction: str = ""
+    documents_context: str = ""
 
 
 class RenderHtmlBody(BaseModel):
@@ -3004,6 +3005,7 @@ async def api_adapt_documents(request: Request):
         if single is not None:
             uploads = [single]
     from backend.services.adapt_context_docs import (
+        MAX_DOCUMENT_BYTES,
         MAX_DOCUMENTS,
         AdaptContextDocError,
         extract_adapt_context_document,
@@ -3019,15 +3021,17 @@ async def api_adapt_documents(request: Request):
     for upload in uploads:
         if not hasattr(upload, "read"):
             raise HTTPException(status_code=400, detail="Fichier illisible.")
-        raw = await upload.read()
+        raw = await upload.read(MAX_DOCUMENT_BYTES + 1)
+        if len(raw) > MAX_DOCUMENT_BYTES:
+            raise HTTPException(status_code=400, detail="8 Mo maximum par document.")
         try:
-            docs.append(
-                extract_adapt_context_document(
-                    getattr(upload, "filename", "") or "",
-                    getattr(upload, "content_type", "") or "",
-                    raw,
-                )
+            extracted = await asyncio.to_thread(
+                extract_adapt_context_document,
+                getattr(upload, "filename", "") or "",
+                getattr(upload, "content_type", "") or "",
+                raw,
             )
+            docs.append(extracted)
         except AdaptContextDocError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
     context = join_documents_context(docs)
@@ -4053,7 +4057,14 @@ def api_adapt_refine(request: Request, body: AdaptRefineBody):
     try:
         from backend.services.adapter import apply_tweaks_to_cv, refine_cv
 
-        tweaks = refine_cv(cv_current, instruction, user_id=user_id, operation="refine")
+        documents_context = _checked_documents_context(body.documents_context)
+        tweaks = refine_cv(
+            cv_current,
+            instruction,
+            user_id=user_id,
+            operation="refine",
+            documents_context=documents_context,
+        )
         merged = apply_tweaks_to_cv(cv_current, tweaks)
         return {"cv": merged, "tweaks": tweaks}
     except GeminiQuotaExceeded:

@@ -1055,10 +1055,10 @@ button.ats-score-trigger {
 }
 
 .cv-chat-attach.ds-button {
-  width: 36px;
-  min-width: 36px;
-  height: 36px;
-  min-height: 36px;
+  width: var(--ds-size-touch-min);
+  min-width: var(--ds-size-touch-min);
+  height: var(--ds-size-touch-min);
+  min-height: var(--ds-size-touch-min);
   padding: 0;
   color: var(--ds-color-text-default);
 }

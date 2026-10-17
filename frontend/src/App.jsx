@@ -952,6 +952,7 @@ export default function App() {
   const cvChatInputRef = useRef(null);
   const contextFileInputRef = useRef(null);
   const contextFilesRef = useRef([]);
+  const contextUploadSeqRef = useRef(0);
   /** Après la 1re adaptation réussie (chat), ouvre le tutoriel phase 2 - pas au début (évite conflit avec le modal « en cours »). */
   const openPhase2AfterFirstAdaptRef = useRef(false);
 
@@ -1265,7 +1266,7 @@ export default function App() {
       })
       .catch((error) => {
         if (controller.signal.aborted || error?.name === 'AbortError') return;
-        setProfileCvLoadError('Impossible de charger ton profil. Vérifie que le serveur local tourne, puis réessaie.');
+        setProfileCvLoadError('Impossible de charger ton profil. Vérifie ta connexion puis réessaie.');
         setNeedsOnboarding(false);
       })
       .finally(() => {
@@ -1693,6 +1694,7 @@ export default function App() {
       /* ignore localStorage */
     }
     setAnnonce('');
+    contextUploadSeqRef.current += 1;
     setContextFiles([]);
     contextFilesRef.current = [];
     setContextDocMeta([]);
@@ -2539,16 +2541,27 @@ export default function App() {
   };
 
   const uploadContextFiles = async (files) => {
+    const seq = contextUploadSeqRef.current + 1;
+    contextUploadSeqRef.current = seq;
     setContextDocStatus('uploading');
     setContextDocError('');
     const form = new FormData();
     files.forEach((file) => form.append('files', file));
     try {
       const data = await apiPostFormData('/api/adapt-documents', form);
+      if (contextUploadSeqRef.current !== seq) return null;
+      const documents = Array.isArray(data?.documents) ? data.documents : [];
       setDocumentsContext(data?.documents_context || '');
-      setContextDocMeta(Array.isArray(data?.documents) ? data.documents : []);
+      setContextDocMeta(files.map((file, index) => ({
+        filename: documents[index]?.filename || file.name,
+        chars: documents[index]?.chars,
+        localName: file.name,
+        localSize: file.size,
+      })));
       setContextDocStatus('ready');
+      return data;
     } catch (e) {
+      if (contextUploadSeqRef.current !== seq) return null;
       setContextDocStatus('');
       setContextDocError(e.message || 'Impossible d’ajouter le document.');
       throw e;
@@ -2580,20 +2593,35 @@ export default function App() {
     contextFilesRef.current = merged;
     setContextFiles(merged);
     try {
-      await uploadContextFiles(merged);
-      if (blocked) setContextDocError(blocked);
+      const uploaded = await uploadContextFiles(merged);
+      if (uploaded && blocked) setContextDocError(blocked);
     } catch {
       contextFilesRef.current = previous;
       setContextFiles(previous);
     }
   };
 
-  const removeContextFile = async (filename) => {
+  const removeContextFile = async (index) => {
     const previous = contextFilesRef.current;
-    const next = previous.filter((file) => file.name !== filename);
+    const next = previous.filter((_file, fileIndex) => fileIndex !== index);
     contextFilesRef.current = next;
     setContextFiles(next);
     setContextDocError('');
+    if (!previous.length) {
+      const current = contextDocMeta.filter((_doc, docIndex) => docIndex !== index);
+      const removed = contextDocMeta[index];
+      setContextDocMeta(current);
+      if (!current.length) {
+        setDocumentsContext('');
+        setContextDocStatus('');
+      } else if (removed?.filename) {
+        setDocumentsContext((text) => String(text || '')
+          .split(/\n(?=### )/)
+          .filter((part) => !part.startsWith(`### ${removed.filename}`))
+          .join('\n'));
+      }
+      return;
+    }
     if (!next.length) {
       setDocumentsContext('');
       setContextDocMeta([]);
@@ -2711,7 +2739,17 @@ export default function App() {
     setAdapting(true);
     setAdaptStepLabels(['Analyse de la demande', 'Application des modifications', 'Finalisation']);
     try {
-      const data = await apiPost('/api/adapt-refine', { cv: lastAdaptedCv, instruction: text });
+      const data = await apiPost('/api/adapt-refine', {
+        cv: lastAdaptedCv,
+        instruction: text,
+        documents_context: documentsContext || undefined,
+      });
+      contextFilesRef.current = [];
+      setContextFiles([]);
+      setContextDocMeta([]);
+      setDocumentsContext('');
+      setContextDocStatus('');
+      setContextDocError('');
       if (lastAdaptationId) {
         try {
           const patch = { full_cv: data.cv };
@@ -3940,16 +3978,16 @@ export default function App() {
               <div className="cv-chat-input-bar">
                 {(contextDocMeta.length > 0 || contextFiles.length > 0 || contextDocError || contextDocStatus === 'ready') && (
                   <div className="cv-chat-docs">
-                    {(contextDocMeta.length ? contextDocMeta : contextFiles).map((doc) => {
+                    {(contextDocMeta.length ? contextDocMeta : contextFiles).map((doc, index) => {
                       const label = doc.filename || doc.name;
                       return (
-                        <span key={label} className="cv-chat-doc-chip">
+                        <span key={`${doc.localName || label}-${doc.localSize || index}`} className="cv-chat-doc-chip">
                           {label}
                           <button
                             type="button"
                             aria-label={`Retirer ${label}`}
                             disabled={contextDocStatus === 'uploading' || adapting || (!!adaptTodoPlan && !lastAdaptedCv)}
-                            onClick={() => removeContextFile(label)}
+                            onClick={() => removeContextFile(index)}
                           >
                             ×
                           </button>
