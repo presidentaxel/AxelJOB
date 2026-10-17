@@ -523,6 +523,8 @@ def _line_spans_kept(spans: list) -> list[dict]:
                 "color": span.get("color"),
                 "font": str(span.get("font", "")),
                 "flags": int(span.get("flags", 0) or 0),
+                "x0": x0,
+                "x1": x1,
             }
         )
         prev_text = text
@@ -717,7 +719,7 @@ def _harmonize_span_weights(spans: list[dict]) -> list[dict]:
     return out
 
 
-def _spans_to_html(spans: list[dict]) -> str:
+def _spans_to_html(spans: list[dict], *, underline: str = "none") -> str:
     # Avant le découpage des mots : les espaces internes comptent, sinon
     # un lien un peu long devient la couleur de toute la ligne.
     dominant = _dominant_span_color(spans)
@@ -746,6 +748,8 @@ def _spans_to_html(spans: list[dict]) -> str:
             styles.append(f"color:{_span_hex_color(span)}")
         if styles:
             escaped = f'<span style="{";".join(styles)}">{escaped}</span>'
+        if underline == "partial" and span.get("underline") and raw.strip():
+            escaped = f"<u>{escaped}</u>"
         parts.append(escaped)
     plain = "".join(str(span.get("text") or "") for span in spans)
     collapsed = _collapse_tracked_caps(plain)
@@ -830,8 +834,128 @@ def _merge_baseline_fragments(fragments: list[dict]) -> list[dict]:
     return merged
 
 
+def _filter_underline_marks(
+    rects: list[tuple[float, float, float, float]],
+    page_width: float,
+) -> list[tuple[float, float, float, float]]:
+    """Filets sous un mot, pas la règle qui traverse la page.
+
+    Les segments colinéaires presque jointifs forment un seul filet. S'il
+    couvre une grande partie de la page, ce n'est pas un soulignement.
+    """
+    ordered = sorted(rects, key=lambda item: (round(item[1], 1), item[0]))
+    clusters: list[list[tuple[float, float, float, float]]] = []
+    for rect in ordered:
+        if (
+            clusters
+            and abs(rect[1] - clusters[-1][-1][1]) <= 0.8
+            and rect[0] - clusters[-1][-1][2] <= 2.5
+        ):
+            clusters[-1].append(rect)
+        else:
+            clusters.append([rect])
+    marks: list[tuple[float, float, float, float]] = []
+    for cluster in clusters:
+        x0 = min(item[0] for item in cluster)
+        x1 = max(item[2] for item in cluster)
+        if page_width > 0 and (x1 - x0) >= page_width * 0.45:
+            continue
+        marks.extend(cluster)
+    return marks
+
+
+def _drawing_underline_marks(page) -> list[tuple[float, float, float, float]]:
+    """Traits horizontaux fins susceptibles d'être le soulignement d'un texte."""
+    rects: list[tuple[float, float, float, float]] = []
+    for drawing in page.get_drawings():
+        rect = drawing.get("rect")
+        if rect is None:
+            continue
+        width = float(rect.x1 - rect.x0)
+        height = float(rect.y1 - rect.y0)
+        if height <= 0 or width < 6 or height > 1.3 or width < height:
+            continue
+        rects.append((float(rect.x0), float(rect.y0), float(rect.x1), float(rect.y1)))
+    return _filter_underline_marks(rects, float(page.rect.width))
+
+
+def _mark_underlined_spans(
+    spans: list[dict],
+    line_bottom: float,
+    marks: list[tuple[float, float, float, float]],
+    used: set[int],
+) -> None:
+    """Pose ``underline`` sur les spans dont l'encre repose sur un filet."""
+    for span in spans:
+        if not str(span.get("text") or "").strip():
+            continue
+        try:
+            x0 = float(span["x0"])
+            x1 = float(span["x1"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        width = x1 - x0
+        if width < 1:
+            continue
+        for index, mark in enumerate(marks):
+            mx0, my0, mx1, my1 = mark
+            overlap = min(x1, mx1) - max(x0, mx0)
+            if overlap < width * 0.6:
+                continue
+            mid = (my0 + my1) / 2.0
+            if line_bottom - 4.5 <= mid <= line_bottom + 1.8:
+                span["underline"] = True
+                used.add(index)
+                break
+
+
+def _underline_mode(spans: list[dict]) -> str:
+    visible = [span for span in spans if str(span.get("text") or "").strip()]
+    marked = [span for span in visible if span.get("underline")]
+    if not marked:
+        return "none"
+    if len(marked) == len(visible):
+        return "block"
+    return "partial"
+
+
+def _drop_consumed_underline_lines(
+    blocks: list[dict],
+    marks_mm: list[tuple[float, float, float, float]],
+) -> list[dict]:
+    """Retire le filet devenu un soulignement natif du texte."""
+    if not marks_mm:
+        return blocks
+    kept: list[dict] = []
+    for block in blocks:
+        if block.get("type") != "shape:line":
+            kept.append(block)
+            continue
+        style = block.get("style") if isinstance(block.get("style"), dict) else {}
+        if style.get("orientation") == "vertical":
+            kept.append(block)
+            continue
+        bx0 = float(block.get("x") or 0)
+        bx1 = bx0 + float(block.get("w") or 0)
+        by = float(block.get("y") or 0) + float(block.get("h") or 0) / 2.0
+        drop = False
+        for mx0, my0, mx1, my1 in marks_mm:
+            overlap = min(bx1, mx1) - max(bx0, mx0)
+            if overlap >= max(bx1 - bx0, 0.1) * 0.7 and abs(by - ((my0 + my1) / 2.0)) <= 1.2:
+                drop = True
+                break
+        if not drop:
+            kept.append(block)
+    return kept
+
+
 def _extract_text_blocks(
-    page, pos_scale: float, font_scale: float, embedded_roots: set[str] | None = None
+    page,
+    pos_scale: float,
+    font_scale: float,
+    embedded_roots: set[str] | None = None,
+    underline_marks: list[tuple[float, float, float, float]] | None = None,
+    used_underline_mm: list[tuple[float, float, float, float]] | None = None,
 ) -> tuple[list[dict], int]:
     """Une ligne PDF = un bloc texte canvas. Retourne (blocs, nb_chars).
 
@@ -868,7 +992,10 @@ def _extract_text_blocks(
 
     for frag in _merge_baseline_fragments(fragments):
         spans = frag["spans"]
-        content = _spans_to_html(spans)
+        used_marks: set[int] = set()
+        _mark_underlined_spans(spans, float(frag["y1"]), underline_marks or [], used_marks)
+        mode = _underline_mode(spans)
+        content = _spans_to_html(spans, underline=mode)
         if not content:
             continue
         plain = re.sub(r"<[^>]+>", "", html.unescape(content))
@@ -909,6 +1036,19 @@ def _extract_text_blocks(
                 style["font_weight"] = only
         if spans and all(_span_is_italic(s) for s in spans if str(s.get("text", "")).strip()):
             style["italic"] = True
+        if mode == "block":
+            style["underline"] = True
+        if used_underline_mm is not None and underline_marks:
+            for index in used_marks:
+                mx0, my0, mx1, my1 = underline_marks[index]
+                used_underline_mm.append(
+                    (
+                        mx0 * pos_scale,
+                        my0 * pos_scale,
+                        mx1 * pos_scale,
+                        my1 * pos_scale,
+                    )
+                )
 
         x0, y0, x1, y1 = frag["x0"], frag["y0"], frag["x1"], frag["y1"]
         w_mm = max(4.0, (x1 - x0) * pos_scale + 5.0)
@@ -3045,7 +3185,15 @@ def extract_layout_from_pdf(file_bytes: bytes, max_pages: int = MAX_PAGES) -> di
                 if k not in merged_theme_colors:
                     merged_theme_colors[k] = v
             # Le texte D'ABORD (la décomposition/rasterisation retire le texte).
-            text_blocks, chars = _extract_text_blocks(page, pos_scale, fit, embedded_roots)
+            used_underline_mm: list[tuple[float, float, float, float]] = []
+            text_blocks, chars = _extract_text_blocks(
+                page,
+                pos_scale,
+                fit,
+                embedded_roots,
+                underline_marks=_drawing_underline_marks(page),
+                used_underline_mm=used_underline_mm,
+            )
             total_chars += chars
             # Couche graphique décomposée en blocs déplaçables (sidebar, filets,
             # photo, icônes/puces). Repli : fond plat rasterisé, puis vectoriel.
@@ -3064,6 +3212,7 @@ def extract_layout_from_pdf(file_bytes: bytes, max_pages: int = MAX_PAGES) -> di
                 continue
             blocks = _cleanup_image_overlay_blocks(blocks)
             blocks = _fit_images_to_backing_rects(blocks)
+            blocks = _drop_consumed_underline_lines(blocks, used_underline_mm)
             blocks = coalesce_text_runs(blocks)
             blocks = align_gutter_bullets(blocks)
             pages_out.append({"id": f"page_{page_index + 1}", "blocks": blocks})

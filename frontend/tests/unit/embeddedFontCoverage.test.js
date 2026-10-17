@@ -109,6 +109,28 @@ test('fontStyleForText incline le romain si l italique du PDF n a pas les lettre
   assert.equal(out.italic, true);
 });
 
+test('fontStyleForText épaissit le romain si le gras embarqué n a pas les lettres', () => {
+  const style = {
+    font_family: "'PDFEmbed-Times', sans-serif",
+  };
+  const fonts = [
+    {
+      family: 'PDFEmbed-Times',
+      weight: 400,
+      style: 'normal',
+      coverage: ' Banking',
+    },
+    {
+      family: 'PDFEmbed-Times',
+      weight: 700,
+      style: 'normal',
+      coverage: ' ABC',
+    },
+  ];
+  const out = fontStyleForText(style, '<strong>Banking</strong>', fonts);
+  assert.equal(out.font_family, "'PDFEmbed-Times__w400', sans-serif");
+});
+
 test('fontStyleForText ignore une puce absente de la police du texte', () => {
   const style = {
     font_family: "'PDFEmbed-Times', sans-serif",

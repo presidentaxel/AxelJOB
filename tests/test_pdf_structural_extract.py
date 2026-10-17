@@ -13,13 +13,16 @@ from backend.services.pdf_structural_extract import (
     _int_color_to_hex,
     _is_hidden_ats_text,
     _is_near_white,
+    _filter_underline_marks,
     _join_line_span_texts,
     _line_column_fragments,
+    _mark_underlined_spans,
     _merge_baseline_fragments,
     _photo_circle_geometry,
     _photo_plate_blocks,
     _pixmap_is_blank_plate,
     _spans_to_html,
+    _underline_mode,
     coalesce_text_runs,
     extract_layout_from_pdf,
     visible_text_excluding_hidden_ats,
@@ -746,6 +749,45 @@ class ColumnSplitTest(unittest.TestCase):
         texts = [b["content"] for b in out if b["type"] == "text"]
         self.assertEqual(len(texts), 2)
         self.assertTrue(any(t.startswith("•") for t in texts))
+
+    def test_page_rule_is_not_an_underline_and_a_short_stroke_is(self):
+        page_w = 600.0
+        rule = [
+            (36.0, 62.0, 102.0, 63.0),
+            (103.0, 62.0, 453.0, 63.0),
+            (454.0, 62.0, 579.0, 63.0),
+        ]
+        email = (310.0, 51.0, 412.0, 51.6)
+        self.assertEqual(_filter_underline_marks(rule, page_w), [])
+        self.assertEqual(_filter_underline_marks([email], page_w), [email])
+
+    def test_partial_underline_wraps_only_the_covered_span(self):
+        spans = [
+            {
+                "text": "adresse ",
+                "x0": 20.0,
+                "x1": 80.0,
+                "size": 10,
+                "flags": 0,
+                "font": "Times",
+                "color": 0,
+            },
+            {
+                "text": "ada@example.com",
+                "x0": 90.0,
+                "x1": 180.0,
+                "size": 10,
+                "flags": 0,
+                "font": "Times",
+                "color": 255,
+            },
+        ]
+        _mark_underlined_spans(spans, 52.0, [(88.0, 51.0, 182.0, 51.5)], set())
+        self.assertEqual(_underline_mode(spans), "partial")
+        html = _spans_to_html(spans, underline="partial")
+        self.assertIn("<u>", html)
+        self.assertIn("ada@example.com", html)
+        self.assertNotIn("<u>adresse", html)
 
 
 if __name__ == "__main__":

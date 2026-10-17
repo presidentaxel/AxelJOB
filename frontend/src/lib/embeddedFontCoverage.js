@@ -66,8 +66,9 @@ function weightRuns(html, style) {
     } else if (tag === 'span') {
       weightStack.push(weight);
       italicStack.push(italic);
-      const weightMatch = /font-weight:\s*(\d+)/i.exec(match[3] || '');
-      const nextWeight = Number(weightMatch?.[1]);
+      const weightMatch = /font-weight:\s*(bold|normal|\d+)/i.exec(match[3] || '');
+      const rawWeight = (weightMatch?.[1] || '').toLowerCase();
+      const nextWeight = rawWeight === 'bold' ? 700 : rawWeight === 'normal' ? 400 : Number(rawWeight);
       if (CSS_WEIGHTS.has(nextWeight)) weight = nextWeight;
       if (/font-style:\s*italic/i.test(match[3] || '')) italic = true;
     }
@@ -96,12 +97,24 @@ function uprightStack(stack) {
     .join(', ');
 }
 
+function synthesisFamily(stack, weight) {
+  return String(stack || '')
+    .split(',')
+    .map((name, index) => {
+      const clean = name.trim().replace(/^['"]|['"]$/g, '');
+      if (!clean || index > 0) return name.trim();
+      return `'${clean}__w${weight}'`;
+    })
+    .join(', ');
+}
+
+const LIGHTER_WEIGHTS = [400, 500, 600];
+
 /**
- * Retire ``font_family`` quand le sous-ensemble ne contient pas toutes les lettres
- * de la graisse réellement peinte. Sinon le navigateur mélange la police embarquée
- * et une police de repli, lettre par lettre.
- * Un italique incomplet retombe sur le romain de la même graisse, que le
- * navigateur incline, plutôt que de changer de police au milieu du mot.
+ * Retire ``font_family`` quand aucune face de la famille ne contient les lettres.
+ * Si le gras embarqué ne les contient pas, on épaissit le romain de la même
+ * police : le bouton Gras ne doit pas changer de police.
+ * Un italique incomplet incline ce romain, plutôt que de mélanger les lettres.
  */
 export function fontStyleForText(style, text, fonts) {
   if (!style || typeof style !== 'object' || !style.font_family) return style || {};
@@ -120,20 +133,40 @@ export function fontStyleForText(style, text, fonts) {
     Number(item.weight) === weight
     && (item.style === 'italic') === italic
   ));
+  const coveredBy = (weight, italic, value) => {
+    const face = faceFor(weight, italic);
+    return Boolean(face) && faceCovers(face, value);
+  };
   let synthesizeItalic = false;
+  let synthFrom = null;
   const runs = weightRuns(sample, style);
   for (const run of runs) {
-    if (!String(run.text || '').trim()) continue;
-    const face = faceFor(run.weight, run.italic);
-    if (face && faceCovers(face, run.text)) continue;
-    const upright = run.italic ? faceFor(run.weight, false) : null;
-    if (upright && faceCovers(upright, run.text)) {
+    const value = String(run.text || '');
+    if (!value.trim()) continue;
+    if (coveredBy(run.weight, run.italic, value)) continue;
+    if (run.italic && coveredBy(run.weight, false, value)) {
       synthesizeItalic = true;
+      continue;
+    }
+    const lighter = LIGHTER_WEIGHTS.find((weight) => (
+      weight < run.weight && coveredBy(weight, false, value)
+    ));
+    if (lighter) {
+      synthFrom = lighter;
       continue;
     }
     const next = { ...style };
     delete next.font_family;
     return next;
+  }
+  if (synthFrom) {
+    const everything = runs.map((run) => run.text).join('');
+    if (!coveredBy(synthFrom, false, everything)) {
+      const next = { ...style };
+      delete next.font_family;
+      return next;
+    }
+    return { ...style, font_family: synthesisFamily(style.font_family, synthFrom) };
   }
   if (!synthesizeItalic) return style;
   return { ...style, font_family: uprightStack(style.font_family) };

@@ -79,10 +79,13 @@ function EmbeddedFontFaces({ fonts }) {
         + `src:url("${src}") format('${format}');}`
       );
       if (italic) return face;
-      // Même fichier, sans face italique : le navigateur incline le romain
-      // quand le sous-ensemble italique du PDF ne contient pas les lettres.
+      // __up : italique synthétique. __wN : gras synthétique sur cette graisse,
+      // pour que le bouton Gras épaississe la même police.
       return (
         `${face}\n@font-face{font-family:'${family}__up';`
+        + `font-weight:${weight};font-style:normal;font-display:swap;`
+        + `src:url("${src}") format('${format}');}`
+        + `\n@font-face{font-family:'${family}__w${weight}';`
         + `font-weight:${weight};font-style:normal;font-display:swap;`
         + `src:url("${src}") format('${format}');}`
       );
