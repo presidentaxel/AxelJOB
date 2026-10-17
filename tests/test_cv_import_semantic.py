@@ -210,6 +210,33 @@ def test_mixed_contact_line_is_not_replaced_by_a_widget():
     assert by_id["mail"]["type"] == "contact"
 
 
+def test_email_plus_city_is_not_a_contact_widget():
+    layout = {
+        "version": 3,
+        "pages": [
+            {
+                "height_mm": 297,
+                "blocks": [
+                    {
+                        "id": "city",
+                        "type": "text",
+                        "x": 20,
+                        "y": 20,
+                        "w": 80,
+                        "h": 5,
+                        "content": "ada@example.com • Paris",
+                    }
+                ],
+            }
+        ],
+    }
+    anns = annotate_structural_blocks(
+        layout,
+        {"email": "ada@example.com", "ville": "Paris", "linkedin": "www.linkedin.com/in/ada"},
+    )
+    assert anns == []
+
+
 def test_split_profil_heading_goes_to_resume_not_identity():
     text = """Ada Lovelace
 ada@example.com

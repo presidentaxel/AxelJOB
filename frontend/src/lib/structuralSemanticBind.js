@@ -84,31 +84,33 @@ function digitsOnly(value) {
 }
 
 /** Une plage « 2019 - 2023 » n'est pas un numéro. */
-function leftoverWords(text, values, { stripContactTokens = false } = {}) {
+function leftoverWords(text, values, { stripEmail = false, stripPhone = false } = {}) {
   let plain = stripPdfMarkup(text).toLowerCase();
   for (const value of values) {
     const token = String(value || '').trim().toLowerCase();
     if (token.length >= 3) plain = plain.split(token).join(' ');
   }
-  if (stripContactTokens) {
-    plain = plain
-      .replace(new RegExp(EMAIL_RE.source, 'gi'), ' ')
-      .replace(new RegExp(PHONE_RE.source, 'gi'), ' ')
-      .replace(/(?:https?:\/\/|www\.)\S+/gi, ' ')
-      .replace(/linkedin\.com\/\S+/gi, ' ');
-  }
+  if (stripEmail) plain = plain.replace(new RegExp(EMAIL_RE.source, 'gi'), ' ');
+  if (stripPhone) plain = plain.replace(new RegExp(PHONE_RE.source, 'gi'), ' ');
   return plain.replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
 }
 
 /** Un widget n'affiche que ses champs : s'il reste du texte, on garde la ligne PDF. */
-function lineIsOnlyBoundFields(block, kind, cv = {}) {
-  const identityValues = [cv.prenom, cv.first_name, cv.nom, cv.last_name, cv.titre_professionnel];
-  const contactValues = [cv.email, cv.telephone, cv.phone, cv.ville, cv.linkedin];
-  const leftover = leftoverWords(
-    block?.content,
-    kind === 'identity' ? identityValues : contactValues,
-    { stripContactTokens: kind === 'contact' },
-  );
+function lineIsOnlyBoundFields(block, kind, cv = {}, bindPaths) {
+  const paths = Array.isArray(bindPaths) && bindPaths.length
+    ? bindPaths
+    : (kind === 'identity' ? ['prenom', 'nom'] : ['email', 'telephone']);
+  const values = [];
+  if (paths.includes('prenom')) values.push(cv.prenom, cv.first_name);
+  if (paths.includes('nom')) values.push(cv.nom, cv.last_name);
+  if (paths.includes('titre_professionnel')) values.push(cv.titre_professionnel);
+  if (paths.includes('email')) values.push(cv.email);
+  if (paths.includes('telephone')) values.push(cv.telephone, cv.phone);
+  if (paths.includes('linkedin')) values.push(cv.linkedin);
+  const leftover = leftoverWords(block?.content, values, {
+    stripEmail: paths.includes('email'),
+    stripPhone: paths.includes('telephone'),
+  });
   return leftover.length <= 2;
 }
 
@@ -236,7 +238,7 @@ export function classifyStructuralTextBlock(block, cv = {}, { pageHeightMm = 297
       if (y < pageHeightMm * 0.32) confidence += 0.25;
       if (fontSize >= 14 || bold) confidence += 0.2;
       if (hasPrenom && hasNom) confidence += 0.15;
-      if (confidence >= MIN_SEMANTIC_CONFIDENCE && lineIsOnlyBoundFields(block, 'identity', cv)) {
+      if (confidence >= MIN_SEMANTIC_CONFIDENCE && lineIsOnlyBoundFields(block, 'identity', cv, ['prenom', 'nom'])) {
         return {
           type: 'identity',
           confidence: Math.min(1, confidence),
@@ -257,7 +259,7 @@ export function classifyStructuralTextBlock(block, cv = {}, { pageHeightMm = 297
   if (looksLikePhone(text, cv)) contactConf += 0.35;
   const cvEmail = String(cv?.email || '').trim().toLowerCase();
   if (cvEmail && text.toLowerCase().includes(cvEmail)) contactConf += 0.2;
-  if (contactConf >= MIN_SEMANTIC_CONFIDENCE && lineIsOnlyBoundFields(block, 'contact', cv)) {
+  if (contactConf >= MIN_SEMANTIC_CONFIDENCE && lineIsOnlyBoundFields(block, 'contact', cv, ['email', 'telephone'])) {
     return { type: 'contact', confidence: Math.min(1, contactConf), kind: 'contact' };
   }
 
@@ -903,7 +905,7 @@ export function bindStructuralTextToSemanticBlocks(layout, cv = {}, {
         if (!cls) continue;
         if (
           (cls.kind === 'identity' || cls.kind === 'contact')
-          && !lineIsOnlyBoundFields(block, cls.kind, cv)
+          && !lineIsOnlyBoundFields(block, cls.kind, cv, cls.bindPaths)
         ) {
           continue;
         }

@@ -192,6 +192,38 @@ test('classifyStructuralTextBlock : une ligne mixte reste du texte', () => {
   assert.equal(hit, null);
 });
 
+test('classifyStructuralTextBlock : le titre a cote du nom reste du texte', () => {
+  const hit = classifyStructuralTextBlock(
+    {
+      type: 'text',
+      content: 'Marie Martin Product Manager',
+      x: 20,
+      y: 16,
+      w: 80,
+      h: 8,
+      style: { font_size: 16, bold: true },
+    },
+    { prenom: 'Marie', nom: 'Martin', titre_professionnel: 'Product Manager' },
+  );
+  assert.equal(hit, null);
+});
+
+test('classifyStructuralTextBlock : une ville a cote de l email reste du texte', () => {
+  const hit = classifyStructuralTextBlock(
+    {
+      type: 'text',
+      content: 'ada@example.fr • Paris',
+      x: 20,
+      y: 24,
+      w: 80,
+      h: 5,
+      style: {},
+    },
+    { email: 'ada@example.fr', ville: 'Paris' },
+  );
+  assert.equal(hit, null);
+});
+
 test('bind inPlace garde le texte quand l annotation contact effacerait des mots', () => {
   const layout = sanitizeLayoutV3({
     version: 3,

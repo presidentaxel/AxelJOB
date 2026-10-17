@@ -116,18 +116,23 @@ def _visible_plain(text: str) -> str:
     return re.sub(r"\s+", " ", plain).strip()
 
 
-def _line_is_only_values(text: str, values: list[str], *, strip_contact: bool) -> bool:
+def _line_is_only_values(
+    text: str,
+    values: list[str],
+    *,
+    strip_email: bool,
+    strip_phone: bool,
+) -> bool:
     """Vrai si un widget de ces champs n'efface aucun mot de la ligne."""
     plain = _visible_plain(text).lower()
     for value in values:
         token = (value or "").strip().lower()
         if len(token) >= 3:
             plain = plain.replace(token, " ")
-    if strip_contact:
+    if strip_email:
         plain = _EMAIL_RE.sub(" ", plain)
+    if strip_phone:
         plain = _PHONE_RE.sub(" ", plain)
-        plain = re.sub(r"(?:https?://|www\.)\S+", " ", plain, flags=re.IGNORECASE)
-        plain = re.sub(r"linkedin\.com/\S+", " ", plain, flags=re.IGNORECASE)
     plain = re.sub(r"[^\w]+", " ", plain, flags=re.UNICODE)
     plain = re.sub(r"\s+", " ", plain).strip()
     return len(plain) <= 2
@@ -499,7 +504,8 @@ def annotate_structural_blocks(
                     if conf >= min_confidence and _line_is_only_values(
                         text,
                         [prenom, nom, (cv.get("titre_professionnel") or "")],
-                        strip_contact=False,
+                        strip_email=False,
+                        strip_phone=False,
                     ):
                         # Uniquement les champs présents sur CETTE ligne. Le titre
                         # sur la ligne d'en dessous ne doit pas être avalé par le nom.
@@ -535,18 +541,21 @@ def annotate_structural_blocks(
                 linkedin = (cv.get("linkedin") or "").strip().lower()
                 if linkedin and len(linkedin) >= 6 and linkedin in text.lower():
                     contact_bind.append("linkedin")
+                displayed = []
+                if "email" in contact_bind:
+                    displayed.append(email)
+                if "telephone" in contact_bind:
+                    displayed.append(str(cv.get("telephone") or ""))
+                if "linkedin" in contact_bind:
+                    displayed.append(linkedin)
                 if (
                     conf >= min_confidence
                     and contact_bind
                     and _line_is_only_values(
                         text,
-                        [
-                            email,
-                            str(cv.get("telephone") or ""),
-                            ville,
-                            linkedin,
-                        ],
-                        strip_contact=True,
+                        displayed,
+                        strip_email="email" in contact_bind,
+                        strip_phone="telephone" in contact_bind,
                     )
                 ):
                     hit = {
