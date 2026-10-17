@@ -34,7 +34,7 @@ import AdaptLanguageChoiceDialog from './components/ui/AdaptLanguageChoiceDialog
 import { CONTACT_EMAIL, STORAGE_EXPORT_DIR, STORAGE_EXPORT_ATS_BLOCK_SNOOZE, STORAGE_PRE_EXPORT_TEMPLATE_OPTIONS_DONE, STORAGE_PDF_EXPORT_FILENAME_PATTERN, STATUT_LABELS, KANBAN_COLUMNS, getExportFolderName } from './constants';
 import { buildAdaptedPdfFilename } from './lib/pdfExportFilename';
 import { getPdfSaveStartInDirectoryHandle } from './lib/pdfExportStartDirIdb';
-import { HiDocumentText, HiArrowDownTray, HiClipboardDocumentList, HiPencilSquare, HiChatBubbleLeftRight, HiCheck, HiSwatch, HiChevronDown, HiChevronUp, HiPlus } from 'react-icons/hi2';
+import { HiDocumentText, HiArrowDownTray, HiClipboardDocumentList, HiPencilSquare, HiChatBubbleLeftRight, HiCheck, HiSwatch, HiChevronDown, HiChevronUp, HiPlus, HiPaperClip } from 'react-icons/hi2';
 import { lazyWithChunkReload, clearChunkErrorReloadKey } from './lib/lazyChunkReload';
 import { APP_DEFAULT_ROUTE, APP_ROUTES, getViewFromPathname, isKnownAppPathname } from './lib/appRoutes';
 import {
@@ -2554,21 +2554,28 @@ export default function App() {
     if (!picked.length) return;
     const previous = contextFilesRef.current;
     const merged = [...previous];
+    let blocked = '';
     for (const file of picked) {
       const message = adaptContextFileError(file, merged.length);
       if (message) {
-        setContextDocError(message);
-        setContextDocStatus('');
-        return;
+        blocked = message;
+        break;
       }
       if (merged.some((item) => item.name === file.name && item.size === file.size)) continue;
       merged.push(file);
     }
-    if (merged.length === previous.length) return;
+    if (merged.length === previous.length) {
+      if (blocked) {
+        setContextDocError(blocked);
+        setContextDocStatus('');
+      }
+      return;
+    }
     contextFilesRef.current = merged;
     setContextFiles(merged);
     try {
       await uploadContextFiles(merged);
+      if (blocked) setContextDocError(blocked);
     } catch {
       contextFilesRef.current = previous;
       setContextFiles(previous);
@@ -3891,52 +3898,62 @@ export default function App() {
               </div>
               {error && <div className="error cv-chat-error">{error}</div>}
               <div className="cv-chat-input-bar">
-                <div className="cv-chat-docs">
-                  <input
-                    ref={contextFileInputRef}
-                    type="file"
-                    accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                    multiple
-                    hidden
-                    onChange={(e) => {
-                      addContextFiles(e.target.files);
-                      e.target.value = '';
-                    }}
-                  />
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    disabled={adapting || adaptPlanLoading || contextDocStatus === 'uploading' || (!!adaptTodoPlan && !lastAdaptedCv)}
-                    onClick={() => contextFileInputRef.current?.click()}
-                    title="PDF ou DOCX, 8 Mo maximum, 3 fichiers"
-                  >
-                    {contextDocStatus === 'uploading' ? 'Lecture du document…' : 'Joindre un document'}
-                  </Button>
-                  <span className="cv-chat-docs-hint">PDF ou DOCX · 8 Mo · {ADAPT_CONTEXT_MAX_FILES} fichiers</span>
-                  {(contextDocMeta.length ? contextDocMeta : contextFiles).map((doc) => {
-                    const label = doc.filename || doc.name;
-                    return (
-                      <span key={label} className="cv-chat-doc-chip">
-                        {label}
-                        <button
-                          type="button"
-                          aria-label={`Retirer ${label}`}
-                          disabled={contextDocStatus === 'uploading' || adapting || (!!adaptTodoPlan && !lastAdaptedCv)}
-                          onClick={() => removeContextFile(label)}
-                        >
-                          ×
-                        </button>
-                      </span>
-                    );
-                  })}
-                  {contextDocStatus === 'ready' && (
-                    <span className="cv-chat-docs-status" role="status">Document ajouté. Il sera pris en compte dans l’adaptation.</span>
-                  )}
-                  {contextDocError && (
-                    <span className="cv-chat-docs-error" role="alert">{contextDocError}</span>
-                  )}
-                </div>
+                {(contextDocMeta.length > 0 || contextFiles.length > 0 || contextDocError || contextDocStatus === 'ready') && (
+                  <div className="cv-chat-docs">
+                    {(contextDocMeta.length ? contextDocMeta : contextFiles).map((doc) => {
+                      const label = doc.filename || doc.name;
+                      return (
+                        <span key={label} className="cv-chat-doc-chip">
+                          {label}
+                          <button
+                            type="button"
+                            aria-label={`Retirer ${label}`}
+                            disabled={contextDocStatus === 'uploading' || adapting || (!!adaptTodoPlan && !lastAdaptedCv)}
+                            onClick={() => removeContextFile(label)}
+                          >
+                            ×
+                          </button>
+                        </span>
+                      );
+                    })}
+                    {contextDocStatus === 'ready' && !contextDocError && (
+                      <span className="cv-chat-docs-status" role="status">Document ajouté.</span>
+                    )}
+                    {contextDocError && (
+                      <span className="cv-chat-docs-error" role="alert">{contextDocError}</span>
+                    )}
+                  </div>
+                )}
+                <input
+                  ref={contextFileInputRef}
+                  type="file"
+                  accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                  multiple
+                  hidden
+                  onChange={(e) => {
+                    addContextFiles(e.target.files);
+                    e.target.value = '';
+                  }}
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  iconOnly
+                  aria-label="Joindre un document"
+                  title="Joindre un PDF ou un DOCX"
+                  disabled={adapting || adaptPlanLoading || contextDocStatus === 'uploading' || (!!adaptTodoPlan && !lastAdaptedCv)}
+                  loading={contextDocStatus === 'uploading'}
+                  onClick={() => {
+                    if (contextFilesRef.current.length >= ADAPT_CONTEXT_MAX_FILES) {
+                      setContextDocError('3 documents maximum.');
+                      return;
+                    }
+                    contextFileInputRef.current?.click();
+                  }}
+                >
+                  <HiPaperClip aria-hidden="true" />
+                </Button>
                 <textarea
                   ref={cvChatInputRef}
                   className="cv-chat-input"

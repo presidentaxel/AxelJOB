@@ -948,7 +948,6 @@ button.ats-score-trigger {
   width: 100%;
 }
 
-.cv-chat-docs-hint,
 .cv-chat-docs-status {
   color: var(--ds-color-text-muted);
   font-size: 0.75rem;
