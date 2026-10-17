@@ -118,9 +118,11 @@ def documents_contexte_block(offre: dict | None) -> str:
         return ""
     return (
         "<documents_candidat>\n"
-        "Pièces jointes fournies par le candidat (lettre, portfolio, annexes). "
-        "S'en servir seulement pour reformuler des faits déjà présents dans le CV source. "
-        "Ne rien inventer.\n"
+        "Pièces jointes lues (CV, lettre, portfolio, annexe). "
+        "Sers-t'en pour le plan et la reformulation. "
+        "Si la demande dit de t'en inspirer ou de les reprendre, fais-le à partir de ce texte. "
+        "Ne rien inventer qui ne figure ni dans le CV source ni dans ces pièces. "
+        "Cite le nom du fichier.\n"
         f"{text}\n"
         "</documents_candidat>\n"
     )
@@ -863,7 +865,7 @@ Style (important) :
 - Tu peux tutoyer. Mentionne l'intitulé du poste, l'entreprise ou un thème concret de l'offre quand c'est pertinent.
 - INTERDIT : les formules génériques du type « Optimiser les mots-clés ATS », « Adapter les expériences les plus pertinentes », « Réécrire le résumé selon le poste », « Aligner sur les attentes », « Mettre en avant les réalisations ».
 - "reason" = une seule phrase utile : pourquoi cette étape pour CETTE offre (pas du remplissage).
-- "assistant_message" = 1 phrase chaleureuse et directe (tutoiement OK).
+- "assistant_message" = 1 phrase chaleureuse et directe (tutoiement OK). Si des pièces sont jointes, dis que tu les as lues et cite leur nom.
 
 Contraintes techniques :
 - IDs autorisés uniquement : rewrite_resume, rewrite_experiences, optimize_ats (dans cet ordre dans le JSON).

@@ -2605,8 +2605,11 @@ export default function App() {
   const handleChatSend = async () => {
     const text = (chatInput || '').trim();
     if (!text || adapting || adaptPlanLoading || contextDocStatus === 'uploading') return;
+    const attachedNames = (contextDocMeta.length ? contextDocMeta : contextFiles)
+      .map((doc) => doc.filename || doc.name)
+      .filter(Boolean);
     setChatInput('');
-    setChatMessages((prev) => [...prev, { role: 'user', content: text }]);
+    setChatMessages((prev) => [...prev, { role: 'user', content: text, attachments: attachedNames }]);
     hideError();
     if (!lastAdaptedCv) {
       if (adaptTodoPlan) {
@@ -2635,24 +2638,37 @@ export default function App() {
         setAdaptRunStepIds([]);
         setAdaptStreamRunningStepId(null);
         setAdaptStreamDoneStepIds([]);
+        const cited = attachedNames.some((name) => String(plan?.assistant_message || '').includes(name));
+        const readLine = attachedNames.length && !cited
+          ? `J'ai lu ${attachedNames.map((name) => `« ${name} »`).join(', ')}.`
+          : '';
+        const assistantMessage = [readLine, plan?.assistant_message || "Voici un plan d'adaptation. Ajuste les étapes puis valide."]
+          .filter(Boolean)
+          .join(' ');
         setAdaptTodoPlan({
           planId: plan?.plan_id || null,
           description: text,
           todo,
-          assistantMessage: plan?.assistant_message || "Voici un plan d'adaptation. Ajuste les étapes puis valide.",
+          assistantMessage,
           cvLanguage: plan?.cv_language || null,
           offerLanguage: plan?.offer_language || null,
           languageMismatch: mismatch,
           outputLanguage: autoLang.outputLanguage,
           languageRemembered: autoLang.remembered,
           documentsContext,
+          attachments: attachedNames,
         });
+        contextFilesRef.current = [];
+        setContextFiles([]);
+        setContextDocMeta([]);
+        setContextDocStatus('');
+        setContextDocError('');
         setLanguagePreviewStatus(mismatch ? 'idle' : 'ready');
         languagePreviewCvRef.current = null;
         lastLocalizedSourceFpRef.current = '';
         setChatMessages((prev) => [...prev, {
           role: 'assistant',
-          content: plan?.assistant_message || "Voici un plan d'adaptation. Ajuste les étapes puis valide.",
+          content: assistantMessage,
           kind: 'todo_plan',
         }]);
         if (autoLang.prompt) {
@@ -3705,6 +3721,9 @@ export default function App() {
                               {(adaptTodoPlan.todo || []).length} étape(s)
                             </span>
                           </div>
+                          {Array.isArray(adaptTodoPlan.attachments) && adaptTodoPlan.attachments.length > 0 && (
+                            <p className="cv-chat-todo-docs">Lu : {adaptTodoPlan.attachments.join(', ')}</p>
+                          )}
                           <div className="cv-chat-todo-list">
                             {(adaptTodoPlan.todo || []).map((step) => {
                               const sid = String(step.id);
@@ -3834,6 +3853,13 @@ export default function App() {
                           {m.role === 'user' && typeof m.content === 'string' && m.content.length > 280 && !expandedUserMessages[i]
                             ? `${m.content.slice(0, 280)}…`
                             : m.content}
+                          {m.role === 'user' && Array.isArray(m.attachments) && m.attachments.length > 0 && (
+                            <span className="cv-chat-msg-files">
+                              {m.attachments.map((name) => (
+                                <span key={name} className="cv-chat-doc-chip">{name}</span>
+                              ))}
+                            </span>
+                          )}
                           {m.role === 'user' && typeof m.content === 'string' && m.content.length > 280 ? (
                             <button
                               type="button"
