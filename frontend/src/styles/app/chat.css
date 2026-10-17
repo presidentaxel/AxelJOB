@@ -932,11 +932,98 @@ button.ats-score-trigger {
 .cv-chat-input-bar {
   flex-shrink: 0;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 0.5rem;
   padding: 0.75rem 1rem;
   background: var(--bg);
   border-top: 1px solid var(--border);
+}
+
+.cv-chat-docs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.cv-chat-msg-files {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-top: 0.45rem;
+}
+
+.cv-chat-msg-file {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+  max-width: 16rem;
+  padding: 0.35rem 0.5rem;
+  border-radius: var(--radius-xs);
+  background: rgba(255, 255, 255, 0.16);
+  color: var(--ds-color-text-inverse);
+  font-size: 0.75rem;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.cv-chat-msg-file svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+.cv-chat-msg-file-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cv-chat-msg-file-kind {
+  flex-shrink: 0;
+  opacity: 0.75;
+  font-size: 0.65rem;
+  letter-spacing: 0.04em;
+}
+
+.cv-chat-todo-docs {
+  margin: 0.35rem 0 0;
+  color: var(--ds-color-text-muted);
+  font-size: 0.75rem;
+}
+
+.cv-chat-docs-status {
+  color: var(--ds-color-text-muted);
+  font-size: 0.75rem;
+}
+
+.cv-chat-docs-error {
+  color: var(--ds-color-text-danger);
+  font-size: 0.75rem;
+  width: 100%;
+}
+
+.cv-chat-doc-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  max-width: 100%;
+  padding: 0.15rem 0.55rem;
+  border-radius: var(--ds-radius-action);
+  background: var(--ds-color-bg-subtle);
+  color: var(--ds-color-text-default);
+  font-size: 0.75rem;
+}
+
+.cv-chat-doc-chip button {
+  border: 0;
+  background: transparent;
+  color: var(--ds-color-text-muted);
+  cursor: pointer;
+  line-height: 1;
 }
 
 .cv-chat-input {
@@ -965,6 +1052,21 @@ button.ats-score-trigger {
 .cv-chat-input:focus {
   border-color: var(--accent);
   box-shadow: var(--shadow-focus);
+}
+
+.cv-chat-attach.ds-button {
+  width: var(--ds-size-touch-min);
+  min-width: var(--ds-size-touch-min);
+  height: var(--ds-size-touch-min);
+  min-height: var(--ds-size-touch-min);
+  padding: 0;
+  color: var(--ds-color-text-default);
+}
+
+.cv-chat-attach.ds-button svg {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
 }
 
 .cv-chat-input-send {
