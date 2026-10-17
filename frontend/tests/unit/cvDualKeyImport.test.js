@@ -75,13 +75,12 @@ describe('structuralSemanticBind annotations', () => {
       },
     );
     assert.equal(boundCount, 1);
-    const block = bound.pages[0].blocks[0];
-    // Titre seul (pas de corps dans la région) : title verrouillé, pas un
-    // widget experiences qui s’auto-agrandit. L’annotation API a quand même
-    // primé : sans elle « Something odd » resterait du texte.
-    assert.equal(block.type, 'title');
-    assert.equal(block.content, 'EXPERIENCES');
-    assert.equal(block.style?.lock_height, true);
+    const types = bound.pages[0].blocks.map((b) => b.type);
+    assert.ok(types.includes('title'));
+    assert.equal(types.includes('experiences'), false);
+    assert.equal(bound.pages[0].blocks[0].style.semantic_section, 'experiences');
+    assert.equal(bound.pages[0].blocks[0].content, 'EXPERIENCES');
+    assert.equal(bound.pages[0].blocks[0].style.lock_height, true);
   });
 
   it('API heading + corps même colonne → widget experiences', () => {
@@ -116,6 +115,7 @@ describe('structuralSemanticBind annotations', () => {
       layout,
       {},
       {
+        mode: 'absorb',
         annotations: [{
           block_id: 't1',
           type: 'experiences',

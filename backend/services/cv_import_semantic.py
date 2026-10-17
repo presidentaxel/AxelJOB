@@ -92,6 +92,52 @@ _STRUCTURAL_SECTION_KEYS = frozenset(
 _EMAIL_RE = re.compile(r"[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}", re.I)
 _PHONE_RE = re.compile(r"(?:\+?\d[\d\s().-]{7,}\d)")
 
+
+def _digits(value: str) -> str:
+    return re.sub(r"\D", "", value or "")
+
+
+def _looks_like_phone(text: str, cv_phone: str) -> bool:
+    """Une plage « 2019 - 2023 » matche le motif, mais ce n'est pas un numéro."""
+    match = _PHONE_RE.search(text or "")
+    if not match:
+        return False
+    chunk = match.group(0)
+    digits = _digits(chunk)
+    cv_digits = _digits(cv_phone)
+    if len(cv_digits) >= 8 and cv_digits[-8:] in digits:
+        return True
+    rest = _digits(re.sub(r"(?:19|20)\d{2}", "", chunk))
+    return 8 <= len(rest) <= 15
+
+
+def _visible_plain(text: str) -> str:
+    plain = re.sub(r"<[^>]+>", " ", text or "")
+    return re.sub(r"\s+", " ", plain).strip()
+
+
+def _line_is_only_values(
+    text: str,
+    values: list[str],
+    *,
+    strip_email: bool,
+    strip_phone: bool,
+) -> bool:
+    """Vrai si un widget de ces champs n'efface aucun mot de la ligne."""
+    plain = _visible_plain(text).lower()
+    for value in values:
+        token = (value or "").strip().lower()
+        if len(token) >= 3:
+            plain = plain.replace(token, " ")
+    if strip_email:
+        plain = _EMAIL_RE.sub(" ", plain)
+    if strip_phone:
+        plain = _PHONE_RE.sub(" ", plain)
+    plain = re.sub(r"[^\w]+", " ", plain, flags=re.UNICODE)
+    plain = re.sub(r"\s+", " ", plain).strip()
+    return len(plain) <= 2
+
+
 _HEADING_CLASSIFY: tuple[tuple[str, re.Pattern[str]], ...] = tuple(
     (name, pat) for name, pat in _SECTION_MARKERS if name != "identity"
 )
@@ -455,30 +501,66 @@ def annotate_structural_blocks(
                         conf += 0.2
                     if has_p and has_n:
                         conf += 0.15
-                    if conf >= min_confidence:
+                    if conf >= min_confidence and _line_is_only_values(
+                        text,
+                        [prenom, nom, (cv.get("titre_professionnel") or "")],
+                        strip_email=False,
+                        strip_phone=False,
+                    ):
+                        # Uniquement les champs présents sur CETTE ligne. Le titre
+                        # sur la ligne d'en dessous ne doit pas être avalé par le nom.
+                        bind = []
+                        if has_p:
+                            bind.append("prenom")
+                        if has_n:
+                            bind.append("nom")
+                        titre = (cv.get("titre_professionnel") or "").strip().lower()
+                        if titre and titre in lower:
+                            bind.append("titre_professionnel")
                         hit = {
                             "block_id": bid,
                             "type": "identity",
                             "kind": "identity",
                             "confidence": min(1.0, conf),
-                            "bind": ["prenom", "nom", "titre_professionnel"],
+                            "bind": bind or ["prenom", "nom"],
                         }
 
             if hit is None:
                 conf = 0.0
-                if _EMAIL_RE.search(text):
+                contact_bind: list[str] = []
+                if _EMAIL_RE.search(text) or (email and email in text.lower()):
                     conf += 0.8
-                if _PHONE_RE.search(text):
-                    conf += 0.35
-                if email and email in text.lower():
-                    conf += 0.1
-                if conf >= min_confidence:
+                    contact_bind.append("email")
+                phone = str(cv.get("telephone") or "")
+                if _looks_like_phone(text, phone):
+                    conf += 0.8
+                    contact_bind.append("telephone")
+                linkedin = (cv.get("linkedin") or "").strip().lower()
+                if linkedin and len(linkedin) >= 6 and linkedin in text.lower():
+                    contact_bind.append("linkedin")
+                displayed = []
+                if "email" in contact_bind:
+                    displayed.append(email)
+                if "telephone" in contact_bind:
+                    displayed.append(str(cv.get("telephone") or ""))
+                if "linkedin" in contact_bind:
+                    displayed.append(linkedin)
+                if (
+                    conf >= min_confidence
+                    and contact_bind
+                    and _line_is_only_values(
+                        text,
+                        displayed,
+                        strip_email="email" in contact_bind,
+                        strip_phone="telephone" in contact_bind,
+                    )
+                ):
                     hit = {
                         "block_id": bid,
                         "type": "contact",
                         "kind": "contact",
                         "confidence": min(1.0, conf),
-                        "bind": ["email", "telephone", "linkedin", "ville"],
+                        "bind": contact_bind,
                     }
 
             if hit and float(hit.get("confidence") or 0) >= min_confidence:

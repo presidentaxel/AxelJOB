@@ -19,9 +19,15 @@ from __future__ import annotations
 import base64
 import html
 import logging
+import math
+import re
 from typing import Any
 
-from backend.services.pdf_font_embed import embedded_family_for, extract_embedded_fonts
+from backend.services.pdf_font_embed import (
+    embedded_family_for,
+    extract_embedded_fonts,
+    font_css_weight,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +39,8 @@ MM_PER_PT = 25.4 / 72.0
 MIN_SHAPE_AREA_MM2 = 12.0
 LINE_MAX_THICKNESS_MM = 1.6
 MAX_BULLET_MM = 6.5
+# Puces de liste seulement. Au-delà, c'est un pictogramme (téléphone, pastille).
+LIST_BULLET_MAX_MM = 3.0
 MAX_ICON_MM = 16.0
 MIN_ICON_MM = 3.0
 # Au-delà, un pictogramme carré n'est plus une icône contact mais un masque photo.
@@ -47,6 +55,11 @@ PAGE_BG_AREA_RATIO = 0.82
 MIN_SEPARATOR_LEN_MM = 8.0
 MIN_TEXT_CHARS_FOR_NATIVE = 40
 MAX_PAGES = 3
+# Puce à gauche du texte : écart max (mm) et tolérance verticale pour l'alignement.
+MAX_GUTTER_GAP_MM = 14.0
+MAX_BULLET_ALIGN_DY_MM = 8.0
+_BULLET_GLYPH_RE = re.compile(r"^[•●○◦▪■‣▸∙·\-–—*]$")
+_JOB_TITLE_DASH_RE = re.compile(r"\s[–—-]\s")
 MAX_IMAGES_PER_DOC = 8
 MAX_IMAGE_BYTES = 350_000
 # Fond graphique rasterisé (texte retiré) : résolution et poids max.
@@ -72,6 +85,37 @@ def _int_color_to_hex(color: int | None) -> str:
     return f"#{(color & 0xFFFFFF):06x}"
 
 
+def _span_hex_color(span: dict) -> str:
+    color = span.get("color")
+    if isinstance(color, int):
+        return _int_color_to_hex(color)
+    if isinstance(color, str) and len(color) == 7 and color.startswith("#"):
+        return color.lower()
+    return "#1a1a1a"
+
+
+def _dominant_span_color(spans: list[dict]) -> str:
+    """Couleur qui couvre le plus de caractères, pas le fragment le plus long.
+
+    Un lien court en bleu ne doit pas repeindre l'adresse noire de la même ligne,
+    et l'inverse non plus : la couleur minoritaire reste dans le HTML.
+    """
+    totals: dict[str, int] = {}
+    order: list[str] = []
+    for span in spans:
+        text = str(span.get("text") or "").strip()
+        if not text:
+            continue
+        color = _span_hex_color(span)
+        if color not in totals:
+            order.append(color)
+            totals[color] = 0
+        totals[color] += len(text)
+    if not order:
+        return "#1a1a1a"
+    return max(order, key=lambda color: totals[color])
+
+
 def _float_rgb_to_hex(value: Any) -> str | None:
     """Convertit un fill PyMuPDF (tuple flottants 0..1, gris ou rgb) en hex."""
     if value is None:
@@ -87,6 +131,162 @@ def _float_rgb_to_hex(value: Any) -> str | None:
             r, g, b = (max(0, min(255, round(float(c) * 255))) for c in value[:3])
             return f"#{r:02x}{g:02x}{b:02x}"
     return None
+
+
+# Texte minuscule et quasi de la couleur du fond : mots-clés ATS invisibles.
+# On ne les recopie pas dans le modèle (ils ne font pas partie du CV visible).
+_HIDDEN_ATS_MAX_PT = 6.0
+_HIDDEN_ATS_MAX_CONTRAST = 1.8
+
+
+def _srgb_channel(value: int) -> float:
+    channel = max(0, min(255, value)) / 255.0
+    if channel <= 0.04045:
+        return channel / 12.92
+    return ((channel + 0.055) / 1.055) ** 2.4
+
+
+def _relative_luminance(hex_color: str | None) -> float | None:
+    if not hex_color or len(hex_color) != 7 or not hex_color.startswith("#"):
+        return None
+    try:
+        red = int(hex_color[1:3], 16)
+        green = int(hex_color[3:5], 16)
+        blue = int(hex_color[5:7], 16)
+    except ValueError:
+        return None
+    return (
+        0.2126 * _srgb_channel(red) + 0.7152 * _srgb_channel(green) + 0.0722 * _srgb_channel(blue)
+    )
+
+
+def _contrast_ratio(foreground: str | None, background: str | None) -> float | None:
+    fore = _relative_luminance(foreground)
+    back = _relative_luminance(background)
+    if fore is None or back is None:
+        return None
+    lighter = max(fore, back)
+    darker = min(fore, back)
+    return (lighter + 0.05) / (darker + 0.05)
+
+
+def _is_hidden_ats_text(size_pt: float, color_hex: str | None, background_hex: str | None) -> bool:
+    """Vrai si la ligne est un pavé de mots-clés ATS camouflé, pas un texte à afficher."""
+    if size_pt > _HIDDEN_ATS_MAX_PT:
+        return False
+    contrast = _contrast_ratio(color_hex, background_hex or "#ffffff")
+    if contrast is None:
+        return False
+    return contrast < _HIDDEN_ATS_MAX_CONTRAST
+
+
+def _paint_fills(page) -> list[tuple[Any, str]]:
+    """Aplats dans l'ordre de peinture : le dernier qui contient un point est le fond."""
+    fills: list[tuple[Any, str]] = []
+    try:
+        drawings = page.get_drawings()
+    except Exception:
+        return fills
+    for drawing in drawings:
+        rect = drawing.get("rect")
+        fill = drawing.get("fill")
+        if rect is None or fill is None:
+            continue
+        hex_color = _float_rgb_to_hex(fill)
+        if not hex_color:
+            continue
+        fills.append((rect, hex_color))
+    return fills
+
+
+def _background_at(fills: list[tuple[Any, str]], x: float, y: float) -> str:
+    background = "#ffffff"
+    for rect, hex_color in fills:
+        if rect.x0 - 0.5 <= x <= rect.x1 + 0.5 and rect.y0 - 0.5 <= y <= rect.y1 + 0.5:
+            background = hex_color
+    return background
+
+
+def _span_is_hidden_ats(span: dict, fills: list[tuple[Any, str]], font_scale: float) -> bool:
+    text = str(span.get("text", "") or "").strip()
+    if not text:
+        return False
+    bbox = span.get("bbox") or (0, 0, 0, 0)
+    try:
+        cx = (float(bbox[0]) + float(bbox[2])) / 2.0
+        cy = (float(bbox[1]) + float(bbox[3])) / 2.0
+    except (TypeError, ValueError, IndexError):
+        cx, cy = 0.0, 0.0
+    size_pt = float(span.get("size", 10) or 10) * font_scale
+    color = _int_color_to_hex(span.get("color"))
+    return _is_hidden_ats_text(size_pt, color, _background_at(fills, cx, cy))
+
+
+def _reading_order_plaintext(fragments: list[dict]) -> str:
+    """Colonne par colonne, puis de haut en bas. Les ancres évitent de mélanger deux colonnes."""
+    if not fragments:
+        return ""
+
+    def line_text(frag: dict) -> str:
+        return _collapse_tracked_caps(str(frag.get("text") or ""))
+
+    anchors = _column_anchor_xs(fragments)
+    if len(anchors) < 2:
+        ordered = sorted(fragments, key=lambda frag: (float(frag["y0"]), float(frag["x0"])))
+        return "\n".join(line_text(frag) for frag in ordered if line_text(frag))
+
+    def column_key(x0: float) -> float:
+        return min(anchors, key=lambda anchor: abs(anchor - x0))
+
+    ordered = sorted(
+        fragments,
+        key=lambda frag: (column_key(float(frag["x0"])), float(frag["y0"]), float(frag["x0"])),
+    )
+    return "\n".join(line_text(frag) for frag in ordered if line_text(frag))
+
+
+def visible_text_excluding_hidden_ats(file_bytes: bytes) -> tuple[str, int]:
+    """Texte lisible du PDF, et le nombre de lignes ATS camouflées retirées.
+
+    S'il n'y en a aucune, le texte renvoyé peut être ignoré : l'extracteur
+    habituel (ordre de lecture) reste préférable.
+    """
+    import fitz
+
+    hidden = 0
+    pages: list[str] = []
+    try:
+        doc = fitz.open(stream=file_bytes, filetype="pdf")
+    except Exception:
+        return "", 0
+    try:
+        for page in doc:
+            fills = _paint_fills(page)
+            fragments: list[dict] = []
+            for raw_block in page.get_text("dict").get("blocks", []):
+                if raw_block.get("type") != 0:
+                    continue
+                for line in raw_block.get("lines", []):
+                    spans = [
+                        span for span in line.get("spans", []) if str(span.get("text", "")).strip()
+                    ]
+                    if not spans:
+                        continue
+                    visible = [span for span in spans if not _span_is_hidden_ats(span, fills, 1.0)]
+                    hidden += len(spans) - len(visible)
+                    if not visible:
+                        continue
+                    text = _join_line_span_texts(visible)
+                    if not text:
+                        continue
+                    x0, y0, _x1, _y1 = line.get("bbox", (0, 0, 0, 0))
+                    fragments.append({"x0": float(x0), "y0": float(y0), "text": text})
+            page_text = _reading_order_plaintext(fragments)
+            if page_text:
+                pages.append(page_text)
+    finally:
+        doc.close()
+    return "\n\n".join(pages), hidden
 
 
 def _is_near_white(hex_color: str | None) -> bool:
@@ -217,12 +417,19 @@ def _font_family_from_name(font_name: str) -> str | None:
     return None  # défaut : stack sans-serif gérée côté thème
 
 
-def _span_is_bold(span: dict) -> bool:
+def _span_css_weight(span: dict) -> int:
+    """Graisse réelle. Le nom (Medium, SemiBold) prime sur le flag gras du PDF."""
+    named = font_css_weight(str(span.get("font") or ""))
+    if named is not None:
+        return named
     flags = int(span.get("flags", 0) or 0)
     if flags & _FLAG_BOLD:
-        return True
-    name = str(span.get("font", "")).lower()
-    return "bold" in name or "black" in name or "heavy" in name or "semibold" in name
+        return 700
+    return 400
+
+
+def _span_is_bold(span: dict) -> bool:
+    return _span_css_weight(span) >= 700
 
 
 def _span_is_italic(span: dict) -> bool:
@@ -282,8 +489,473 @@ def _join_line_span_texts(spans: list) -> str:
     return "".join(parts).strip()
 
 
+def _line_spans_kept(spans: list) -> list[dict]:
+    """Garde le gras/italique de chaque span. Un span « dominant » ne peint pas toute la ligne."""
+    kept: list[dict] = []
+    prev_x1: float | None = None
+    prev_text = ""
+    for span in spans:
+        text = str(span.get("text", "") or "")
+        if not text:
+            continue
+        bbox = span.get("bbox") or (0, 0, 0, 0)
+        try:
+            x0 = float(bbox[0])
+            x1 = float(bbox[2])
+        except (TypeError, ValueError, IndexError):
+            x0, x1 = 0.0, 0.0
+        if kept and prev_text:
+            gap = 0.0 if prev_x1 is None else x0 - prev_x1
+            glued_after_colon = bool(prev_text[-1] in ":;" and text[0].isalnum())
+            need_space = glued_after_colon or (
+                gap > 0.55
+                and not prev_text[-1].isspace()
+                and not text[0].isspace()
+                and text[0] not in ".,;:!?)]}/»"
+                and prev_text[-1] not in "«(/["
+            )
+            if need_space:
+                text = " " + text.lstrip()
+        kept.append(
+            {
+                "text": text,
+                "size": float(span.get("size", 10) or 10),
+                "color": span.get("color"),
+                "font": str(span.get("font", "")),
+                "flags": int(span.get("flags", 0) or 0),
+                "x0": x0,
+                "x1": x1,
+            }
+        )
+        prev_text = text
+        prev_x1 = x1
+    return kept
+
+
+def _span_text(span: dict) -> str:
+    text = span.get("text")
+    if text:
+        return str(text)
+    return "".join(str(ch.get("c") or "") for ch in span.get("chars") or [])
+
+
+def _tracked_single_caps(text: str) -> bool:
+    tokens = [tok for tok in text.split(" ") if tok]
+    return bool(tokens) and all(len(tok) == 1 and tok.isupper() for tok in tokens)
+
+
+def _line_column_fragments(line: dict) -> list[dict]:
+    """Découpe une ligne PDF là où un large blanc sépare deux colonnes.
+
+    Word aligne date, poste et ville sur la même baseline avec des espaces.
+    Leurs boîtes se touchent, donc un simple écart entre spans ne les sépare pas.
+    """
+    y0, y1 = 0.0, 0.0
+    bbox = line.get("bbox") or (0, 0, 0, 0)
+    try:
+        y0 = float(bbox[1])
+        y1 = float(bbox[3])
+    except (TypeError, ValueError, IndexError):
+        y0, y1 = 0.0, 0.0
+
+    glyphs: list[tuple[dict, str, float, float]] = []
+    for span in line.get("spans") or []:
+        chars = span.get("chars") or []
+        if chars:
+            for ch in chars:
+                glyphs.append(
+                    (
+                        span,
+                        str(ch.get("c") or ""),
+                        float(ch.get("bbox", (0, 0, 0, 0))[0]),
+                        float(ch.get("bbox", (0, 0, 0, 0))[2]),
+                    )
+                )
+            continue
+        text = _span_text(span)
+        if text.strip():
+            sb = span.get("bbox") or (0, 0, 0, 0)
+            glyphs.append((span, text, float(sb[0]), float(sb[2])))
+
+    groups: list[list[tuple[dict, str, float, float]]] = []
+    group: list[tuple[dict, str, float, float]] = []
+    prev_x1: float | None = None
+    for span, text, x0, x1 in glyphs:
+        if text.isspace() or not text:
+            continue
+        gap = 0.0 if prev_x1 is None else x0 - prev_x1
+        current = "".join(part for _span, part, _a, _b in group)
+        tracked = _tracked_single_caps(current) and len(text) == 1 and text.isupper()
+        if group and gap > _COLUMN_SPLIT_GAP_PT and not tracked:
+            groups.append(group)
+            group = []
+            gap = 0.0
+        if group and gap > 0.45:
+            group.append((span, " ", x0, x0))
+        group.append((span, text, x0, x1))
+        prev_x1 = x1
+    if group:
+        groups.append(group)
+
+    fragments: list[dict] = []
+    for index, piece in enumerate(groups):
+        spans_out: list[dict] = []
+        for span, text, x0, x1 in piece:
+            key = (span.get("font"), span.get("flags"), span.get("size"), span.get("color"))
+            if spans_out and spans_out[-1].get("_key") == key:
+                spans_out[-1]["text"] += text
+                box = spans_out[-1]["bbox"]
+                spans_out[-1]["bbox"] = (box[0], box[1], max(box[2], x1), box[3])
+            else:
+                spans_out.append(
+                    {
+                        "text": text,
+                        "size": span.get("size", 10),
+                        "color": span.get("color"),
+                        "font": span.get("font", ""),
+                        "flags": span.get("flags", 0),
+                        "bbox": (x0, y0, x1, y1),
+                        "_key": key,
+                    }
+                )
+        if not spans_out:
+            continue
+        for span in spans_out:
+            span.pop("_key", None)
+        ink = [item for item in piece if item[1].strip()]
+        fragments.append(
+            {
+                "x0": ink[0][2],
+                "y0": y0,
+                "x1": ink[-1][3],
+                "y1": y1,
+                "spans": _line_spans_kept(spans_out),
+                "column_break": index > 0,
+            }
+        )
+    return fragments
+
+
+# Fragments PDF sur la même ligne de base (Canva découpe souvent un mot = une « ligne »).
+_BASELINE_TOL_PT = 2.2
+_COLUMN_ANCHOR_TOL_PT = 3.5
+_COLUMN_ANCHOR_MIN = 3
+_JOIN_GAP_PT = 22.0
+# Plus large qu'un espace entre deux mots (~2,5 pt), plus étroit qu'un trou
+# de colonne (date | poste | ville). Les lettres écartées d'un titre en
+# capitales restent dans le même fragment.
+_COLUMN_SPLIT_GAP_PT = 6.5
+_TRACKED_CAPS_RE = re.compile(r"^(?:[A-ZÀ-Ý]{1,4} +){2,}[A-ZÀ-Ý]{1,6}$")
+
+
+def _collapse_tracked_caps(text: str) -> str:
+    """« ALT E R NANT » (interlettrage PDF) redevient « ALTERNANT »."""
+    stripped = " ".join(text.split())
+    if not _TRACKED_CAPS_RE.match(stripped):
+        return text.strip()
+    tokens = stripped.split(" ")
+    if sum(1 for token in tokens if len(token) == 1) < 2:
+        return text.strip()
+    return "".join(tokens)
+
+
+def _column_anchor_xs(fragments: list[dict]) -> list[float]:
+    """x de début répétés = colonnes (date | école), pas la suite d'une phrase."""
+    xs = sorted(float(f["x0"]) for f in fragments)
+    clusters: list[list[float]] = []
+    for x in xs:
+        if clusters and x - clusters[-1][-1] <= _COLUMN_ANCHOR_TOL_PT:
+            clusters[-1].append(x)
+        else:
+            clusters.append([x])
+    return [
+        sum(cluster) / len(cluster) for cluster in clusters if len(cluster) >= _COLUMN_ANCHOR_MIN
+    ]
+
+
+def _starts_new_column(x0: float, current_x0: float, anchors: list[float]) -> bool:
+    for anchor in anchors:
+        if abs(x0 - anchor) <= _COLUMN_ANCHOR_TOL_PT:
+            return abs(x0 - current_x0) > _COLUMN_ANCHOR_TOL_PT
+    return False
+
+
+def _harmonize_span_weights(spans: list[dict]) -> list[dict]:
+    """Une graisse par mot. Gras et régulier restent possibles d'un mot à l'autre."""
+    pieces: list[dict] = []
+    for span in spans:
+        raw = str(span.get("text") or "")
+        if not raw:
+            continue
+        weight = _span_css_weight(span)
+        for part in re.split(r"(\s+)", raw):
+            if part:
+                pieces.append({**span, "text": part, "_weight": weight})
+    groups: list[list[dict]] = []
+    word: list[dict] = []
+    for piece in pieces:
+        if str(piece.get("text") or "").isspace():
+            if word:
+                groups.append(word)
+                word = []
+            groups.append([piece])
+        else:
+            word.append(piece)
+    if word:
+        groups.append(word)
+    out: list[dict] = []
+    for group in groups:
+        if str(group[0].get("text") or "").isspace():
+            out.extend(group)
+            continue
+        counts: dict[int, int] = {}
+        for piece in group:
+            weight = int(piece["_weight"])
+            counts[weight] = counts.get(weight, 0) + len(str(piece.get("text") or ""))
+        majority = max(counts, key=lambda item: (counts[item], -item))
+        for piece in group:
+            piece["_weight"] = majority
+            out.append(piece)
+    return out
+
+
+def _spans_to_html(spans: list[dict], *, underline: str = "none") -> str:
+    # Avant le découpage des mots : les espaces internes comptent, sinon
+    # un lien un peu long devient la couleur de toute la ligne.
+    dominant = _dominant_span_color(spans)
+    spans = _harmonize_span_weights(spans)
+    parts: list[str] = []
+    for span in spans:
+        raw = str(span.get("text") or "")
+        if not raw:
+            continue
+        escaped = html.escape(raw)
+        stored = span.get("_weight")
+        weight = stored if isinstance(stored, int) else _span_css_weight(span)
+        bold = weight >= 700
+        italic = _span_is_italic(span)
+        if bold and italic:
+            escaped = f"<strong><em>{escaped}</em></strong>"
+        elif bold:
+            escaped = f"<strong>{escaped}</strong>"
+        elif italic:
+            escaped = f"<em>{escaped}</em>"
+        styles: list[str] = []
+        if 400 < weight < 700:
+            styles.append(f"font-weight:{weight}")
+        # La couleur du bloc est la dominante. Les autres restent sur leur fragment.
+        if _span_hex_color(span) != dominant and raw.strip():
+            styles.append(f"color:{_span_hex_color(span)}")
+        if styles:
+            escaped = f'<span style="{";".join(styles)}">{escaped}</span>'
+        if underline == "partial" and span.get("underline") and raw.strip():
+            escaped = f"<u>{escaped}</u>"
+        parts.append(escaped)
+    plain = "".join(str(span.get("text") or "") for span in spans)
+    collapsed = _collapse_tracked_caps(plain)
+    if collapsed != plain.strip() and "<" not in "".join(parts):
+        return html.escape(collapsed)
+    return "".join(parts)
+
+
+def _merge_baseline_fragments(fragments: list[dict]) -> list[dict]:
+    """Recolle les mots d'une même ligne visuelle, sans fusionner deux colonnes."""
+    if not fragments:
+        return []
+    anchors = _column_anchor_xs(fragments)
+    rows: list[list[dict]] = []
+    for frag in sorted(fragments, key=lambda f: (float(f["y0"]), float(f["x0"]))):
+        if not rows or float(frag["y0"]) - float(rows[-1][0]["y0"]) > _BASELINE_TOL_PT:
+            rows.append([frag])
+        else:
+            rows[-1].append(frag)
+    merged: list[dict] = []
+    for row in rows:
+        row.sort(key=lambda f: float(f["x0"]))
+        current = {
+            "x0": row[0]["x0"],
+            "y0": row[0]["y0"],
+            "x1": row[0]["x1"],
+            "y1": row[0]["y1"],
+            "spans": list(row[0]["spans"]),
+        }
+        for nxt in row[1:]:
+            gap = float(nxt["x0"]) - float(current["x1"])
+            size_a = float(current["spans"][0].get("size") or 10)
+            size_b = float(nxt["spans"][0].get("size") or 10)
+            # Un trou de colonne (espaces de calage dans le PDF) ne se recolle pas :
+            # sinon « 2024    Poste » redevient une seule ligne.
+            if nxt.get("column_break"):
+                merged.append(current)
+                current = {
+                    "x0": nxt["x0"],
+                    "y0": nxt["y0"],
+                    "x1": nxt["x1"],
+                    "y1": nxt["y1"],
+                    "spans": list(nxt["spans"]),
+                }
+                continue
+            new_column = _starts_new_column(float(nxt["x0"]), float(current["x0"]), anchors)
+            # Un mot en fin de phrase peut tomber sur l'ancre de la colonne date.
+            # On ne coupe que si le fragment de gauche est court (une date), pas
+            # une phrase déjà longue dont le dernier mot est juste après.
+            left_len = len("".join(str(s.get("text") or "") for s in current["spans"]).strip())
+            if new_column and left_len >= 18 and gap <= max(size_a * 1.35, 12.0):
+                new_column = False
+            if -2.0 <= gap <= _JOIN_GAP_PT and abs(size_a - size_b) <= 1.5 and not new_column:
+                left = "".join(str(s.get("text") or "") for s in current["spans"])
+                right = str(nxt["spans"][0].get("text") or "") if nxt["spans"] else ""
+                tight_punct = bool(right) and right[0] in ".,;:!?)]}/»" and gap < 1.5
+                if (
+                    left
+                    and right
+                    and not left[-1].isspace()
+                    and not right[0].isspace()
+                    and not tight_punct
+                    and left[-1] not in "«(/["
+                ):
+                    current["spans"].append({**nxt["spans"][0], "text": " " + right.lstrip()})
+                    current["spans"].extend(nxt["spans"][1:])
+                else:
+                    current["spans"].extend(nxt["spans"])
+                current["x1"] = max(float(current["x1"]), float(nxt["x1"]))
+                current["y0"] = min(float(current["y0"]), float(nxt["y0"]))
+                current["y1"] = max(float(current["y1"]), float(nxt["y1"]))
+            else:
+                merged.append(current)
+                current = {
+                    "x0": nxt["x0"],
+                    "y0": nxt["y0"],
+                    "x1": nxt["x1"],
+                    "y1": nxt["y1"],
+                    "spans": list(nxt["spans"]),
+                }
+        merged.append(current)
+    return merged
+
+
+def _filter_underline_marks(
+    rects: list[tuple[float, float, float, float]],
+    page_width: float,
+) -> list[tuple[float, float, float, float]]:
+    """Filets sous un mot, pas la règle qui traverse la page.
+
+    Les segments colinéaires presque jointifs forment un seul filet. S'il
+    couvre une grande partie de la page, ce n'est pas un soulignement.
+    """
+    ordered = sorted(rects, key=lambda item: (round(item[1], 1), item[0]))
+    clusters: list[list[tuple[float, float, float, float]]] = []
+    for rect in ordered:
+        if (
+            clusters
+            and abs(rect[1] - clusters[-1][-1][1]) <= 0.8
+            and rect[0] - clusters[-1][-1][2] <= 2.5
+        ):
+            clusters[-1].append(rect)
+        else:
+            clusters.append([rect])
+    marks: list[tuple[float, float, float, float]] = []
+    for cluster in clusters:
+        x0 = min(item[0] for item in cluster)
+        x1 = max(item[2] for item in cluster)
+        if page_width > 0 and (x1 - x0) >= page_width * 0.45:
+            continue
+        marks.extend(cluster)
+    return marks
+
+
+def _drawing_underline_marks(page) -> list[tuple[float, float, float, float]]:
+    """Traits horizontaux fins susceptibles d'être le soulignement d'un texte."""
+    rects: list[tuple[float, float, float, float]] = []
+    for drawing in page.get_drawings():
+        rect = drawing.get("rect")
+        if rect is None:
+            continue
+        width = float(rect.x1 - rect.x0)
+        height = float(rect.y1 - rect.y0)
+        if height <= 0 or width < 6 or height > 1.3 or width < height:
+            continue
+        rects.append((float(rect.x0), float(rect.y0), float(rect.x1), float(rect.y1)))
+    return _filter_underline_marks(rects, float(page.rect.width))
+
+
+def _mark_underlined_spans(
+    spans: list[dict],
+    line_bottom: float,
+    marks: list[tuple[float, float, float, float]],
+    used: set[int],
+) -> None:
+    """Pose ``underline`` sur les spans dont l'encre repose sur un filet."""
+    for span in spans:
+        if not str(span.get("text") or "").strip():
+            continue
+        try:
+            x0 = float(span["x0"])
+            x1 = float(span["x1"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        width = x1 - x0
+        if width < 1:
+            continue
+        for index, mark in enumerate(marks):
+            mx0, my0, mx1, my1 = mark
+            overlap = min(x1, mx1) - max(x0, mx0)
+            if overlap < width * 0.6:
+                continue
+            mid = (my0 + my1) / 2.0
+            if line_bottom - 4.5 <= mid <= line_bottom + 1.8:
+                span["underline"] = True
+                used.add(index)
+                break
+
+
+def _underline_mode(spans: list[dict]) -> str:
+    visible = [span for span in spans if str(span.get("text") or "").strip()]
+    marked = [span for span in visible if span.get("underline")]
+    if not marked:
+        return "none"
+    if len(marked) == len(visible):
+        return "block"
+    return "partial"
+
+
+def _drop_consumed_underline_lines(
+    blocks: list[dict],
+    marks_mm: list[tuple[float, float, float, float]],
+) -> list[dict]:
+    """Retire le filet devenu un soulignement natif du texte."""
+    if not marks_mm:
+        return blocks
+    kept: list[dict] = []
+    for block in blocks:
+        if block.get("type") != "shape:line":
+            kept.append(block)
+            continue
+        style = block.get("style") if isinstance(block.get("style"), dict) else {}
+        if style.get("orientation") == "vertical":
+            kept.append(block)
+            continue
+        bx0 = float(block.get("x") or 0)
+        bx1 = bx0 + float(block.get("w") or 0)
+        by = float(block.get("y") or 0) + float(block.get("h") or 0) / 2.0
+        drop = False
+        for mx0, my0, mx1, my1 in marks_mm:
+            overlap = min(bx1, mx1) - max(bx0, mx0)
+            if overlap >= max(bx1 - bx0, 0.1) * 0.7 and abs(by - ((my0 + my1) / 2.0)) <= 1.2:
+                drop = True
+                break
+        if not drop:
+            kept.append(block)
+    return kept
+
+
 def _extract_text_blocks(
-    page, pos_scale: float, font_scale: float, embedded_roots: set[str] | None = None
+    page,
+    pos_scale: float,
+    font_scale: float,
+    embedded_roots: set[str] | None = None,
+    underline_marks: list[tuple[float, float, float, float]] | None = None,
+    used_underline_mm: list[tuple[float, float, float, float]] | None = None,
 ) -> tuple[list[dict], int]:
     """Une ligne PDF = un bloc texte canvas. Retourne (blocs, nb_chars).
 
@@ -295,81 +967,104 @@ def _extract_text_blocks(
     roots = embedded_roots or set()
     blocks: list[dict] = []
     char_count = 0
-    data = page.get_text("dict")
+    fragments: list[dict] = []
+    fills = _paint_fills(page)
+    data = page.get_text("rawdict")
     for raw_block in data.get("blocks", []):
         if raw_block.get("type") != 0:  # 0 = texte
             continue
         for line in raw_block.get("lines", []):
-            spans = [s for s in line.get("spans", []) if str(s.get("text", "")).strip()]
+            spans = []
+            for span in line.get("spans", []):
+                if not span.get("text"):
+                    span["text"] = _span_text(span)
+                if str(span.get("text", "")).strip() and not _span_is_hidden_ats(
+                    span, fills, font_scale
+                ):
+                    spans.append(span)
             if not spans:
                 continue
-            x0, y0, x1, y1 = line.get("bbox", (0, 0, 0, 0))
-            text = _join_line_span_texts(spans)
-            if not text:
+            kept_line = {"bbox": line.get("bbox"), "spans": spans}
+            pieces = _line_column_fragments(kept_line)
+            if not pieces:
                 continue
-            char_count += len(text)
+            fragments.extend(pieces)
 
-            # Style dominant = span qui porte le plus de caractères (et non le
-            # plus grand) : un simple tiret en 14pt ne doit pas imposer sa
-            # taille à toute une ligne rédigée en 9.5pt.
-            lead = max(
-                spans,
-                key=lambda s: (len(str(s.get("text", "")).strip()), float(s.get("size", 0) or 0)),
-            )
-            size_pt = float(lead.get("size", 10) or 10) * font_scale
-            style: dict[str, Any] = {
-                "font_size": round(size_pt, 1),
-                "color": _int_color_to_hex(lead.get("color")),
-                "align": "left",
-                # Une ligne PDF = une ligne canvas. La police web (Inter) est un
-                # peu plus large que celle du PDF : sans ça le texte reviendrait
-                # à la ligne et chevaucherait le bloc suivant (positions figées).
-                "nowrap": True,
-            }
-            lead_font = str(lead.get("font", ""))
-            emb_family = embedded_family_for(lead_font, roots)
-            if emb_family:
-                style["font_family"] = emb_family
-            else:
-                fam = _font_family_from_name(lead_font)
-                if fam:
-                    style["font_family"] = fam
-            # Gras/italique d'après le span DOMINANT (le plus de caractères) :
-            # une simple étiquette grasse en tête de ligne ne doit pas rendre
-            # tout le texte gras (sinon mauvaise graisse → glyphes manquants).
-            if _span_is_bold(lead):
+    for frag in _merge_baseline_fragments(fragments):
+        spans = frag["spans"]
+        used_marks: set[int] = set()
+        _mark_underlined_spans(spans, float(frag["y1"]), underline_marks or [], used_marks)
+        mode = _underline_mode(spans)
+        content = _spans_to_html(spans, underline=mode)
+        if not content:
+            continue
+        plain = re.sub(r"<[^>]+>", "", html.unescape(content))
+        char_count += len(plain)
+        # Style dominant = span qui porte le plus de caractères (et non le
+        # plus grand) : un simple tiret en 14pt ne doit pas imposer sa
+        # taille à toute une ligne rédigée en 9.5pt.
+        lead = max(
+            spans, key=lambda s: (len(str(s.get("text", "")).strip()), float(s.get("size", 0) or 0))
+        )
+        size_pt = float(lead.get("size", 10) or 10) * font_scale
+        style: dict[str, Any] = {
+            "font_size": round(size_pt, 1),
+            "color": _dominant_span_color(spans),
+            "align": "left",
+            # Une ligne PDF = une ligne canvas. La police web (Inter) est un
+            # peu plus large que celle du PDF : sans ça le texte reviendrait
+            # à la ligne et chevaucherait le bloc suivant (positions figées).
+            "nowrap": True,
+        }
+        lead_font = str(lead.get("font", ""))
+        emb_family = embedded_family_for(lead_font, roots)
+        if emb_family:
+            style["font_family"] = emb_family
+        else:
+            fam = _font_family_from_name(lead_font)
+            if fam:
+                style["font_family"] = fam
+        # Gras/italique seulement si TOUTE la ligne l'est. Sinon le CSS du
+        # bloc graisserait aussi les mots réguliers ; le gras partiel est dans le HTML.
+        visible_spans = [s for s in spans if str(s.get("text", "")).strip()]
+        weights = {_span_css_weight(s) for s in visible_spans}
+        if len(weights) == 1:
+            only = next(iter(weights))
+            if only >= 700:
                 style["bold"] = True
-            if _span_is_italic(lead):
-                style["italic"] = True
+            elif only != 400:
+                style["font_weight"] = only
+        if spans and all(_span_is_italic(s) for s in spans if str(s.get("text", "")).strip()):
+            style["italic"] = True
+        if mode == "block":
+            style["underline"] = True
+        if used_underline_mm is not None and underline_marks:
+            for index in used_marks:
+                mx0, my0, mx1, my1 = underline_marks[index]
+                used_underline_mm.append(
+                    (
+                        mx0 * pos_scale,
+                        my0 * pos_scale,
+                        mx1 * pos_scale,
+                        my1 * pos_scale,
+                    )
+                )
 
-            # Largeur = largeur réelle du texte + marge (padding interne du bloc
-            # 1.5mm/côté + jeu pour la police web légèrement plus large).
-            w_mm = max(4.0, (x1 - x0) * pos_scale + 5.0)
-            line_h_mm = max((y1 - y0) * pos_scale, size_pt * MM_PER_PT * 1.05)
-            x_mm = max(0.0, x0 * pos_scale)
-            # Le CSS applique `padding: 1mm 1.5mm` sur les blocs texte (FreeCanvas.css).
-            # Sans compensation, le texte s'affiche 1 mm PLUS BAS que sa position PDF,
-            # ce qui fait paraître les shape:line 1 mm trop hauts par rapport au texte.
-            # On décale le bloc vers le haut de 1 mm : après le padding CSS, le rendu
-            # s'aligne exactement sur les coordonnées du PDF.
-            # Le padding bas (1 mm) doit aussi entrer dans h, sinon les glyphes
-            # (titres de section surtout) sont clipés par overflow:hidden.
-            _CSS_TEXT_PAD_TOP = 1.0  # mm — doit correspondre au padding-top CSS
-            _CSS_TEXT_PAD_BOTTOM = 1.0  # mm — padding-bottom CSS
-            y_mm = max(0.0, y0 * pos_scale - _CSS_TEXT_PAD_TOP)
-            line_h_mm += _CSS_TEXT_PAD_TOP + _CSS_TEXT_PAD_BOTTOM
-            blocks.append(
-                {
-                    "type": "text",
-                    "content": html.escape(text),
-                    "x": round(x_mm, 2),
-                    "y": round(y_mm, 2),
-                    "w": round(min(w_mm, PAGE_W_MM), 2),
-                    "h": round(max(3.0, line_h_mm), 2),
-                    "z": 3,
-                    "style": style,
-                }
-            )
+        x0, y0, x1, y1 = frag["x0"], frag["y0"], frag["x1"], frag["y1"]
+        w_mm = max(4.0, (x1 - x0) * pos_scale + 5.0)
+        line_h_mm = max((y1 - y0) * pos_scale, size_pt * MM_PER_PT * 1.05)
+        blocks.append(
+            {
+                "type": "text",
+                "content": content,
+                "x": round(max(0.0, x0 * pos_scale), 2),
+                "y": round(max(0.0, y0 * pos_scale), 2),
+                "w": round(min(w_mm, PAGE_W_MM), 2),
+                "h": round(max(3.0, line_h_mm), 2),
+                "z": 3,
+                "style": style,
+            }
+        )
     return blocks, char_count
 
 
@@ -438,7 +1133,8 @@ def _shape_block_from_box(
         "y": round(y_mm, 2),
         "w": round(max(min(w_mm, PAGE_W_MM), 0.3), 2),
         "h": round(max(min(h_mm, PAGE_H_MM), 0.3), 2),
-        "z": 1 if thin else 0,
+        # z=1 : au-dessus d'une image de fond pleine page (z=0), sous le texte (z=3).
+        "z": 1,
         "style": {"color": color},
     }
 
@@ -690,13 +1386,11 @@ def _pixmap_to_data_url(pix) -> str | None:
     try:
         if pix.n >= 5:  # CMYK / autres → RGB
             pix = fitz.Pixmap(fitz.csRGB, pix)
-        if pix.alpha:
-            pix = fitz.Pixmap(pix, 0)
-        # On privilégie le PNG ; si trop lourd, repli JPEG, sinon on abandonne
-        # l'image (le canvas reste fidèle pour le texte et les formes).
+        # On garde le canal alpha (logos ronds). JPEG seulement si le PNG est trop lourd.
         data = pix.tobytes("png")
         if len(data) > MAX_IMAGE_BYTES:
-            data = pix.tobytes("jpeg")
+            flat = fitz.Pixmap(pix, 0) if pix.alpha else pix
+            data = flat.tobytes("jpeg")
         if len(data) > MAX_IMAGE_BYTES:
             return None
         b64 = base64.b64encode(data).decode("ascii")
@@ -707,7 +1401,599 @@ def _pixmap_to_data_url(pix) -> str | None:
         return None
 
 
-def _extract_image_blocks(page, doc, scale: float, budget: list[int]) -> list[dict]:
+def _pixmap_visible_on_page(pix, rect, page_rect):
+    """Recadre le bitmap sur la partie vraiment imprimée (Canva déborde souvent de la page)."""
+    import fitz
+
+    full = fitz.Rect(rect)
+    inter = full & fitz.Rect(page_rect)
+    if inter.is_empty or inter.width < 1 or inter.height < 1:
+        return None, None
+    inside = (
+        abs(inter.x0 - full.x0) < 0.6
+        and abs(inter.y0 - full.y0) < 0.6
+        and abs(inter.x1 - full.x1) < 0.6
+        and abs(inter.y1 - full.y1) < 0.6
+    )
+    if inside or pix.width < 2 or pix.height < 2:
+        return pix, inter
+    rw = full.width or 1
+    rh = full.height or 1
+    x0 = max(0, min(pix.width - 1, int((inter.x0 - full.x0) / rw * pix.width)))
+    y0 = max(0, min(pix.height - 1, int((inter.y0 - full.y0) / rh * pix.height)))
+    x1 = max(x0 + 1, min(pix.width, int(round((inter.x1 - full.x0) / rw * pix.width))))
+    y1 = max(y0 + 1, min(pix.height, int(round((inter.y1 - full.y0) / rh * pix.height))))
+    if x1 - x0 < 2 or y1 - y0 < 2:
+        return pix, inter
+    cropped = _crop_pixmap(pix, x0, y0, x1, y1)
+    return (cropped if cropped is not None else pix), inter
+
+
+def _crop_pixmap(pix, x0: int, y0: int, x1: int, y1: int):
+    """Découpe un pixmap sans ``Pixmap(pix, clip)`` (cassé sur certains ICC)."""
+    import fitz
+
+    x0 = max(0, min(pix.width - 1, int(x0)))
+    y0 = max(0, min(pix.height - 1, int(y0)))
+    x1 = max(x0 + 1, min(pix.width, int(x1)))
+    y1 = max(y0 + 1, min(pix.height, int(y1)))
+    width = x1 - x0
+    height = y1 - y0
+    channels = pix.n
+    source = pix.samples
+    stride = pix.width * channels
+    row = width * channels
+    buffer = bytearray(height * row)
+    for y in range(height):
+        start = (y0 + y) * stride + x0 * channels
+        buffer[y * row : (y + 1) * row] = source[start : start + row]
+    try:
+        return fitz.Pixmap(pix.colorspace, width, height, bytes(buffer), bool(pix.alpha))
+    except Exception:
+        return None
+
+
+def _pdf_content_tokens(text: str) -> list[str]:
+    """Tokens d'un flux PDF, sans les chaînes ni les commentaires."""
+    tokens: list[str] = []
+    i = 0
+    n = len(text)
+    while i < n:
+        ch = text[i]
+        if ch.isspace() or ord(ch) < 32:
+            i += 1
+            continue
+        if ch == "%":
+            while i < n and text[i] not in "\n\r":
+                i += 1
+            continue
+        if ch == "(":
+            i += 1
+            depth = 1
+            while i < n and depth:
+                if text[i] == "\\":
+                    i += 2
+                    continue
+                if text[i] == "(":
+                    depth += 1
+                elif text[i] == ")":
+                    depth -= 1
+                i += 1
+            continue
+        if ch == "<":
+            if text.startswith("<<", i):
+                depth = 0
+                while i < n - 1:
+                    if text.startswith("<<", i):
+                        depth += 1
+                        i += 2
+                        continue
+                    if text.startswith(">>", i):
+                        depth -= 1
+                        i += 2
+                        if depth == 0:
+                            break
+                        continue
+                    i += 1
+                continue
+            i += 1
+            while i < n and text[i] != ">":
+                i += 1
+            i += 1
+            continue
+        if ch == "[":
+            depth = 1
+            i += 1
+            while i < n and depth:
+                if text[i] == "[":
+                    depth += 1
+                elif text[i] == "]":
+                    depth -= 1
+                i += 1
+            continue
+        start = i
+        if ch == "/":
+            i += 1
+        while (
+            i < n and not text[i].isspace() and text[i] not in "[]()<>{}/%" and ord(text[i]) >= 32
+        ):
+            i += 1
+        if i > start:
+            tokens.append(text[start:i])
+    return tokens
+
+
+def _circle_from_path(ops: list[tuple]) -> tuple[float, float, float] | None:
+    """Cercle PDF classique : un moveto et quatre courbes de Bézier."""
+    if not ops or ops[0][0] != "m":
+        return None
+    curves = [op for op in ops if op[0] == "c"]
+    if len(curves) != 4 or any(op[0] not in ("m", "c", "h") for op in ops):
+        return None
+    points = [(float(ops[0][1]), float(ops[0][2]))]
+    points.extend((float(op[5]), float(op[6])) for op in curves)
+    if points[0] == points[-1]:
+        points = points[:-1]
+    if len(points) < 4:
+        return None
+    xs = [p[0] for p in points]
+    ys = [p[1] for p in points]
+    cx = (min(xs) + max(xs)) / 2
+    cy = (min(ys) + max(ys)) / 2
+    radii = [math.hypot(x - cx, y - cy) for x, y in points]
+    mean = sum(radii) / len(radii)
+    if mean < 1 or max(radii) - min(radii) > mean * 0.08:
+        return None
+    if abs((max(xs) - min(xs)) - (max(ys) - min(ys))) > mean * 0.12:
+        return None
+    return cx, cy, mean
+
+
+def _user_circle_to_page(circle, ctm, page_tm) -> tuple[float, float, float] | None:
+    import fitz
+
+    cx, cy, radius = circle
+    center = fitz.Point(cx, cy) * ctm * page_tm
+    edge_x = fitz.Point(cx + radius, cy) * ctm * page_tm
+    edge_y = fitz.Point(cx, cy + radius) * ctm * page_tm
+    rx = math.hypot(edge_x.x - center.x, edge_x.y - center.y)
+    ry = math.hypot(edge_y.x - center.x, edge_y.y - center.y)
+    if min(rx, ry) < 8:
+        return None
+    if abs(rx - ry) > max(rx, ry) * 0.12:
+        return None
+    return float(center.x), float(center.y), (rx + ry) / 2
+
+
+def _rect_to_page(x: float, y: float, w: float, h: float, ctm, page_tm):
+    import fitz
+
+    corners = (
+        fitz.Point(x, y) * ctm * page_tm,
+        fitz.Point(x + w, y) * ctm * page_tm,
+        fitz.Point(x, y + h) * ctm * page_tm,
+        fitz.Point(x + w, y + h) * ctm * page_tm,
+    )
+    xs = [p.x for p in corners]
+    ys = [p.y for p in corners]
+    return min(xs), min(ys), max(xs), max(ys)
+
+
+def _photo_circle_geometry(doc, page) -> tuple[dict[int, list[tuple]], list[tuple]]:
+    """Cercles qui rognent une photo, et pastilles claires derrière.
+
+    Retourne ``(clips par xref image, pastilles (cx, cy, r, couleur))`` en
+    coordonnées de page. Un cadre blanc circulaire n'est pas le bitmap.
+    """
+    import fitz
+
+    image_clips: dict[int, list[tuple]] = {}
+    plates: list[tuple] = []
+    seen_forms: set[int] = set()
+    page_tm = page.transformation_matrix
+
+    def remember_clip(circle) -> None:
+        mapped = _user_circle_to_page(circle, ctm[0], page_tm)
+        if mapped is None:
+            return
+        if any(
+            math.hypot(mapped[0] - old[0], mapped[1] - old[1]) < 1.5
+            and abs(mapped[2] - old[2]) < 1.5
+            for old in clips[0]
+        ):
+            return
+        clips[0].append(mapped)
+
+    def walk(stream: bytes, resources_text: str) -> None:
+        xo_text = _resource_subsection(doc, resources_text, "XObject") or ""
+        xobjects: dict[str, tuple[int, str]] = {}
+        for name, body in _named_refs(xo_text):
+            ref = re.fullmatch(r"\s*(\d+)\s+0\s+R\s*", body)
+            if not ref:
+                continue
+            xref = int(ref.group(1))
+            try:
+                header = doc.xref_object(xref)
+            except Exception:
+                continue
+            if "/Subtype /Image" in header or "/Subtype/Image" in header:
+                kind = "Image"
+            elif "/Subtype /Form" in header or "/Subtype/Form" in header:
+                kind = "Form"
+            else:
+                continue
+            xobjects[name] = (xref, kind)
+        try:
+            tokens = _pdf_content_tokens(stream.decode("latin1", errors="replace"))
+        except Exception:
+            return
+        nums: list[float] = []
+        path: list[tuple] = []
+        last_name = ""
+
+        def take(count: int):
+            if len(nums) < count:
+                nums.clear()
+                return None
+            vals = nums[-count:]
+            nums.clear()
+            return vals
+
+        for word in tokens:
+            if word.startswith("/"):
+                last_name = word[1:]
+                nums.clear()
+                continue
+            try:
+                nums.append(float(word))
+                continue
+            except ValueError:
+                pass
+            if word == "q":
+                stack.append((ctm[0], list(clips[0]), fill[0]))
+            elif word == "Q":
+                if stack:
+                    ctm[0], clips[0], fill[0] = stack.pop()
+            elif word == "cm":
+                vals = take(6)
+                if vals:
+                    ctm[0] = fitz.Matrix(*vals) * ctm[0]
+            elif word == "m":
+                vals = take(2)
+                path = [("m", *vals)] if vals else []
+            elif word == "l":
+                vals = take(2)
+                if vals:
+                    path.append(("l", *vals))
+            elif word == "c":
+                vals = take(6)
+                if vals:
+                    path.append(("c", *vals))
+            elif word == "h":
+                nums.clear()
+                path.append(("h",))
+            elif word == "re":
+                vals = take(4)
+                path = [("re", *vals)] if vals else []
+            elif word in ("W", "W*"):
+                nums.clear()
+                circle = _circle_from_path(path)
+                if circle:
+                    remember_clip(circle)
+            elif word in ("f", "F", "f*", "b", "b*", "B", "B*"):
+                nums.clear()
+                circle = _circle_from_path(path)
+                if circle and fill[0]:
+                    mapped = _user_circle_to_page(circle, ctm[0], page_tm)
+                    if mapped:
+                        plates.append((*mapped, fill[0]))
+                elif path and path[0][0] == "re" and fill[0] and _is_near_white(fill[0]):
+                    x0, y0, x1, y1 = _rect_to_page(*path[0][1:], ctm[0], page_tm)
+                    for clip in clips[0]:
+                        cx, cy, radius = clip
+                        if (
+                            abs(x0 - (cx - radius)) < 8
+                            and abs(y0 - (cy - radius)) < 8
+                            and abs(x1 - (cx + radius)) < 8
+                            and abs(y1 - (cy + radius)) < 8
+                        ):
+                            plates.append((*clip, fill[0]))
+                path = []
+            elif word in ("n", "S", "s"):
+                nums.clear()
+                path = []
+            elif word == "rg":
+                vals = take(3)
+                if vals:
+                    fill[0] = _float_rgb_to_hex(tuple(vals))
+            elif word == "g":
+                vals = take(1)
+                if vals:
+                    fill[0] = _float_rgb_to_hex((vals[0], vals[0], vals[0]))
+            elif word == "Do" and last_name:
+                nums.clear()
+                spec = xobjects.get(last_name)
+                if not spec:
+                    path = []
+                    continue
+                xref, kind = spec
+                if kind == "Image":
+                    image_clips.setdefault(xref, []).extend(
+                        clip for clip in clips[0] if clip[2] >= 12
+                    )
+                elif xref not in seen_forms:
+                    seen_forms.add(xref)
+                    try:
+                        inner = doc.xref_object(xref)
+                        inner_stream = doc.xref_stream(xref)
+                    except Exception:
+                        path = []
+                        continue
+                    matrix = doc.xref_get_key(xref, "Matrix")
+                    saved = ctm[0]
+                    if matrix[0] == "array":
+                        raw = [float(n) for n in re.findall(r"-?[0-9]*\.?[0-9]+", matrix[1])]
+                        if len(raw) == 6:
+                            ctm[0] = fitz.Matrix(*raw) * ctm[0]
+                    walk(inner_stream, inner)
+                    ctm[0] = saved
+                path = []
+            else:
+                nums.clear()
+
+    ctm = [fitz.Matrix(1, 0, 0, 1, 0, 0)]
+    clips: list[list[tuple]] = [[]]
+    fill: list[str | None] = [None]
+    stack: list[tuple] = []
+    try:
+        page_obj = doc.xref_object(page.xref)
+        resources = _resource_subsection(doc, page_obj, "Resources") or ""
+        walk(page.read_contents(), resources)
+    except Exception as exc:  # pragma: no cover - PDF exotique
+        logger.debug("pdf_structural_extract: cercles photo illisibles: %s", exc)
+        return {}, []
+    return image_clips, plates
+
+
+def _matching_photo_circle(rect, clips: list[tuple] | None):
+    """Plus petit cercle qui tient dans le bitmap : c'est la photo visible."""
+    import fitz
+
+    if not clips:
+        return None
+    image = fitz.Rect(rect)
+    best = None
+    for cx, cy, radius in clips:
+        if radius < 12:
+            continue
+        if not (image.x0 - 4 <= cx <= image.x1 + 4 and image.y0 - 4 <= cy <= image.y1 + 4):
+            continue
+        if (
+            cx - radius < image.x0 - 6
+            or cy - radius < image.y0 - 6
+            or cx + radius > image.x1 + 6
+            or cy + radius > image.y1 + 6
+        ):
+            continue
+        if best is None or radius < best[2]:
+            best = (cx, cy, radius)
+    return best
+
+
+def _crop_pixmap_to_page_rect(pix, src_rect, dest_rect):
+    import fitz
+
+    src = fitz.Rect(src_rect)
+    dest = fitz.Rect(dest_rect) & src
+    if dest.is_empty or dest.width < 2 or dest.height < 2 or pix.width < 2:
+        return pix, src
+    rw = src.width or 1
+    rh = src.height or 1
+    x0 = int((dest.x0 - src.x0) / rw * pix.width)
+    y0 = int((dest.y0 - src.y0) / rh * pix.height)
+    x1 = int(round((dest.x1 - src.x0) / rw * pix.width))
+    y1 = int(round((dest.y1 - src.y0) / rh * pix.height))
+    cropped = _crop_pixmap(pix, x0, y0, x1, y1)
+    if cropped is None:
+        return pix, src
+    return cropped, dest
+
+
+def _photo_plate_blocks(image_blocks: list[dict], plates: list[tuple], scale: float) -> list[dict]:
+    """Cercle clair plus grand que la photo : l'anneau blanc autour du portrait."""
+    blocks: list[dict] = []
+    for cx, cy, radius, color in plates:
+        if not _is_near_white(color):
+            continue
+        hosts = False
+        for img in image_blocks:
+            if (img.get("style") or {}).get("shape") != "circle":
+                continue
+            ix = (float(img.get("x") or 0) + float(img.get("w") or 0) / 2) / scale
+            iy = (float(img.get("y") or 0) + float(img.get("h") or 0) / 2) / scale
+            ir = float(img.get("w") or 0) / scale / 2
+            if math.hypot(ix - cx, iy - cy) > 4:
+                continue
+            if radius <= ir + 1.2 or radius > ir * 1.45:
+                continue
+            hosts = True
+            break
+        if not hosts:
+            continue
+        side = 2 * radius * scale
+        blocks.append(
+            {
+                "type": "shape:circle",
+                "x": round(max(0.0, (cx - radius) * scale), 2),
+                "y": round(max(0.0, (cy - radius) * scale), 2),
+                "w": round(min(side, PAGE_W_MM), 2),
+                "h": round(min(side, PAGE_H_MM), 2),
+                "z": 1,
+                "style": {"color": color, "stroke_width": 0, "photo_plate": True},
+            }
+        )
+    return blocks
+
+
+def _crop_image_to_white_frame(page, pix, rect):
+    """Recadre une image sur le cadre blanc qui la contient vraiment.
+
+    Certains PDF posent la photo dans un bitmap beaucoup plus large (marge
+    noire ou transparente) et la limitent par un carré blanc. On garde ce
+    cadre, pas le bitmap entier.
+    """
+    import fitz
+
+    image = fitz.Rect(rect)
+    image_area = image.width * image.height
+    if image_area < 1 or pix.width < 2 or pix.height < 2:
+        return pix, image
+    best = None
+    best_area = 0.0
+    try:
+        drawings = page.get_drawings()
+    except Exception:
+        return pix, image
+    for drawing in drawings:
+        if not _drawing_is_visible(drawing):
+            continue
+        fill = drawing.get("fill")
+        fill_hex = _float_rgb_to_hex(fill) if fill is not None else None
+        if not _is_near_white(fill_hex):
+            continue
+        rects = [it[1] for it in drawing.get("items") or [] if it and it[0] == "re"]
+        if len(rects) != 1:
+            continue
+        frame = fitz.Rect(rects[0])
+        if frame.width < 18 or frame.height < 18:
+            continue
+        if (
+            frame.x0 < image.x0 - 3
+            or frame.y0 < image.y0 - 3
+            or frame.x1 > image.x1 + 3
+            or frame.y1 > image.y1 + 3
+        ):
+            continue
+        area = frame.width * frame.height
+        if area < image_area * 0.08 or area > image_area * 0.8:
+            continue
+        if area > best_area:
+            best, best_area = frame, area
+    if best is None:
+        return pix, image
+    rw = image.width or 1
+    rh = image.height or 1
+    x0 = int((best.x0 - image.x0) / rw * pix.width)
+    y0 = int((best.y0 - image.y0) / rh * pix.height)
+    x1 = int(round((best.x1 - image.x0) / rw * pix.width))
+    y1 = int(round((best.y1 - image.y0) / rh * pix.height))
+    cropped = _crop_pixmap(pix, x0, y0, x1, y1)
+    if cropped is None:
+        return pix, image
+    return cropped, best
+
+
+def _hidden_photo_frame(drawing: dict, scale: float) -> dict | None:
+    """Rectangle non peint qui borne la photo (le bitmap déborde souvent)."""
+    import fitz
+
+    if drawing.get("fill") is None:
+        return None
+    rects = [it[1] for it in drawing.get("items") or [] if it and it[0] == "re"]
+    if len(rects) != 1:
+        return None
+    rect = fitz.Rect(rects[0])
+    w_mm = rect.width * scale
+    h_mm = rect.height * scale
+    if not _is_photo_sized(w_mm, h_mm):
+        return None
+    return {
+        "type": "shape:rect",
+        "x": round(max(0.0, rect.x0 * scale), 2),
+        "y": round(max(0.0, rect.y0 * scale), 2),
+        "w": round(min(w_mm, PAGE_W_MM), 2),
+        "h": round(min(h_mm, PAGE_H_MM), 2),
+        "z": 0,
+        "style": {"color": "#000000", "hidden_frame": True},
+    }
+
+
+def _drawing_is_visible(drawing: dict) -> bool:
+    """Un aplat d'opacité 0 est une ombre PDF, pas une forme du CV."""
+    fill = drawing.get("fill")
+    fill_op = drawing.get("fill_opacity")
+    fill_ok = fill is not None and (fill_op is None or float(fill_op) > 0.02)
+    stroke = drawing.get("color")
+    stroke_op = drawing.get("stroke_opacity")
+    width = float(drawing.get("width") or 0)
+    stroke_ok = (
+        stroke is not None and width > 0.05 and (stroke_op is None or float(stroke_op) > 0.02)
+    )
+    return fill_ok or stroke_ok
+
+
+def _hex_to_rgb01(color: str) -> tuple[float, float, float]:
+    raw = (color or "").lstrip("#")
+    if len(raw) != 6:
+        return (0.0, 0.0, 0.0)
+    return tuple(int(raw[i : i + 2], 16) / 255 for i in (0, 2, 4))
+
+
+def _filled_polygon_block(drawing: dict, scale: float, fill_hex: str) -> dict | None:
+    """Triangle ou chevron : on le rasterise, on n'en fait pas un rectangle."""
+    import fitz
+
+    items = [it for it in drawing.get("items") or [] if it]
+    if any(it[0] != "l" for it in items) or len(items) < 3:
+        return None
+    points: list[tuple[float, float]] = []
+    for item in items:
+        start, end = item[1], item[2]
+        if not points:
+            points.append((float(start.x), float(start.y)))
+        points.append((float(end.x), float(end.y)))
+    if len(points) < 4:
+        return None
+    rect = fitz.Rect(drawing.get("rect"))
+    if rect.is_empty:
+        return None
+    w_mm = rect.width * scale
+    h_mm = rect.height * scale
+    if min(w_mm, h_mm) <= LINE_MAX_THICKNESS_MM:
+        return None
+    if w_mm * h_mm < BACKGROUND_MIN_AREA_MM2:
+        return None
+    doc = fitz.open()
+    try:
+        raster = doc.new_page(width=rect.width, height=rect.height)
+        shape = raster.new_shape()
+        local = [(x - rect.x0, y - rect.y0) for x, y in points]
+        shape.draw_polyline(local)
+        shape.finish(color=None, fill=_hex_to_rgb01(fill_hex), closePath=True)
+        shape.commit()
+        pix = raster.get_pixmap(alpha=True)
+    except Exception:
+        return None
+    finally:
+        doc.close()
+    data_url = _pixmap_to_data_url(pix)
+    if not data_url:
+        return None
+    return {
+        "type": "image",
+        "image_src": data_url,
+        "x": round(max(0.0, rect.x0 * scale), 2),
+        "y": round(max(0.0, rect.y0 * scale), 2),
+        "w": round(min(w_mm, PAGE_W_MM), 2),
+        "h": round(min(h_mm, PAGE_H_MM), 2),
+        "z": 1,
+        "style": {"shape": "rect", "decorative": False, "vector_fill": True},
+    }
+
+
+def _extract_image_blocks(
+    page, doc, scale: float, budget: list[int], image_clips: dict | None = None
+) -> list[dict]:
     """Images embarquées (photo, logos) → blocs image data-URL."""
     import fitz
 
@@ -716,6 +2002,7 @@ def _extract_image_blocks(page, doc, scale: float, budget: list[int]) -> list[di
         images = page.get_images(full=True)
     except Exception:  # pragma: no cover
         return blocks
+    paint_opacity = _image_paint_opacity(doc, page)
 
     for img in images:
         if budget[0] <= 0:
@@ -731,15 +2018,34 @@ def _extract_image_blocks(page, doc, scale: float, budget: list[int]) -> list[di
             pix = fitz.Pixmap(doc, xref)
         except Exception:
             continue
-        rect = rects[0]
-        w_mm = (rect.x1 - rect.x0) * scale
-        h_mm = (rect.y1 - rect.y0) * scale
+        pix, rect = _pixmap_visible_on_page(pix, rects[0], page.rect)
+        if pix is None or rect is None:
+            continue
+        circle = _matching_photo_circle(rect, (image_clips or {}).get(xref))
+        if circle is not None:
+            import fitz
+
+            cx, cy, radius = circle
+            pix, rect = _crop_pixmap_to_page_rect(
+                pix, rect, fitz.Rect(cx - radius, cy - radius, cx + radius, cy + radius)
+            )
+        else:
+            pix, rect = _crop_image_to_white_frame(page, pix, rect)
+        if pix is None or rect is None:
+            continue
+        w_mm = rect.width * scale
+        h_mm = rect.height * scale
         if w_mm <= 2 or h_mm <= 2:
             continue
-        shape = _infer_image_shape(w_mm, h_mm, pix)
+        page_covering = w_mm * h_mm > PAGE_W_MM * PAGE_H_MM * PAGE_BG_AREA_RATIO
+        shape = "circle" if circle is not None else _infer_image_shape(w_mm, h_mm, pix)
         data_url = _pixmap_to_data_url(pix)
         if not data_url:
             continue
+        style: dict[str, Any] = {"shape": shape, "decorative": page_covering}
+        opacity = paint_opacity.get(xref)
+        if opacity is not None and opacity < 0.985:
+            style["opacity"] = opacity
         blocks.append(
             {
                 "type": "image",
@@ -748,8 +2054,8 @@ def _extract_image_blocks(page, doc, scale: float, budget: list[int]) -> list[di
                 "y": round(max(0.0, rect.y0 * scale), 2),
                 "w": round(min(w_mm, PAGE_W_MM), 2),
                 "h": round(min(h_mm, PAGE_H_MM), 2),
-                "z": 2,
-                "style": {"shape": shape},
+                "z": 0 if page_covering else 2,
+                "style": style,
             }
         )
         budget[0] -= 1
@@ -924,7 +2230,9 @@ def _cleanup_image_overlay_blocks(blocks: list[dict]) -> list[dict]:
             if other.get("type") not in ("icon", "shape:circle"):
                 continue
             side = max(float(other.get("w", 0)), float(other.get("h", 0)))
-            if other["type"] == "shape:circle" and side < MIN_PHOTO_MM:
+            if other["type"] == "shape:circle" and (
+                side < MIN_PHOTO_MM or (other.get("style") or {}).get("photo_plate")
+            ):
                 continue
             if _blocks_overlap_ratio(other, img, 0.2):
                 style = img.setdefault("style", {})
@@ -937,14 +2245,369 @@ def _cleanup_image_overlay_blocks(blocks: list[dict]) -> list[dict]:
             _blocks_overlap_ratio(block, img, 0.22) for img in targets
         ):
             continue
-        if block.get("type") == "shape:circle":
-            side = max(float(block.get("w", 0)), float(block.get("h", 0)))
-            if side >= MIN_PHOTO_MM and any(
-                _blocks_overlap_ratio(block, img, 0.18) for img in targets
-            ):
-                continue
+        if (
+            block.get("type") == "shape:circle"
+            and not (block.get("style") or {}).get("photo_plate")
+            and any(
+                _blocks_overlap_ratio(block, img, 0.18)
+                for img in images
+                if not (img.get("style") or {}).get("decorative")
+                and float(img.get("w", 0)) * float(img.get("h", 0)) < PAGE_W_MM * PAGE_H_MM * 0.5
+            )
+        ):
+            continue
         kept.append(block)
     return kept
+
+
+def _crop_image_block_to_box(img: dict, box: dict) -> None:
+    """Recadre le bitmap pour qu'il remplisse exactement le cadre visible."""
+    import fitz
+
+    src = str(img.get("image_src") or "")
+    iw = float(img.get("w") or 0) or 1.0
+    ih = float(img.get("h") or 0) or 1.0
+    fx0 = (float(box.get("x") or 0) - float(img.get("x") or 0)) / iw
+    fy0 = (float(box.get("y") or 0) - float(img.get("y") or 0)) / ih
+    fx1 = fx0 + float(box.get("w") or 0) / iw
+    fy1 = fy0 + float(box.get("h") or 0) / ih
+    img["x"] = round(float(box.get("x") or 0), 2)
+    img["y"] = round(float(box.get("y") or 0), 2)
+    img["w"] = round(float(box.get("w") or 0), 2)
+    img["h"] = round(float(box.get("h") or 0), 2)
+    if not src.startswith("data:") or "," not in src:
+        return
+    try:
+        pix = fitz.Pixmap(base64.b64decode(src.split(",", 1)[1]))
+    except Exception:
+        return
+    cropped = _crop_pixmap(
+        pix,
+        int(fx0 * pix.width),
+        int(fy0 * pix.height),
+        int(round(fx1 * pix.width)),
+        int(round(fy1 * pix.height)),
+    )
+    if cropped is None:
+        return
+    data_url = _pixmap_to_data_url(cropped)
+    if data_url:
+        img["image_src"] = data_url
+
+
+def _fit_images_to_backing_rects(blocks: list[dict]) -> list[dict]:
+    """Un aplat de même largeur, plus court, est la fenêtre visible de la photo.
+
+    Le bitmap déborde souvent (hors page, sous un bandeau). On le recadre sur
+    cet aplat et on retire le rectangle, sinon l'image paraît trop grande.
+    """
+    drop: set[int] = set()
+    for img in blocks:
+        if img.get("type") != "image" or (img.get("style") or {}).get("decorative"):
+            continue
+        iw = float(img.get("w") or 0)
+        ih = float(img.get("h") or 0)
+        if not _is_photo_sized(iw, ih):
+            continue
+        plate = None
+        for rect in blocks:
+            if rect.get("type") != "shape:rect" or id(rect) in drop:
+                continue
+            rw = float(rect.get("w") or 0)
+            rh = float(rect.get("h") or 0)
+            if rh >= ih - 0.8 or rh < ih * 0.55:
+                continue
+            if abs(float(rect.get("x") or 0) - float(img.get("x") or 0)) > 1.6:
+                continue
+            if abs((float(rect.get("x") or 0) + rw) - (float(img.get("x") or 0) + iw)) > 1.6:
+                continue
+            top = float(rect.get("y") or 0)
+            if (
+                top < float(img.get("y") or 0) - 1.2
+                or top + rh > float(img.get("y") or 0) + ih + 1.2
+            ):
+                continue
+            plate = rect
+        if plate is None:
+            continue
+        _crop_image_block_to_box(img, plate)
+        drop.add(id(plate))
+    return [
+        block
+        for block in blocks
+        if id(block) not in drop and not (block.get("style") or {}).get("hidden_frame")
+    ]
+
+
+def _plain_text_content(block: dict) -> str:
+    raw = html.unescape(str(block.get("content") or ""))
+    raw = re.sub(r"<[^>]+>", "", raw)
+    return raw.replace("\xa0", " ").strip()
+
+
+def _starts_with_bullet(block: dict) -> bool:
+    text = _plain_text_content(block).lstrip()
+    return bool(text) and bool(_BULLET_GLYPH_RE.fullmatch(text[0]))
+
+
+def _is_gutter_marker(block: dict) -> bool:
+    """Puce visuelle isolée (cercle vectoriel, glyphe, micro-vignette)."""
+    w = float(block.get("w") or 0)
+    h = float(block.get("h") or 0)
+    if max(w, h) > MAX_BULLET_MM:
+        return False
+    btype = block.get("type")
+    if btype == "shape:circle":
+        return True
+    if btype == "image" and w <= MAX_BULLET_MM and h <= MAX_BULLET_MM:
+        return True
+    if btype in ("text", "title"):
+        return bool(_BULLET_GLYPH_RE.fullmatch(_plain_text_content(block)))
+    return False
+
+
+def _is_list_body_line(block: dict) -> bool:
+    """Lignes de puces : pas les titres de poste gras ni les dates courtes italiques."""
+    text = _plain_text_content(block)
+    if len(text) < 3:
+        return False
+    style = block.get("style") if isinstance(block.get("style"), dict) else {}
+    if style.get("italic") and len(text) < 28:
+        return False
+    if style.get("bold") and _JOB_TITLE_DASH_RE.search(text) and len(text) < 90:
+        return False
+    return True
+
+
+def _snap_marker_to_text_line(marker: dict, text: dict) -> None:
+    mh = float(marker.get("h") or 0)
+    content = str(text.get("content") or "")
+    style = text.get("style") if isinstance(text.get("style"), dict) else {}
+    # Puce sur la première ligne du bloc, pas au milieu d'un item sur deux lignes.
+    if "<br>" in content.lower() or style.get("multiline"):
+        size = float(style.get("font_size") or 10)
+        th = max(size * MM_PER_PT * 1.2, 3.2)
+    else:
+        th = float(text.get("h") or 0)
+    ty = float(text.get("y") or 0)
+    marker["y"] = round(max(0.0, ty + (th - mh) / 2.0), 2)
+
+
+def _left_item_marker(line: dict, markers: list[dict]) -> dict | None:
+    """Puce ou petite icône juste à gauche de la ligne : début d'un item, pas une suite."""
+    lx = float(line.get("x") or 0)
+    ly = float(line.get("y") or 0)
+    best: dict | None = None
+    best_dy = 10**9
+    best_dx = 10**9
+    limit = max(3.0, float(line.get("h") or 0) * 0.7)
+    for marker in markers:
+        side = max(float(marker.get("w") or 0), float(marker.get("h") or 0))
+        if side > MAX_BULLET_MM:
+            continue
+        right = float(marker.get("x") or 0) + float(marker.get("w") or 0)
+        if right > lx + 1.2:
+            continue
+        dx = lx - right
+        if dx > MAX_GUTTER_GAP_MM or dx < -1.2:
+            continue
+        dy = abs(float(marker.get("y") or 0) - ly)
+        if dy > limit:
+            continue
+        if dy < best_dy - 0.05 or (abs(dy - best_dy) <= 0.05 and dx < best_dx):
+            best = marker
+            best_dy = dy
+            best_dx = dx
+    return best
+
+
+def _emphasis_html(block: dict) -> str:
+    """Le gras partiel reste dans le HTML. Le flag de bloc ne doit pas tout graisser."""
+    content = str(block.get("content") or "")
+    style = block.get("style") if isinstance(block.get("style"), dict) else {}
+    lowered = content.lower()
+    if style.get("bold") and "<strong>" not in lowered:
+        content = f"<strong>{content}</strong>"
+    if style.get("italic") and "<em>" not in lowered:
+        content = f"<em>{content}</em>"
+    return content
+
+
+def _text_styles_compatible(a: dict, b: dict) -> bool:
+    sa = a.get("style") if isinstance(a.get("style"), dict) else {}
+    sb = b.get("style") if isinstance(b.get("style"), dict) else {}
+    if abs(float(sa.get("font_size") or 0) - float(sb.get("font_size") or 0)) > 0.8:
+        return False
+    if str(sa.get("color") or "") != str(sb.get("color") or ""):
+        return False
+    if str(sa.get("font_family") or "") != str(sb.get("font_family") or ""):
+        return False
+    return True
+
+
+def coalesce_text_runs(blocks: list[dict]) -> list[dict]:
+    """Regroupe un paragraphe ou une puce multi-lignes en un seul bloc.
+
+    Une puce (cercle ou petite icône à gauche) ouvre un item. Les lignes
+    suivantes, même colonne et même style, sans nouvelle puce, le rejoignent.
+    Les colonnes (date | intitulé) restent séparées.
+    """
+    texts = [b for b in blocks if b.get("type") == "text"]
+    others = [b for b in blocks if b.get("type") != "text"]
+    markers = [
+        b
+        for b in others
+        if b.get("type") in ("shape:circle", "image")
+        and max(float(b.get("w") or 0), float(b.get("h") or 0)) <= MAX_BULLET_MM
+    ]
+    texts.sort(key=lambda b: (float(b.get("y") or 0), float(b.get("x") or 0)))
+    used: set[int] = set()
+    merged: list[dict] = []
+    for index, line in enumerate(texts):
+        if id(line) in used:
+            continue
+        run = [line]
+        used.add(id(line))
+        opener = _left_item_marker(line, markers)
+        for nxt in texts[index + 1 :]:
+            if id(nxt) in used:
+                continue
+            if abs(float(nxt.get("x") or 0) - float(run[-1].get("x") or 0)) > 2.4:
+                continue
+            gap = float(nxt.get("y") or 0) - (
+                float(run[-1].get("y") or 0) + float(run[-1].get("h") or 0)
+            )
+            if gap > max(1.8, float(run[-1].get("h") or 0) * 0.55):
+                break
+            if gap < -1.2 or not _text_styles_compatible(run[-1], nxt):
+                break
+            if _starts_with_bullet(nxt):
+                break
+            nxt_marker = _left_item_marker(nxt, markers)
+            if nxt_marker is not None and nxt_marker is not opener:
+                break
+            if opener is None and nxt_marker is not None:
+                break
+            run.append(nxt)
+            used.add(id(nxt))
+        if len(run) == 1:
+            merged.append(line)
+            continue
+        first, last = run[0], run[-1]
+        style = dict(first.get("style") or {})
+        if not all((b.get("style") or {}).get("bold") for b in run):
+            style.pop("bold", None)
+        if not all((b.get("style") or {}).get("italic") for b in run):
+            style.pop("italic", None)
+        style["nowrap"] = False
+        style["multiline"] = True
+        style["lock_height"] = True
+        height = (float(last.get("y") or 0) + float(last.get("h") or 0)) - float(
+            first.get("y") or 0
+        )
+        size_mm = float(style.get("font_size") or 10) * MM_PER_PT
+        if len(run) > 1 and size_mm > 0 and height > 0:
+            style["line_height"] = round(height / (len(run) * size_mm), 3)
+        merged.append(
+            {
+                **first,
+                "content": "<br>".join(_emphasis_html(b) for b in run),
+                "w": round(max(float(b.get("w") or 0) for b in run), 2),
+                "h": round(height, 2),
+                "style": style,
+            }
+        )
+    return [*others, *merged]
+
+
+def align_gutter_bullets(blocks: list[dict]) -> list[dict]:
+    """Aligne les puces sur les lignes de corps, pas sur le titre / la date au-dessus.
+
+    Appariement par colonne (même x) puis zip haut→bas : un matching « plus proche »
+    accroche souvent le titre de poste, ce qui décale toute la liste d'une ligne.
+    """
+    if not blocks:
+        return blocks
+    targets = [
+        b
+        for b in blocks
+        if b.get("type") in ("text", "title")
+        and not _is_gutter_marker(b)
+        and len(_plain_text_content(b)) >= 2
+    ]
+    markers = [b for b in blocks if _is_gutter_marker(b)]
+    if not targets or not markers:
+        return blocks
+
+    columns: dict[int, list[dict]] = {}
+    for marker in markers:
+        key = round(float(marker.get("x") or 0) / 2.5)
+        columns.setdefault(key, []).append(marker)
+
+    for col_markers in columns.values():
+        col_markers.sort(key=lambda b: float(b.get("y") or 0))
+        mx = float(col_markers[0].get("x") or 0)
+        mw = float(col_markers[0].get("w") or 0)
+        marker_right = mx + mw
+        col_texts = [
+            t
+            for t in targets
+            if float(t.get("x") or 0) >= marker_right - 1.0
+            and float(t.get("x") or 0) - marker_right <= MAX_GUTTER_GAP_MM
+        ]
+        col_texts.sort(key=lambda b: float(b.get("y") or 0))
+        body = [t for t in col_texts if _is_list_body_line(t)]
+        if len(body) < max(1, int(len(col_markers) * 0.6)):
+            body = [
+                t
+                for t in col_texts
+                if len(_plain_text_content(t)) >= 3
+                and not ((t.get("style") or {}).get("italic") and len(_plain_text_content(t)) < 28)
+            ]
+        # Puces dupliquées (deux cercles au même endroit) : on n'en garde qu'une.
+        deduped: list[dict] = []
+        for marker in col_markers:
+            cx = float(marker.get("x") or 0) + float(marker.get("w") or 0) / 2
+            cy = float(marker.get("y") or 0) + float(marker.get("h") or 0) / 2
+            if any(
+                abs(cx - (float(other.get("x") or 0) + float(other.get("w") or 0) / 2)) < 1.2
+                and abs(cy - (float(other.get("y") or 0) + float(other.get("h") or 0) / 2)) < 1.2
+                for other in deduped
+            ):
+                marker["type"] = "_dropped_bullet"
+                continue
+            deduped.append(marker)
+        used: set[int] = set()
+        for marker in deduped:
+            my = float(marker.get("y") or 0) + float(marker.get("h") or 0) / 2
+            best: dict | None = None
+            best_score: float | None = None
+            for text in body:
+                if id(text) in used:
+                    continue
+                ty = float(text.get("y") or 0)
+                th = float(text.get("h") or 0)
+                inside = ty - 0.4 <= my <= ty + th
+                dy = abs(ty - float(marker.get("y") or 0))
+                if not inside and dy > MAX_BULLET_ALIGN_DY_MM:
+                    continue
+                score = dy if inside else dy + 20
+                if best is None or best_score is None or score < best_score:
+                    best = text
+                    best_score = score
+            if best is None:
+                continue
+            used.add(id(best))
+            _snap_marker_to_text_line(marker, best)
+        if deduped:
+            shared_x = round(
+                sorted(float(m.get("x") or 0) for m in deduped)[len(deduped) // 2],
+                2,
+            )
+            for marker in deduped:
+                marker["x"] = shared_x
+
+    return [b for b in blocks if b.get("type") != "_dropped_bullet"]
 
 
 def _classify_graphic_cluster(cluster: list, scale: float) -> dict | None:
@@ -991,8 +2654,8 @@ def _classify_graphic_cluster(cluster: list, scale: float) -> dict | None:
             "style": {"color": color, "stroke_width": stroke, "orientation": "vertical"},
         }
 
-    # Puce / bullet rond
-    if long_side <= MAX_BULLET_MM and 0.55 <= aspect <= 1.85:
+    # Puce de liste. Un pictogramme plus gros ne doit pas devenir un disque noir.
+    if long_side <= LIST_BULLET_MAX_MM and 0.55 <= aspect <= 1.85:
         d = round(max(long_side, 1.0), 2)
         return {
             "type": "shape:circle",
@@ -1004,24 +2667,225 @@ def _classify_graphic_cluster(cluster: list, scale: float) -> dict | None:
             "style": {"color": color, "stroke_color": color, "stroke_width": 0},
         }
 
-    # Pictogramme contact (téléphone, email, …) — taille modeste uniquement.
+    # Pictogramme (téléphone, email, pastille) : raster fidèle, pas une icône devinée.
     if (
         MIN_ICON_MM <= long_side <= MAX_CONTACT_ICON_MM
         and short_side >= MIN_ICON_MM
         and not _is_photo_sized(w_mm, h_mm)
     ):
-        return {
-            "type": "icon",
-            "icon_name": _guess_icon_name(w_mm, h_mm, cluster),
-            "x": round(x_mm, 2),
-            "y": round(y_mm, 2),
-            "w": round(w_mm, 2),
-            "h": round(h_mm, 2),
-            "z": 2,
-            "style": {"color": color},
-        }
+        return None
 
     return None
+
+
+def _pixmap_is_blank_plate(pix) -> bool:
+    """Vignette quasi blanche et opaque : ce n'est pas un dessin du CV.
+
+    Un aplat blanc rasterisé (ou un résidu de masque) apparaît comme un carré
+    qui n'existe pas sur la page. Une icône claire sur fond transparent reste.
+    """
+    if pix is None or pix.width < 2 or pix.height < 2:
+        return True
+    channels = int(pix.n or 0)
+    if channels < 1:
+        return True
+    samples = pix.samples
+    total = int(pix.width) * int(pix.height)
+    if total <= 0 or len(samples) < total * channels:
+        return True
+    has_alpha = bool(pix.alpha)
+    ink = 0
+    opaque_white = 0
+    transparent = 0
+    step = max(1, total // 20000)
+    sampled = 0
+    for index in range(0, total, step):
+        sampled += 1
+        base = index * channels
+        if channels >= 3:
+            red, green, blue = samples[base], samples[base + 1], samples[base + 2]
+        else:
+            red = green = blue = samples[base]
+        alpha = samples[base + channels - 1] if has_alpha else 255
+        if alpha < 24:
+            transparent += 1
+            continue
+        if red >= 236 and green >= 236 and blue >= 236:
+            opaque_white += 1
+        else:
+            ink += 1
+    if sampled <= 0:
+        return True
+    if ink / sampled >= 0.08:
+        return False
+    if transparent / sampled >= 0.3 and (opaque_white + ink) / sampled >= 0.02:
+        return False
+    return opaque_white / sampled >= 0.65
+
+
+def _resource_subsection(doc, obj_text: str, key: str) -> str | None:
+    """Dictionnaire ``/key << ... >>`` ou ``/key N 0 R``.
+
+    Ignore une valeur homonyme (``/Type /XObject`` n'est pas la clé ``/XObject``).
+    """
+    needle = f"/{key}"
+    start = 0
+    rest = ""
+    while True:
+        idx = obj_text.find(needle, start)
+        if idx < 0:
+            return None
+        after = idx + len(needle)
+        if after < len(obj_text) and obj_text[after] not in " \t\r\n/[<":
+            start = after
+            continue
+        rest = obj_text[after:].lstrip()
+        if rest.startswith("/") or rest.startswith("["):
+            start = after
+            continue
+        break
+    if rest.startswith("<<"):
+        depth = 0
+        i = 0
+        while i < len(rest) - 1:
+            if rest.startswith("<<", i):
+                depth += 1
+                i += 2
+                continue
+            if rest.startswith(">>", i):
+                depth -= 1
+                i += 2
+                if depth == 0:
+                    return rest[:i]
+                continue
+            i += 1
+        return rest
+    match = re.match(r"(\d+)\s+0\s+R", rest)
+    if not match:
+        return None
+    try:
+        return doc.xref_object(int(match.group(1)))
+    except Exception:
+        return None
+
+
+def _named_refs(body: str) -> list[tuple[str, str]]:
+    """Paires ``/Nom 12 0 R`` ou ``/Nom << ... >>`` d'un dictionnaire PDF."""
+    found: list[tuple[str, str]] = []
+    for match in re.finditer(r"/([^\s/\[\]<>()]+)\s+", body):
+        name = match.group(1)
+        rest = body[match.end() :].lstrip()
+        if rest.startswith("<<"):
+            depth = 0
+            i = 0
+            while i < len(rest) - 1:
+                if rest.startswith("<<", i):
+                    depth += 1
+                    i += 2
+                    continue
+                if rest.startswith(">>", i):
+                    depth -= 1
+                    i += 2
+                    if depth == 0:
+                        found.append((name, rest[:i]))
+                        break
+                    continue
+                i += 1
+            continue
+        ref = re.match(r"(\d+)\s+0\s+R", rest)
+        if ref:
+            found.append((name, ref.group(0)))
+    return found
+
+
+def _fill_opacity(doc, gs_body: str) -> float:
+    body = gs_body
+    ref = re.fullmatch(r"\s*(\d+)\s+0\s+R\s*", gs_body or "")
+    if ref:
+        try:
+            body = doc.xref_object(int(ref.group(1)))
+        except Exception:
+            return 1.0
+    match = re.search(r"(?<![A-Za-z])/ca\s+([0-9]*\.?[0-9]+)", body or "")
+    if not match:
+        return 1.0
+    try:
+        return max(0.0, min(1.0, float(match.group(1))))
+    except ValueError:
+        return 1.0
+
+
+def _image_paint_opacity(doc, page) -> dict[int, float]:
+    """Opacité réelle de chaque image (les formulaires la multiplient).
+
+    Canva exporte souvent un fond « luminosité baissée » comme une image
+    dessinée à 40 % : sans ça, le bitmap brut est trop contrasté.
+    """
+    opacities: dict[int, float] = {}
+    seen_forms: set[tuple[int, float]] = set()
+
+    def walk(stream: bytes, resources_text: str, inherited: float) -> None:
+        gs_text = _resource_subsection(doc, resources_text, "ExtGState") or ""
+        xo_text = _resource_subsection(doc, resources_text, "XObject") or ""
+        gs_ca = {name: _fill_opacity(doc, body) for name, body in _named_refs(gs_text)}
+        xobjects: dict[str, tuple[int, str]] = {}
+        for name, body in _named_refs(xo_text):
+            ref = re.fullmatch(r"\s*(\d+)\s+0\s+R\s*", body)
+            if not ref:
+                continue
+            xref = int(ref.group(1))
+            try:
+                header = doc.xref_object(xref)
+            except Exception:
+                continue
+            if "/Subtype /Image" in header or "/Subtype/Image" in header:
+                kind = "Image"
+            elif "/Subtype /Form" in header or "/Subtype/Form" in header:
+                kind = "Form"
+            else:
+                continue
+            xobjects[name] = (xref, kind)
+
+        try:
+            text = stream.decode("latin1", errors="replace")
+        except Exception:
+            return
+        words = re.findall(r"/[^\s/\[\]<>()]+|[^\s]+", text)
+        stack: list[float] = []
+        current = 1.0
+        for index, word in enumerate(words):
+            if word == "q":
+                stack.append(current)
+            elif word == "Q":
+                current = stack.pop() if stack else 1.0
+            elif word == "gs" and index and words[index - 1].startswith("/"):
+                current = gs_ca.get(words[index - 1][1:], 1.0)
+            elif word == "Do" and index and words[index - 1].startswith("/"):
+                spec = xobjects.get(words[index - 1][1:])
+                if not spec:
+                    continue
+                xref, kind = spec
+                if kind == "Image":
+                    opacities[xref] = round(max(0.0, min(1.0, inherited * current)), 3)
+                    continue
+                key = (xref, round(inherited * current, 3))
+                if key in seen_forms:
+                    continue
+                seen_forms.add(key)
+                try:
+                    inner = doc.xref_object(xref)
+                    inner_stream = doc.xref_stream(xref)
+                except Exception:
+                    continue
+                walk(inner_stream, inner, inherited * current)
+
+    try:
+        page_obj = doc.xref_object(page.xref)
+        resources = _resource_subsection(doc, page_obj, "Resources") or ""
+        walk(page.read_contents(), resources, 1.0)
+    except Exception as exc:  # pragma: no cover - PDF exotique
+        logger.debug("pdf_structural_extract: opacité images illisible: %s", exc)
+    return opacities
 
 
 def _cutout_block(page, clip, scale: float) -> tuple[dict | None, int]:
@@ -1034,13 +2898,15 @@ def _cutout_block(page, clip, scale: float) -> tuple[dict | None, int]:
 
     try:
         pix = page.get_pixmap(
-            matrix=fitz.Matrix(CUTOUT_RENDER_SCALE, CUTOUT_RENDER_SCALE), clip=clip, alpha=False
+            matrix=fitz.Matrix(CUTOUT_RENDER_SCALE, CUTOUT_RENDER_SCALE), clip=clip, alpha=True
         )
     except Exception:  # pragma: no cover - dépend du PDF
         return None, 0
     w_mm = (clip.x1 - clip.x0) * scale
     h_mm = (clip.y1 - clip.y0) * scale
     if w_mm <= 0.4 or h_mm <= 0.4:
+        return None, 0
+    if _pixmap_is_blank_plate(pix):
         return None, 0
     shape = _infer_image_shape(w_mm, h_mm, pix)
     data_url = _pixmap_to_data_url(pix)
@@ -1054,7 +2920,10 @@ def _cutout_block(page, clip, scale: float) -> tuple[dict | None, int]:
         "w": round(min(w_mm, PAGE_W_MM), 2),
         "h": round(min(h_mm, PAGE_H_MM), 2),
         "z": 2,
-        "style": {"shape": shape, "decorative": shape != "circle"},
+        "style": {
+            "shape": shape,
+            "decorative": w_mm * h_mm > PAGE_W_MM * PAGE_H_MM * 0.5,
+        },
     }
     return block, len(data_url)
 
@@ -1100,6 +2969,11 @@ def _extract_graphic_blocks(page, doc, scale: float, image_budget: list) -> list
         blocks.append(blk)
 
     for d in drawings:
+        if not _drawing_is_visible(d):
+            frame = _hidden_photo_frame(d, scale)
+            if frame:
+                blocks.append(frame)
+            continue
         rect = d.get("rect")
         if rect is None:
             continue
@@ -1149,6 +3023,11 @@ def _extract_graphic_blocks(page, doc, scale: float, image_budget: list) -> list
             if blk:
                 _push(blk)
                 handled = True
+        elif fill_hex and not _is_near_white(fill_hex) and line_items and not re_items:
+            poly = _filled_polygon_block(d, scale, fill_hex)
+            if poly:
+                _push(poly)
+                handled = True
 
         if not handled:
             misc.append(d)
@@ -1193,7 +3072,11 @@ def _extract_graphic_blocks(page, doc, scale: float, image_budget: list) -> list
         return None
 
     # Photos (avant la redaction qui retire le texte).
-    blocks.extend(_extract_image_blocks(page, doc, scale, image_budget))
+    # L'anneau clair est posé avant la photo (même tri z : l'ordre du tableau).
+    image_clips, plates = _photo_circle_geometry(doc, page)
+    image_blocks = _extract_image_blocks(page, doc, scale, image_budget, image_clips)
+    blocks.extend(_photo_plate_blocks(image_blocks, plates, scale))
+    blocks.extend(image_blocks)
 
     if clusters:
         try:
@@ -1221,6 +3104,17 @@ def _extract_graphic_blocks(page, doc, scale: float, image_budget: list) -> list
             clip = fitz.Rect(cluster[0]["rect"])
             for d in cluster[1:]:
                 clip |= fitz.Rect(d["rect"])
+            cx = (clip.x0 + clip.x1) / 2 * scale
+            cy = (clip.y0 + clip.y1) / 2 * scale
+            if any(
+                b.get("type") == "image"
+                and not (b.get("style") or {}).get("decorative")
+                and float(b.get("w", 0)) * float(b.get("h", 0)) < PAGE_W_MM * PAGE_H_MM * 0.5
+                and float(b.get("x", 0)) <= cx <= float(b.get("x", 0)) + float(b.get("w", 0))
+                and float(b.get("y", 0)) <= cy <= float(b.get("y", 0)) + float(b.get("h", 0))
+                for b in blocks
+            ):
+                continue
             block, nbytes = _cutout_block(page, clip, scale)
             if block:
                 blocks.append(block)
@@ -1291,7 +3185,15 @@ def extract_layout_from_pdf(file_bytes: bytes, max_pages: int = MAX_PAGES) -> di
                 if k not in merged_theme_colors:
                     merged_theme_colors[k] = v
             # Le texte D'ABORD (la décomposition/rasterisation retire le texte).
-            text_blocks, chars = _extract_text_blocks(page, pos_scale, fit, embedded_roots)
+            used_underline_mm: list[tuple[float, float, float, float]] = []
+            text_blocks, chars = _extract_text_blocks(
+                page,
+                pos_scale,
+                fit,
+                embedded_roots,
+                underline_marks=_drawing_underline_marks(page),
+                used_underline_mm=used_underline_mm,
+            )
             total_chars += chars
             # Couche graphique décomposée en blocs déplaçables (sidebar, filets,
             # photo, icônes/puces). Repli : fond plat rasterisé, puis vectoriel.
@@ -1309,6 +3211,10 @@ def extract_layout_from_pdf(file_bytes: bytes, max_pages: int = MAX_PAGES) -> di
             if not blocks:
                 continue
             blocks = _cleanup_image_overlay_blocks(blocks)
+            blocks = _fit_images_to_backing_rects(blocks)
+            blocks = _drop_consumed_underline_lines(blocks, used_underline_mm)
+            blocks = coalesce_text_runs(blocks)
+            blocks = align_gutter_bullets(blocks)
             pages_out.append({"id": f"page_{page_index + 1}", "blocks": blocks})
 
         if not pages_out or total_chars < MIN_TEXT_CHARS_FOR_NATIVE:

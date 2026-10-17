@@ -13,6 +13,7 @@ import {
   buildStructuralImportLayout,
   buildThemeFromVisionImport,
   estimateSemanticBlockHeight,
+  ensureImportLayoutHasContent,
   inferThemeFromProfile,
   isStructuralLayout,
   mergePresetDecorations,
@@ -164,7 +165,7 @@ test('buildStructuralImportLayout : copie fidèle, aucun preset', () => {
   assert.equal(title.style.bold, true);
 });
 
-test('buildStructuralImportLayout : lie titres freeform → blocs sémantiques (AXE-329)', () => {
+test('buildStructuralImportLayout : mix in-place (identity/title, corps PDF conservé)', () => {
   const structural = {
     version: 3,
     format: 'A4',
@@ -213,8 +214,38 @@ test('buildStructuralImportLayout : lie titres freeform → blocs sémantiques (
   assert.equal(result.layout.freeform, true);
   const blocks = result.layout.pages[0].blocks;
   assert.ok(blocks.some((b) => b.type === 'identity' && Array.isArray(b.bind)));
-  assert.ok(blocks.some((b) => b.type === 'experiences' && b.bind === 'experiences'));
-  assert.equal(blocks.some((b) => b.type === 'text' && String(b.content || '').includes('Head of Growth')), false);
+  assert.ok(blocks.some((b) => b.type === 'title' && b.style?.semantic_section === 'experiences'));
+  assert.ok(blocks.some((b) => b.type === 'text' && String(b.content || '').includes('Head of Growth')));
+  assert.equal(blocks.some((b) => b.type === 'experiences'), false);
+});
+
+test('ensureImportLayoutHasContent : copie PDF freeform ne seed pas de widgets', () => {
+  const layout = sanitizeLayoutV3({
+    version: 3,
+    format: 'A4',
+    grid: 'free',
+    unit: 'mm',
+    freeform: true,
+    pages: [{
+      id: 'p1',
+      blocks: [
+        {
+          id: 'bg',
+          type: 'shape:rect',
+          x: 0,
+          y: 0,
+          w: 18,
+          h: 297,
+          z: 0,
+          style: { color: '#003c33' },
+        },
+      ],
+    }],
+  });
+  const out = ensureImportLayoutHasContent(layout, DENSE_CV);
+  assert.equal(out.pages[0].blocks.some((b) => b.type === 'experiences'), false);
+  assert.equal(out.pages[0].blocks.some((b) => b.type === 'identity'), false);
+  assert.equal(out.pages[0].blocks.length, 1);
 });
 
 test('applyImportedRoundImageShapes : anneau vectoriel → image en cercle', () => {
@@ -231,6 +262,39 @@ test('applyImportedRoundImageShapes : anneau vectoriel → image en cercle', () 
   const image = out.pages[0].blocks.find((b) => b.id === 'img');
   assert.equal(image.style.shape, 'circle');
   assert.equal(out.pages[0].blocks.some((b) => b.id === 'ring'), false);
+});
+
+test('applyImportedRoundImageShapes : un aplat vectoriel carré reste rectangulaire', () => {
+  const layout = {
+    pages: [{
+      id: 'p1',
+      blocks: [
+        { id: 'tri', type: 'image', x: 0, y: 0, w: 80, h: 79, z: 1, style: { shape: 'rect', vector_fill: true }, image_src: 'https://example.test/t.png' },
+        { id: 'plate', type: 'shape:circle', x: 15, y: 10, w: 50, h: 50, z: 1, style: { color: '#ffffff', photo_plate: true } },
+        { id: 'photo', type: 'image', x: 17, y: 12, w: 46, h: 46, z: 2, style: { shape: 'circle' }, image_src: 'https://example.test/p.jpg' },
+      ],
+    }],
+  };
+  const out = applyImportedRoundImageShapes(layout);
+  const tri = out.pages[0].blocks.find((b) => b.id === 'tri');
+  const plate = out.pages[0].blocks.find((b) => b.id === 'plate');
+  assert.equal(tri.style.shape, 'rect');
+  assert.equal(plate.style.photo_plate, true);
+});
+
+test('cleanupImportedImageOverlays : garde l’anneau blanc plus grand que la photo', () => {
+  const layout = {
+    pages: [{
+      id: 'p1',
+      blocks: [
+        { id: 'img', type: 'image', x: 18, y: 18, w: 28, h: 28, z: 2, style: { shape: 'circle' }, image_src: 'https://example.test/p.jpg' },
+        { id: 'plate', type: 'shape:circle', x: 15, y: 15, w: 34, h: 34, z: 1, style: { color: '#ffffff', stroke_width: 0, photo_plate: true } },
+      ],
+    }],
+  };
+  const out = cleanupImportedImageOverlays(layout);
+  assert.equal(out.pages[0].blocks.some((b) => b.id === 'plate'), true);
+  assert.equal(out.pages[0].blocks.find((b) => b.id === 'img').style.shape, 'circle');
 });
 
 test('cleanupImportedImageOverlays : supprime icône parasite sur photo', () => {
@@ -277,7 +341,7 @@ test('sanitizeLayoutV3 : applique le min 5×3 hors freeform', () => {
 test('sanitizeLayoutV3 : préserve les polices embarquées (@font-face)', () => {
   const fonts = [
     { family: 'PDFEmbed-Garet', weight: 700, style: 'normal', format: 'truetype', src: 'data:font/ttf;base64,AAA' },
-    { family: 'PDFEmbed-Garet', weight: 400, style: 'normal', src: 'data:font/ttf;base64,BBB' },
+    { family: 'PDFEmbed-Garet', weight: 500, style: 'normal', src: 'data:font/ttf;base64,BBB' },
     { family: '', src: 'data:...' },
   ];
   const out = sanitizeLayoutV3({ ...STRUCTURAL_LAYOUT, fonts });
@@ -285,6 +349,7 @@ test('sanitizeLayoutV3 : préserve les polices embarquées (@font-face)', () => 
   assert.equal(out.fonts[0].family, 'PDFEmbed-Garet');
   assert.equal(out.fonts[0].weight, 700);
   assert.equal(out.fonts[1].format, 'truetype');
+  assert.equal(out.fonts[1].weight, 500);
 });
 
 test('reflowColumnBlocksOnPage : ne touche pas un layout freeform', () => {

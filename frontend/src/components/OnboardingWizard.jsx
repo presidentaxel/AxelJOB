@@ -1,14 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
-import { apiPost, apiPostFile, apiPut, trackEvent } from '../api';
+import { apiGet, apiPost, apiPostFile, apiPut, trackEvent } from '../api';
 import { analyticsAttrs } from '../lib/analyticsAttrs.js';
 import {
-  cvFromImportPayload,
   finishImportLoadingAnimation,
   isSparseImportedCv,
   ONBOARDING_IMPORT_STEPS,
   onboardingImportErrorMessage,
   startImportLoadingAnimation,
 } from '../lib/cvImportUtils.js';
+import { buildOnboardingImportPersist } from '../lib/onboardingImportPersist.js';
 import '../styles/OnboardingWizard.css';
 import CvImportLoadingOverlay from './CvImportLoadingOverlay.jsx';
 import Button from './ui/Button.jsx';
@@ -35,15 +35,24 @@ function StepIndicator({ current }) {
   );
 }
 
-export default function OnboardingWizard({ session, onComplete }) {
+export default function OnboardingWizard({
+  session,
+  onComplete,
+  templatesList = [],
+  onImportedTemplate,
+}) {
   const [step, setStep] = useState(0);
   const [method, setMethod] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [sparseHint, setSparseHint] = useState(false);
   const [parsedCv, setParsedCv] = useState(null);
+  const [persistBody, setPersistBody] = useState(null);
+  const [layoutCopied, setLayoutCopied] = useState(false);
+  const [layoutHint, setLayoutHint] = useState('');
   const [cvText, setCvText] = useState('');
   const [importStepIndex, setImportStepIndex] = useState(0);
+  const [importProgress, setImportProgress] = useState(0);
   const fileRef = useRef(null);
   const importCleanupRef = useRef(null);
 
@@ -51,21 +60,40 @@ export default function OnboardingWizard({ session, onComplete }) {
     if (importCleanupRef.current) importCleanupRef.current();
   }, []);
 
-  const runCvAnalysis = async (requestFn) => {
+  const runCvAnalysis = async (requestFn, importMethod) => {
     setError('');
     setSparseHint(false);
+    setLayoutHint('');
+    setLayoutCopied(false);
+    setPersistBody(null);
     setLoading(true);
     setImportStepIndex(0);
+    setImportProgress(0);
     if (importCleanupRef.current) importCleanupRef.current();
     importCleanupRef.current = startImportLoadingAnimation(setImportStepIndex, {
       steps: ONBOARDING_IMPORT_STEPS,
+      setProgress: setImportProgress,
     });
     try {
       const data = await requestFn();
       finishImportLoadingAnimation(setImportStepIndex, { steps: ONBOARDING_IMPORT_STEPS });
-      const cv = cvFromImportPayload(data?.cv || data);
-      setParsedCv(cv);
-      setSparseHint(isSparseImportedCv(cv));
+      let templates = Array.isArray(templatesList) ? templatesList : [];
+      if (templates.length === 0) {
+        try {
+          const fetched = await apiGet('/api/templates');
+          templates = Array.isArray(fetched) ? fetched : [];
+        } catch {
+          templates = [];
+        }
+      }
+      const built = buildOnboardingImportPersist(data, templates, {
+        method: importMethod,
+      });
+      setParsedCv(built.cv);
+      setPersistBody(built.persistBody);
+      setLayoutCopied(built.layoutCopied);
+      setLayoutHint(built.layoutHint);
+      setSparseHint(isSparseImportedCv(built.cv));
       await new Promise((resolve) => window.setTimeout(resolve, 280));
       setStep(1);
     } catch (err) {
@@ -85,7 +113,7 @@ export default function OnboardingWizard({ session, onComplete }) {
     setMethod('upload');
     trackEvent('onboarding_method_chosen', { method: 'file_upload' });
     try {
-      await runCvAnalysis(() => apiPostFile('/api/cv/import', file));
+      await runCvAnalysis(() => apiPostFile('/api/cv/import', file), 'upload');
     } finally {
       if (fileRef.current) fileRef.current.value = '';
     }
@@ -95,7 +123,10 @@ export default function OnboardingWizard({ session, onComplete }) {
     if (!cvText.trim()) return;
     setMethod('text');
     trackEvent('onboarding_method_chosen', { method: 'text_paste' });
-    await runCvAnalysis(() => apiPost('/api/cv/import-text', { text: cvText.trim() }));
+    await runCvAnalysis(
+      () => apiPost('/api/cv/import-text', { text: cvText.trim() }),
+      'text',
+    );
   };
 
   const handleManual = () => {
@@ -109,7 +140,12 @@ export default function OnboardingWizard({ session, onComplete }) {
     setError('');
     setLoading(true);
     try {
-      await apiPut('/api/cv', parsedCv);
+      const body = persistBody || parsedCv;
+      await apiPut('/api/cv', body);
+      const tid = String(body?.template_id || '').trim();
+      if (tid && typeof onImportedTemplate === 'function') {
+        onImportedTemplate(tid);
+      }
       setStep(2);
     } catch (err) {
       setError(err.message || 'Erreur de sauvegarde.');
@@ -130,7 +166,12 @@ export default function OnboardingWizard({ session, onComplete }) {
   const handleGoToProfile = async () => {
     if (parsedCv) {
       try {
-        await apiPut('/api/cv', parsedCv);
+        const body = persistBody || parsedCv;
+        await apiPut('/api/cv', body);
+        const tid = String(body?.template_id || '').trim();
+        if (tid && typeof onImportedTemplate === 'function') {
+          onImportedTemplate(tid);
+        }
       } catch {
         /* import optional on navigation */
       }
@@ -222,6 +263,14 @@ export default function OnboardingWizard({ session, onComplete }) {
             {sparseHint && (
               <div className="onb-sparse" role="status">
                 Peu d’infos extraites. Tu peux continuer, puis compléter ton profil à la main.
+              </div>
+            )}
+            {layoutHint && (
+              <div
+                className={`onb-sparse${layoutCopied ? ' onb-sparse--copied' : ''}`}
+                role="status"
+              >
+                {layoutHint}
               </div>
             )}
 
@@ -319,6 +368,7 @@ export default function OnboardingWizard({ session, onComplete }) {
       {analyzing && (
         <CvImportLoadingOverlay
           stepIndex={importStepIndex}
+          progress={importProgress}
           steps={ONBOARDING_IMPORT_STEPS}
           title="Analyse de ton CV en cours"
           subtitle="On lit ton document, puis on structure le profil. Ça peut prendre jusqu’à une minute."

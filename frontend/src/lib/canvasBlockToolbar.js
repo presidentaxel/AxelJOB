@@ -40,6 +40,7 @@ export function blockHasTypographyOverride(style = {}) {
     || style?.font_family
     || style?.color
     || style?.bold
+    || style?.font_weight
     || style?.italic
     || style?.underline
     || style?.strikethrough,
@@ -57,7 +58,8 @@ export function blockStyleToCss(style = {}) {
   if (s.color) css.color = s.color;
   if (s.align) css.textAlign = s.align;
   if (s.opacity != null) css.opacity = s.opacity;
-  if (s.bold) css.fontWeight = '700';
+  if (s.font_weight) css.fontWeight = String(s.font_weight);
+  else if (s.bold) css.fontWeight = '700';
   if (s.italic || s.font_style === 'italic') css.fontStyle = 'italic';
   const deco = [];
   if (s.underline) deco.push('underline');

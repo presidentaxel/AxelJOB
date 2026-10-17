@@ -36,16 +36,48 @@ def _strip_subset_prefix(name: str) -> str:
     return _SUBSET_PREFIX_RE.sub("", str(name or ""))
 
 
-def _font_root_and_style(basefont: str) -> tuple[str, bool, bool]:
-    """Retourne (racine_famille, gras, italique) depuis un nom PostScript."""
+def font_css_weight(font_name: str) -> int | None:
+    """Graisse CSS lue dans le nom (Medium 500, SemiBold 600). ``None`` si absente."""
+    low = _strip_subset_prefix(font_name).lower().replace("-", "").replace(" ", "").replace("_", "")
+    if "semibold" in low or "demibold" in low:
+        return 600
+    if "extrabold" in low or "ultrabold" in low:
+        return 800
+    if "extrablack" in low or "ultrablack" in low:
+        return 900
+    if "black" in low or "heavy" in low:
+        return 900
+    if "bold" in low:
+        return 700
+    if "medium" in low:
+        return 500
+    if "extralight" in low or "ultralight" in low:
+        return 200
+    if "light" in low:
+        return 300
+    if "thin" in low:
+        return 100
+    if "regular" in low or "roman" in low or "book" in low:
+        return 400
+    return None
+
+
+def _font_root_and_style(basefont: str) -> tuple[str, int, bool]:
+    """Retourne (racine_famille, graisse CSS, italique) depuis un nom PostScript.
+
+    ``TimesNewRomanPSMT`` et ``TimesNewRomanPS-BoldMT`` sont la même famille :
+    le romain et le gras doivent partager le ``@font-face``, sinon le navigateur
+    dessine le texte régulier avec le sous-ensemble gras et remplace les
+    lettres qui lui manquent.
+    """
     name = _strip_subset_prefix(basefont)
     low = name.lower()
-    bold = any(k in low for k in ("bold", "black", "heavy", "semibold", "semi-b"))
+    weight = font_css_weight(name) or 400
     italic = "italic" in low or "oblique" in low
-    # Racine = avant le premier séparateur de style ('-', ',', espace).
-    root = re.split(r"[-,\s]", name, maxsplit=1)[0] or "Doc"
-    root = re.sub(r"[^A-Za-z0-9]", "", root) or "Doc"
-    return root, bold, italic
+    head = re.split(r"[-,\s_]", name, maxsplit=1)[0]
+    head = re.sub(r"MT$", "", head, flags=re.IGNORECASE)
+    root = re.sub(r"[^A-Za-z0-9]", "", head) or "Doc"
+    return root, weight, italic
 
 
 def _css_family(root: str) -> str:
@@ -87,6 +119,24 @@ def _merge_subsets(buffers: list[bytes]) -> bytes | None:
         logger.info("pdf_font_embed: fusion échouée (%s), repli sous-ensemble unique", exc)
         # Repli : on garde le sous-ensemble le plus complet (le plus gros).
         return max(buffers, key=len)
+
+
+def _coverage_chars(font_bytes: bytes) -> str:
+    """Caractères réellement dessinés. Un sous-ensemble incomplet mélange les graisses."""
+    try:
+        from fontTools.ttLib import TTFont
+
+        font = TTFont(io.BytesIO(font_bytes))
+        try:
+            cmap = font.getBestCmap() or {}
+        finally:
+            font.close()
+    except Exception:
+        return ""
+    chars = "".join(chr(code) for code in sorted(cmap) if 32 <= code < 0x10000)
+    if len(chars) > 2000:
+        return ""
+    return chars
 
 
 def _data_url(font_bytes: bytes) -> str:
@@ -138,7 +188,7 @@ def extract_embedded_fonts(doc, max_pages: int = 3) -> tuple[list[dict[str, Any]
     embedded_roots: set[str] = set()
     total = 0
 
-    for (root, bold, italic), by_xref in groups.items():
+    for (root, weight, italic), by_xref in groups.items():
         merged = _merge_subsets(list(by_xref.values()))
         if not merged or len(merged) > MAX_FONT_BYTES:
             continue
@@ -146,14 +196,16 @@ def extract_embedded_fonts(doc, max_pages: int = 3) -> tuple[list[dict[str, Any]
             continue
         total += len(merged)
         embedded_roots.add(root)
-        font_faces.append(
-            {
-                "family": _css_family(root),
-                "weight": 700 if bold else 400,
-                "style": "italic" if italic else "normal",
-                "format": "truetype",
-                "src": _data_url(merged),
-            }
-        )
+        face: dict[str, Any] = {
+            "family": _css_family(root),
+            "weight": weight,
+            "style": "italic" if italic else "normal",
+            "format": "truetype",
+            "src": _data_url(merged),
+        }
+        coverage = _coverage_chars(merged)
+        if coverage:
+            face["coverage"] = coverage
+        font_faces.append(face)
 
     return font_faces, embedded_roots

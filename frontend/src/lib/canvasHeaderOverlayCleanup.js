@@ -197,25 +197,30 @@ export function removeTextDuplicatingIdentity(layout, cv = {}) {
   if (!layout?.pages?.length) return layout;
   const pages = layout.pages.map((page) => {
     const blocks = Array.isArray(page?.blocks) ? page.blocks : [];
-    const identities = blocks.filter((b) => b?.type === 'identity').map(asBox);
+    const identities = blocks.filter((b) => b?.type === 'identity');
     if (!identities.length) return page;
+    const titre = normalizeIdentityText(cv.titre_professionnel);
+    const name = normalizeIdentityText(
+      `${cv.prenom || cv.first_name || ''} ${cv.nom || cv.last_name || ''}`,
+    );
 
     const nextBlocks = blocks.filter((block) => {
       if (block?.type !== 'text' && block?.type !== 'title') return true;
       const box = asBox(block);
       if (box.y > 72) return true;
-      const inTitleBand = box.y < 24;
-      const nearIdentity = identities.some((idb) => (
-        overlapRatio(box, idb) >= 0.08
-        || (sameHeaderRow(box, idb, 14) && overlapRatio(
-          { ...box, h: Math.max(box.h, 8) },
-          { ...idb, h: Math.max(idb.h, 10) },
-        ) >= 0.01)
-      ));
-      if (!nearIdentity && !inTitleBand) return true;
-      const line = normalizeIdentityText(block.content);
-      if (!nearIdentity && line.length > 48) return true;
-      return !textDuplicatesIdentityContent(block.content, cv);
+      // Seulement si le widget qui affiche ce champ recouvre la ligne.
+      // Un titre sur la ligne d'en dessous du nom doit rester visible.
+      const text = normalizeIdentityText(block.content);
+      const matchesTitle = Boolean(titre) && isShortIdentityGhost(text, titre);
+      const matchesName = Boolean(name) && isShortIdentityGhost(text, name);
+      const covered = identities.some((idb) => {
+        if (overlapRatio(box, asBox(idb)) < 0.18) return false;
+        const bind = Array.isArray(idb.bind) ? idb.bind : [];
+        if (matchesTitle && bind.includes('titre_professionnel')) return true;
+        if (matchesName && (bind.includes('prenom') || bind.includes('nom'))) return true;
+        return false;
+      });
+      return !covered;
     });
     return nextBlocks.length === blocks.length ? page : { ...page, blocks: nextBlocks };
   });

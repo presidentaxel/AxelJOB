@@ -789,6 +789,20 @@
   padding: 1mm 1.5mm;
 }
 
+/* Import PDF (nowrap) : le padding 1 mm décalait le texte au-dessus des puces. */
+.free-canvas-block[data-nowrap='true'][data-block-type='text'] .free-canvas-block__inner,
+.free-canvas-block[data-nowrap='true'][data-block-type='title'] .free-canvas-block__inner {
+  padding: 0;
+  display: flex;
+  align-items: center;
+}
+
+.free-canvas-block[data-nowrap='true'] .free-canvas-block__text,
+.free-canvas-block[data-nowrap='true'] .free-canvas-block__title {
+  line-height: 1;
+  width: 100%;
+}
+
 /* Titres de section importés : bbox PDF trop basse — ne pas clipper les glyphes. */
 .free-canvas-block[data-block-type='title'] .free-canvas-block__inner,
 .free-canvas-block__inner--heading {
@@ -1128,4 +1142,13 @@
 .free-canvas-block__shape-vector {
   width: 100%;
   height: 100%;
+}
+
+/* SVG inline : le cercle se cale sur la ligne de base et tombe sous le texte. */
+.free-canvas-block__shape-vector svg {
+  display: block;
+}
+
+.free-canvas-block[data-multiline='true'] .free-canvas-block__inner {
+  padding: 0;
 }

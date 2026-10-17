@@ -33,7 +33,7 @@ export const CV_IMPORT_STEPS = [
   'Finalisation du canvas',
 ];
 
-/** Étapes affichées à la création de compte (pas de canvas / vision). */
+/** Étapes overlay à la création de compte (AXE-341). Le layout design est persisté à part (AXE-398). */
 export const ONBOARDING_IMPORT_STEPS = [
   'Lecture du document',
   'Extraction du texte',
@@ -42,9 +42,65 @@ export const ONBOARDING_IMPORT_STEPS = [
   'Finalisation',
 ];
 
-export const CV_IMPORT_STEP_DURATION_MS = 1600;
+/** Durées des étapes avant le palier d'attente (l'appel IA). Plus longues au début pour ne pas figer la barre. */
+export const CV_IMPORT_STEP_DURATIONS_MS = [8000, 9000, 14000, 10000];
+export const CV_IMPORT_PROGRESS_CEILING = 96;
+/** Constante de temps du glissement après le palier : la barre continue d'avancer sans atteindre 100 %. */
+export const CV_IMPORT_CREEP_TAU_MS = 22000;
+/** @deprecated Conservé pour les appelants qui lisaient l'ancien intervalle unique. */
+export const CV_IMPORT_STEP_DURATION_MS = CV_IMPORT_STEP_DURATIONS_MS[0];
 /** Dernière étape animée avant confirmation API (reste sur « Placement… »). */
 export const CV_IMPORT_ANIMATION_HOLD_STEP = CV_IMPORT_STEPS.length - 2;
+
+function _holdStepFor(steps, holdStep) {
+  const count = Math.max(1, steps.length);
+  if (typeof holdStep === 'number') return Math.min(Math.max(0, holdStep), count - 1);
+  return Math.max(0, count - 2);
+}
+
+function _holdAtMs(holdStep, durations) {
+  let holdAt = 0;
+  const fallback = durations[durations.length - 1] || 8000;
+  for (let i = 0; i < holdStep; i += 1) {
+    holdAt += durations[i] ?? fallback;
+  }
+  return holdAt;
+}
+
+/** Pourcentage affiché pour un temps écoulé. Linéaire jusqu'au palier, puis asymptote vers le plafond. */
+export function importProgressForElapsed(elapsedMs, options = {}) {
+  const steps = Array.isArray(options.steps) && options.steps.length
+    ? options.steps
+    : CV_IMPORT_STEPS;
+  const holdStep = _holdStepFor(steps, options.holdStep);
+  const durations = options.durationsMs || CV_IMPORT_STEP_DURATIONS_MS;
+  const elapsed = Math.max(0, Number(elapsedMs) || 0);
+  const holdAt = _holdAtMs(holdStep, durations);
+  const holdPct = ((holdStep + 1) / steps.length) * 100;
+  if (holdAt <= 0 || elapsed >= holdAt) {
+    const extra = holdAt <= 0 ? elapsed : elapsed - holdAt;
+    const crept = holdPct + (CV_IMPORT_PROGRESS_CEILING - holdPct) * (1 - Math.exp(-extra / CV_IMPORT_CREEP_TAU_MS));
+    return Math.min(CV_IMPORT_PROGRESS_CEILING, Math.round(crept));
+  }
+  return Math.max(4, Math.round((elapsed / holdAt) * holdPct));
+}
+
+/** Index d'étape pour un temps écoulé, plafonné au palier d'attente. */
+export function importStepForElapsed(elapsedMs, options = {}) {
+  const steps = Array.isArray(options.steps) && options.steps.length
+    ? options.steps
+    : CV_IMPORT_STEPS;
+  const holdStep = _holdStepFor(steps, options.holdStep);
+  const durations = options.durationsMs || CV_IMPORT_STEP_DURATIONS_MS;
+  const elapsed = Math.max(0, Number(elapsedMs) || 0);
+  let acc = 0;
+  const fallback = durations[durations.length - 1] || 8000;
+  for (let i = 0; i < holdStep; i += 1) {
+    acc += durations[i] ?? fallback;
+    if (elapsed < acc) return i;
+  }
+  return holdStep;
+}
 
 export function formatScalarPreviewForPrivacy(fieldKey, value, maxLen) {
   if (fieldKey === 'photo_url') {
@@ -241,13 +297,21 @@ export function startImportLoadingAnimation(setImportStepIndex, options = {}) {
   const steps = Array.isArray(options.steps) && options.steps.length
     ? options.steps
     : CV_IMPORT_STEPS;
-  const holdStep = typeof options.holdStep === 'number'
-    ? options.holdStep
-    : Math.max(0, steps.length - 2);
-  setImportStepIndex(0);
-  const stepTimer = setInterval(() => {
-    setImportStepIndex((i) => (i >= holdStep ? i : i + 1));
-  }, CV_IMPORT_STEP_DURATION_MS);
+  const holdStep = _holdStepFor(steps, options.holdStep);
+  const setProgress = typeof options.setProgress === 'function' ? options.setProgress : null;
+  const tickOptions = { steps, holdStep };
+  const started = Date.now();
+  const tick = () => {
+    const elapsed = Date.now() - started;
+    const step = importStepForElapsed(elapsed, tickOptions);
+    setImportStepIndex((current) => (current >= steps.length - 1 ? current : step));
+    if (setProgress) {
+      const next = importProgressForElapsed(elapsed, tickOptions);
+      setProgress((current) => (current >= 100 ? current : next));
+    }
+  };
+  tick();
+  const stepTimer = setInterval(tick, 200);
   return () => clearInterval(stepTimer);
 }
 

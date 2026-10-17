@@ -67,11 +67,26 @@ function EmbeddedFontFaces({ fonts }) {
       if (!src) return null;
       const family = cssEscapeString(f.family);
       const format = cssEscapeString(f.format || 'truetype');
-      return (
+      const weight = [100, 200, 300, 400, 500, 600, 700, 800, 900].includes(Number(f.weight))
+        ? Number(f.weight)
+        : 400;
+      const italic = f.style === 'italic';
+      const face = (
         `@font-face{font-family:'${family}';`
-        + `font-weight:${f.weight === 700 ? 700 : 400};`
-        + `font-style:${f.style === 'italic' ? 'italic' : 'normal'};`
+        + `font-weight:${weight};`
+        + `font-style:${italic ? 'italic' : 'normal'};`
         + 'font-display:swap;'
+        + `src:url("${src}") format('${format}');}`
+      );
+      if (italic) return face;
+      // __up : italique synthétique. __wN : gras synthétique sur cette graisse,
+      // pour que le bouton Gras épaississe la même police.
+      return (
+        `${face}\n@font-face{font-family:'${family}__up';`
+        + `font-weight:${weight};font-style:normal;font-display:swap;`
+        + `src:url("${src}") format('${format}');}`
+        + `\n@font-face{font-family:'${family}__w${weight}';`
+        + `font-weight:${weight};font-style:normal;font-display:swap;`
         + `src:url("${src}") format('${format}');}`
       );
     })
@@ -885,6 +900,7 @@ export default function FreeCanvas({
                     key={block.id}
                     block={renderBlock}
                     cv={cv}
+                    embeddedFonts={layout?.fonts}
                     selected={selectedBlockIds.includes(block.id)}
                     editing={editingBlockId === block.id}
                     dragging={draggingBlockId === block.id}

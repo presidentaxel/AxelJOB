@@ -3,10 +3,14 @@ import test from 'node:test';
 
 import { sanitizeLayoutV3 } from '../../src/lib/cvLayoutModelV3.js';
 import {
+  BIND_MODE_ABSORB,
   MIN_SEMANTIC_CONFIDENCE,
+  alignImportGutterMarkers,
   bindStructuralTextToSemanticBlocks,
+  colorFromPdfRuns,
   classifyStructuralTextBlock,
   decodeStructuralText,
+  pruneInPlaceImportDuplicates,
 } from '../../src/lib/structuralSemanticBind.js';
 
 test('decodeStructuralText décode entités HTML', () => {
@@ -78,7 +82,9 @@ test('bindStructuralTextToSemanticBlocks : titre court absorbe corps plus large'
       ],
     }],
   });
-  const { layout: out, boundCount } = bindStructuralTextToSemanticBlocks(layout, {});
+  const { layout: out, boundCount } = bindStructuralTextToSemanticBlocks(layout, {}, {
+    mode: BIND_MODE_ABSORB,
+  });
   assert.equal(boundCount, 1);
   const form = out.pages[0].blocks.find((b) => b.type === 'formations');
   assert.ok(form);
@@ -147,6 +153,115 @@ test('classifyStructuralTextBlock : contact via email', () => {
   );
   assert.equal(hit?.type, 'contact');
   assert.ok(hit.confidence >= MIN_SEMANTIC_CONFIDENCE);
+});
+
+test('classifyStructuralTextBlock : une plage de dates n est pas un téléphone', () => {
+  const hit = classifyStructuralTextBlock(
+    {
+      type: 'text',
+      content: '09/2019 - 06/2023',
+      x: 20,
+      y: 80,
+      w: 40,
+      h: 5,
+      style: {},
+    },
+    { telephone: '+33 6 11 22 33 44' },
+  );
+  assert.equal(hit, null);
+});
+
+test('classifyStructuralTextBlock : une ligne mixte reste du texte', () => {
+  const hit = classifyStructuralTextBlock(
+    {
+      type: 'text',
+      content: '12 rue des Lilas, 75011 Paris • +33 6 11 22 33 44 • ada@example.fr - www.linkedin.com/in/ada',
+      x: 20,
+      y: 20,
+      w: 160,
+      h: 5,
+      style: {},
+    },
+    {
+      email: 'ada@example.fr',
+      telephone: '+33 6 11 22 33 44',
+      linkedin: 'www.linkedin.com/in/ada',
+      ville: 'Paris',
+    },
+  );
+  assert.equal(hit, null);
+});
+
+test('classifyStructuralTextBlock : le titre a cote du nom reste du texte', () => {
+  const hit = classifyStructuralTextBlock(
+    {
+      type: 'text',
+      content: 'Marie Martin Product Manager',
+      x: 20,
+      y: 16,
+      w: 80,
+      h: 8,
+      style: { font_size: 16, bold: true },
+    },
+    { prenom: 'Marie', nom: 'Martin', titre_professionnel: 'Product Manager' },
+  );
+  assert.equal(hit, null);
+});
+
+test('classifyStructuralTextBlock : une ville a cote de l email reste du texte', () => {
+  const hit = classifyStructuralTextBlock(
+    {
+      type: 'text',
+      content: 'ada@example.fr • Paris',
+      x: 20,
+      y: 24,
+      w: 80,
+      h: 5,
+      style: {},
+    },
+    { email: 'ada@example.fr', ville: 'Paris' },
+  );
+  assert.equal(hit, null);
+});
+
+test('bind inPlace garde le texte quand l annotation contact effacerait des mots', () => {
+  const layout = sanitizeLayoutV3({
+    version: 3,
+    format: 'A4',
+    grid: 'free',
+    unit: 'mm',
+    freeform: true,
+    pages: [{
+      id: 'p1',
+      blocks: [{
+        id: 'line',
+        type: 'text',
+        content: '12 rue des Lilas • +33 6 11 22 33 44 • ada@example.fr',
+        x: 20,
+        y: 20,
+        w: 160,
+        h: 5,
+        z: 3,
+        style: { font_size: 10, color: '#0000ff' },
+      }],
+    }],
+  });
+  const { layout: out } = bindStructuralTextToSemanticBlocks(layout, {
+    email: 'ada@example.fr',
+    telephone: '+33 6 11 22 33 44',
+  }, {
+    annotations: [{
+      block_id: 'line',
+      type: 'contact',
+      kind: 'contact',
+      confidence: 0.95,
+      bind: ['email', 'telephone'],
+    }],
+  });
+  const block = out.pages[0].blocks.find((b) => b.id === 'line');
+  assert.equal(block.type, 'text');
+  assert.match(block.content, /rue des Lilas/);
+  assert.match(block.content, /ada@example.fr/);
 });
 
 test('bindStructuralTextToSemanticBlocks : heading + corps → experiences, freeform conservé', () => {
@@ -222,7 +337,7 @@ test('bindStructuralTextToSemanticBlocks : heading + corps → experiences, free
   const { layout: out, boundCount } = bindStructuralTextToSemanticBlocks(layout, {
     prenom: 'Camille',
     nom: 'Durand',
-  });
+  }, { mode: BIND_MODE_ABSORB });
   assert.equal(out.freeform, true);
   assert.equal(boundCount, 2);
   const blocks = out.pages[0].blocks;
@@ -231,7 +346,6 @@ test('bindStructuralTextToSemanticBlocks : heading + corps → experiences, free
   const form = blocks.find((b) => b.type === 'formations');
   assert.ok(exp);
   assert.equal(exp.bind, 'experiences');
-  assert.equal(exp.style?.lock_height, true);
   // Hauteur = bbox freeform (pas preset 80mm) pour éviter le chevauchement.
   assert.ok(exp.h >= 18 && exp.h < 40, `h inattendu: ${exp.h}`);
   assert.ok(form);
@@ -297,7 +411,9 @@ test('bindStructuralTextToSemanticBlocks : ignore sidebar d\'une autre colonne',
       ],
     }],
   });
-  const { layout: out } = bindStructuralTextToSemanticBlocks(layout, {});
+  const { layout: out } = bindStructuralTextToSemanticBlocks(layout, {}, {
+    mode: BIND_MODE_ABSORB,
+  });
   const blocks = out.pages[0].blocks;
   const exp = blocks.find((b) => b.type === 'experiences');
   const skills = blocks.find((b) => b.type === 'skills');
@@ -341,6 +457,531 @@ test('bindStructuralTextToSemanticBlocks : confiance basse → freeform inchang�
   assert.equal(skippedLowConfidence, 0);
   assert.equal(out.pages[0].blocks[0].type, 'text');
   assert.equal(out.pages[0].blocks[0].content.includes('Note'), true);
+});
+
+test('bind inPlace : titres annotés, corps PDF conservé', () => {
+  const layout = sanitizeLayoutV3({
+    version: 3,
+    format: 'A4',
+    grid: 'free',
+    unit: 'mm',
+    freeform: true,
+    pages: [{
+      id: 'p1',
+      blocks: [
+        {
+          id: 'name',
+          type: 'text',
+          content: 'Marie Martin',
+          x: 20,
+          y: 16,
+          w: 90,
+          h: 8,
+          z: 3,
+          style: { font_size: 18, bold: true, color: '#1a1a1a' },
+        },
+        {
+          id: 'h1',
+          type: 'text',
+          content: 'Expérience professionnelle',
+          x: 20,
+          y: 70,
+          w: 100,
+          h: 6,
+          z: 3,
+          style: { font_size: 12, bold: true },
+        },
+        {
+          id: 'b1',
+          type: 'text',
+          content: 'Head of Growth — ScaleUp',
+          x: 20,
+          y: 80,
+          w: 110,
+          h: 5,
+          z: 3,
+          style: { font_size: 10 },
+        },
+      ],
+    }],
+  });
+  const { layout: out, boundCount } = bindStructuralTextToSemanticBlocks(layout, {
+    prenom: 'Marie',
+    nom: 'Martin',
+  });
+  assert.ok(boundCount >= 2);
+  const blocks = out.pages[0].blocks;
+  const identity = blocks.find((b) => b.type === 'identity');
+  assert.ok(identity);
+  assert.deepEqual(identity.bind, ['prenom', 'nom']);
+  assert.equal(identity.style.font_size, 18);
+  assert.equal(identity.style.lock_geometry, true);
+  assert.equal(identity.y, 16);
+  const heading = blocks.find((b) => b.type === 'title');
+  assert.ok(heading);
+  assert.equal(heading.style.semantic_section, 'experiences');
+  assert.ok(blocks.some((b) => b.type === 'text' && String(b.content).includes('Head of Growth')));
+  assert.equal(blocks.some((b) => b.type === 'experiences'), false);
+});
+
+test('bind inPlace conserve la couleur minoritaire d un fragment', () => {
+  const layout = sanitizeLayoutV3({
+    version: 3,
+    format: 'A4',
+    grid: 'free',
+    unit: 'mm',
+    freeform: true,
+    pages: [{
+      id: 'p1',
+      blocks: [
+        {
+          id: 'name',
+          type: 'text',
+          content: '<span style="color:#545454"><strong>EDGAR</strong></span> <strong>PRADEL</strong>',
+          x: 20,
+          y: 16,
+          w: 90,
+          h: 8,
+          z: 3,
+          style: { font_size: 18, bold: true, color: '#163853' },
+        },
+        {
+          id: 'mail',
+          type: 'text',
+          content: '06 74 90 49 11 <span style="color:#0000ff">ada@exemple.fr</span>',
+          x: 20,
+          y: 28,
+          w: 120,
+          h: 5,
+          z: 3,
+          style: { font_size: 9, color: '#000000' },
+        },
+      ],
+    }],
+  });
+  const { layout: out } = bindStructuralTextToSemanticBlocks(layout, {
+    prenom: 'Edgar',
+    nom: 'Pradel',
+    email: 'ada@exemple.fr',
+    telephone: '06 74 90 49 11',
+  });
+  const blocks = out.pages[0].blocks;
+  const identity = blocks.find((b) => b.type === 'identity');
+  const contact = blocks.find((b) => b.type === 'contact');
+  assert.ok(identity);
+  assert.equal(colorFromPdfRuns(identity.style.color_runs, 'Edgar'), '#545454');
+  assert.equal(colorFromPdfRuns(identity.style.color_runs, 'Pradel'), '');
+  assert.ok(contact);
+  assert.equal(colorFromPdfRuns(contact.style.color_runs, 'ada@exemple.fr'), '#0000ff');
+  assert.equal(colorFromPdfRuns(contact.style.color_runs, '06 74 90 49 11'), '');
+});
+
+test('classifyStructuralTextBlock : bullet XP qui cite le nom → pas identity', () => {
+  const hit = classifyStructuralTextBlock(
+    {
+      type: 'text',
+      content: 'Marie Martin a lancé 3 features chez ScaleUp en 2022',
+      x: 20,
+      y: 80,
+      w: 120,
+      h: 5,
+      style: { font_size: 11, bold: true },
+    },
+    { prenom: 'Marie', nom: 'Martin' },
+  );
+  assert.equal(hit, null);
+});
+
+test('bind inPlace : fragments de nom + texte fantôme → une identity', () => {
+  const layout = sanitizeLayoutV3({
+    version: 3,
+    format: 'A4',
+    grid: 'free',
+    unit: 'mm',
+    freeform: true,
+    pages: [{
+      id: 'p1',
+      blocks: [
+        {
+          id: 'first',
+          type: 'text',
+          content: 'Marie',
+          x: 20,
+          y: 16,
+          w: 28,
+          h: 8,
+          z: 3,
+          style: { font_size: 12, bold: true },
+        },
+        {
+          id: 'full',
+          type: 'text',
+          content: 'Marie Martin',
+          x: 20,
+          y: 16,
+          w: 90,
+          h: 8,
+          z: 4,
+          style: { font_size: 18, bold: true },
+        },
+        {
+          id: 'ghost',
+          type: 'text',
+          content: 'Marie Martin',
+          x: 21,
+          y: 17,
+          w: 88,
+          h: 7,
+          z: 2,
+          style: { font_size: 18 },
+        },
+        {
+          id: 'body',
+          type: 'text',
+          content: 'Marie Martin a lancé 3 features chez ScaleUp',
+          x: 20,
+          y: 90,
+          w: 120,
+          h: 5,
+          z: 3,
+          style: { font_size: 10 },
+        },
+      ],
+    }],
+  });
+  const { layout: out } = bindStructuralTextToSemanticBlocks(layout, {
+    prenom: 'Marie',
+    nom: 'Martin',
+  });
+  const blocks = out.pages[0].blocks;
+  const identities = blocks.filter((b) => b.type === 'identity');
+  assert.equal(identities.length, 1);
+  assert.equal(identities[0].id, 'full');
+  assert.equal(blocks.some((b) => b.id === 'ghost'), false);
+  assert.equal(blocks.some((b) => b.id === 'first'), false);
+  assert.ok(blocks.some((b) => b.id === 'body'));
+});
+
+test('bind inPlace : email en-tête + pied → un contact, titres doublés fusionnés', () => {
+  const layout = sanitizeLayoutV3({
+    version: 3,
+    format: 'A4',
+    grid: 'free',
+    unit: 'mm',
+    freeform: true,
+    pages: [{
+      id: 'p1',
+      blocks: [
+        {
+          id: 'mail1',
+          type: 'text',
+          content: 'marie@ex.com',
+          x: 20,
+          y: 28,
+          w: 50,
+          h: 4,
+          z: 3,
+          style: { font_size: 9 },
+        },
+        {
+          id: 'mail2',
+          type: 'text',
+          content: 'marie@ex.com',
+          x: 20,
+          y: 280,
+          w: 50,
+          h: 4,
+          z: 3,
+          style: { font_size: 8 },
+        },
+        {
+          id: 'h1',
+          type: 'text',
+          content: 'Expérience professionnelle',
+          x: 20,
+          y: 70,
+          w: 90,
+          h: 6,
+          z: 3,
+          style: { font_size: 12, bold: true },
+        },
+        {
+          id: 'h1b',
+          type: 'text',
+          content: 'Expérience professionnelle',
+          x: 20.5,
+          y: 70.4,
+          w: 88,
+          h: 6,
+          z: 2,
+          style: { font_size: 11, bold: true },
+        },
+        {
+          id: 'hSide',
+          type: 'text',
+          content: 'Compétences',
+          x: 8,
+          y: 70,
+          w: 40,
+          h: 6,
+          z: 3,
+          style: { font_size: 11, bold: true },
+        },
+        {
+          id: 'hMainSkills',
+          type: 'text',
+          content: 'Compétences',
+          x: 72,
+          y: 140,
+          w: 40,
+          h: 6,
+          z: 3,
+          style: { font_size: 11, bold: true },
+        },
+      ],
+    }],
+  });
+  const { layout: out } = bindStructuralTextToSemanticBlocks(layout, {
+    prenom: 'Marie',
+    nom: 'Martin',
+    email: 'marie@ex.com',
+  });
+  const blocks = out.pages[0].blocks;
+  const contacts = blocks.filter((b) => b.type === 'contact');
+  assert.equal(contacts.length, 1);
+  assert.equal(contacts[0].id, 'mail1');
+  const expTitles = blocks.filter((b) => (
+    b.type === 'title' && b.style?.semantic_section === 'experiences'
+  ));
+  assert.equal(expTitles.length, 1);
+  const skillTitles = blocks.filter((b) => (
+    b.type === 'title' && b.style?.semantic_section === 'skills'
+  ));
+  assert.equal(skillTitles.length, 2);
+});
+
+test('alignImportGutterMarkers : puces recalees sur la ligne, pas la suivante', () => {
+  const layout = {
+    version: 3,
+    pages: [{
+      id: 'p1',
+      blocks: [
+        {
+          id: 't1',
+          type: 'text',
+          content: 'Mise en place des equipes',
+          x: 20,
+          y: 37.54,
+          w: 80,
+          h: 5.85,
+          style: { font_size: 10 },
+        },
+        {
+          id: 'c1',
+          type: 'shape:circle',
+          x: 16.16,
+          y: 40.49,
+          w: 1.55,
+          h: 1.55,
+          style: { color: '#000' },
+        },
+        {
+          id: 't2',
+          type: 'text',
+          content: 'Gestion et ecoute des membres',
+          x: 20,
+          y: 42.47,
+          w: 80,
+          h: 5.85,
+          style: { font_size: 10 },
+        },
+        {
+          id: 'c2',
+          type: 'shape:circle',
+          x: 16.16,
+          y: 45.43,
+          w: 1.55,
+          h: 1.55,
+          style: { color: '#000' },
+        },
+        {
+          id: 't3',
+          type: 'text',
+          content: 'Gestion des reseaux sociaux',
+          x: 20,
+          y: 52.35,
+          w: 80,
+          h: 5.85,
+          style: { font_size: 10 },
+        },
+        {
+          id: 'c3',
+          type: 'shape:circle',
+          x: 16.16,
+          y: 55.31,
+          w: 1.55,
+          h: 1.55,
+          style: { color: '#000' },
+        },
+      ],
+    }],
+  };
+  const out = alignImportGutterMarkers(layout);
+  const byId = Object.fromEntries(out.pages[0].blocks.map((b) => [b.id, b]));
+  assert.ok(byId.c1.y < byId.t2.y, '1re puce au-dessus de la 2e ligne');
+  assert.ok(Math.abs(byId.c1.y - (byId.t1.y + (byId.t1.h - 1.55) / 2)) < 0.2);
+  assert.ok(byId.c3.y < byId.t3.y + byId.t3.h * 0.7, 'pas de puce fantôme sous la liste');
+});
+
+test('alignImportGutterMarkers : ignore titre de poste et date au-dessus', () => {
+  const layout = {
+    version: 3,
+    pages: [{
+      id: 'p1',
+      blocks: [
+        {
+          id: 'job',
+          type: 'text',
+          content: 'Co-Présidente – Association HeForShe ESSEC',
+          x: 20,
+          y: 20,
+          w: 100,
+          h: 6,
+          style: { font_size: 11, bold: true },
+        },
+        {
+          id: 'date',
+          type: 'text',
+          content: '2024',
+          x: 20,
+          y: 27,
+          w: 20,
+          h: 4,
+          style: { font_size: 9, italic: true },
+        },
+        {
+          id: 't1',
+          type: 'text',
+          content: 'Mise en place des equipes campus',
+          x: 20,
+          y: 34,
+          w: 90,
+          h: 5,
+          style: { font_size: 10 },
+        },
+        {
+          id: 'c1',
+          type: 'shape:circle',
+          x: 16,
+          y: 36,
+          w: 1.5,
+          h: 1.5,
+          style: { color: '#000' },
+        },
+        {
+          id: 't2',
+          type: 'text',
+          content: 'Gestion et ecoute des membres',
+          x: 20,
+          y: 40,
+          w: 90,
+          h: 5,
+          style: { font_size: 10 },
+        },
+        {
+          id: 'c2',
+          type: 'shape:circle',
+          x: 16,
+          y: 42,
+          w: 1.5,
+          h: 1.5,
+          style: { color: '#000' },
+        },
+      ],
+    }],
+  };
+  const out = alignImportGutterMarkers(layout);
+  const byId = Object.fromEntries(out.pages[0].blocks.map((b) => [b.id, b]));
+  assert.equal(byId.c1.y, 34 + (5 - 1.5) / 2);
+  assert.ok(byId.c1.y > byId.job.y + 2, 'pas calée sur le titre');
+  assert.equal(byId.c2.y, 40 + (5 - 1.5) / 2);
+});
+
+test('une ligne de titre sous le nom reste du texte', () => {
+  const layout = sanitizeLayoutV3({
+    version: 3,
+    format: 'A4',
+    grid: 'free',
+    unit: 'mm',
+    freeform: true,
+    pages: [{
+      id: 'p1',
+      blocks: [
+        {
+          id: 'name',
+          type: 'text',
+          content: 'Louis Vedovato',
+          x: 45,
+          y: 1,
+          w: 40,
+          h: 7,
+          style: { font_size: 17, color: '#ffffff' },
+        },
+        {
+          id: 'role',
+          type: 'text',
+          content: 'ALTERNANT',
+          x: 45,
+          y: 8,
+          w: 32,
+          h: 5,
+          style: { font_size: 11, color: '#ffffff' },
+        },
+      ],
+    }],
+  });
+  const { layout: out } = bindStructuralTextToSemanticBlocks(layout, {
+    prenom: 'Louis',
+    nom: 'Vedovato',
+    titre_professionnel: 'ALTERNANT',
+  });
+  const role = out.pages[0].blocks.find((b) => b.id === 'role');
+  assert.equal(role?.type, 'text');
+  assert.equal(role.content, 'ALTERNANT');
+});
+
+test('prune ne retire pas un téléphone si le contact voisin ne le porte pas', () => {
+  const layout = {
+    pages: [{
+      blocks: [
+        {
+          id: 'mail',
+          type: 'contact',
+          bind: ['email'],
+          content: '',
+          x: 50,
+          y: 26,
+          w: 40,
+          h: 5,
+        },
+        {
+          id: 'phone',
+          type: 'text',
+          content: '+33 7 83 61 45 30',
+          x: 50,
+          y: 20,
+          w: 36,
+          h: 5,
+        },
+      ],
+    }],
+  };
+  const out = pruneInPlaceImportDuplicates(layout, {
+    email: 'ada@example.com',
+    telephone: '+33 7 83 61 45 30',
+  });
+  const ids = out.pages[0].blocks.map((b) => b.id);
+  assert.ok(ids.includes('phone'));
 });
 
 test('bind : titre seul (corps autre colonne) reste un title, pas un widget experiences', () => {
