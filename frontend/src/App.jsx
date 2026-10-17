@@ -3861,9 +3861,17 @@ export default function App() {
                             : m.content}
                           {m.role === 'user' && Array.isArray(m.attachments) && m.attachments.length > 0 && (
                             <span className="cv-chat-msg-files">
-                              {m.attachments.map((name) => (
-                                <span key={name} className="cv-chat-doc-chip">{name}</span>
-                              ))}
+                              {m.attachments.map((name) => {
+                                const ext = String(name).split('.').pop()?.toLowerCase();
+                                const kind = ext === 'pdf' ? 'PDF' : ext === 'docx' ? 'DOCX' : 'Fichier';
+                                return (
+                                  <span key={name} className="cv-chat-msg-file" title={name}>
+                                    <HiDocumentText aria-hidden="true" />
+                                    <span className="cv-chat-msg-file-name">{name}</span>
+                                    <span className="cv-chat-msg-file-kind">{kind}</span>
+                                  </span>
+                                );
+                              })}
                             </span>
                           )}
                           {m.role === 'user' && typeof m.content === 'string' && m.content.length > 280 ? (
