@@ -2564,6 +2564,21 @@ def _send_support_ticket_email(
         return support_ticket_failure_detail(e, production=IS_PRODUCTION)
 
 
+class PasswordSetupBody(BaseModel):
+    email: str = ""
+
+
+@app.post("/api/auth/password-setup")
+def api_password_setup(body: PasswordSetupBody):
+    """Si l'e-mail est déjà un compte social, prépare un mot de passe sur ce même compte."""
+    from backend.rate_limit import check_rate_limit
+    from backend.services.account_password_link import password_setup_for_email
+
+    email = (body.email or "").strip().lower()
+    check_rate_limit(email or "anon", max_requests=5, scope="password-setup")
+    return password_setup_for_email(email)
+
+
 @app.post("/api/support-ticket")
 def api_support_ticket(request: Request, body: SupportTicketBody):
     """Ouvre un ticket support : envoie un email au support (Reply-To = user) pour que vous répondiez par mail."""
