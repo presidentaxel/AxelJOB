@@ -90,7 +90,7 @@ export default function LandingPage({ onCtaClick, onProClick }) {
               <Link to="/modeles-cv" {...analyticsAttrs('nav-link-modeles', 'header', 'tertiary', 'nav')}>{landingText.navModelesShort}</Link>
               <Link to="/guide-cv" {...analyticsAttrs('nav-link-guide', 'header', 'tertiary', 'nav')}>{landingText.navGuide}</Link>
               <Button type="button" variant="primary" className="landing-cta-nav" onClick={() => goLogin('nav-cta-signup', onCtaClick)} {...analyticsAttrs('nav-cta-signup', 'header', 'primary', 'cta')}>
-                {landingText.ctaTry}
+                {landingText.ctaLogin}
               </Button>
             </nav>
             <div className="landing-header-mobile-actions">
@@ -158,7 +158,7 @@ export default function LandingPage({ onCtaClick, onProClick }) {
               </ul>
               <div className="landing-nav-drawer-cta">
                 <Button type="button" variant="primary" onClick={() => { closeMenu(); goLogin('nav-cta-drawer', onCtaClick); }} {...analyticsAttrs('nav-cta-drawer', 'drawer', 'primary', 'cta')}>
-                  {landingText.ctaTry}
+                  {landingText.ctaLogin}
                 </Button>
               </div>
             </nav>

@@ -66,6 +66,7 @@ export const landingText = {
   navPricing: 'Tarifs',
   navFeatures: 'Fonctionnalités',
   ctaTry: 'Essayer gratuitement',
+  ctaLogin: 'Se connecter',
   ctaStart: 'Commencer',
   heroTitle: 'Passe les filtres automatiques. Décroche des entretiens en 1 clic.',
   heroSubtitle:
