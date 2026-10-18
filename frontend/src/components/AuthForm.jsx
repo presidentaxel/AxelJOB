@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { apiPost } from '../api';
 import { userFacingAuthError } from '../lib/userFacingError.js';
@@ -9,8 +10,10 @@ import {
   emitSignUpStartOnce,
   hydratePlanIntentFromSearch,
 } from '../../public/signupAttribution.js';
+import { AUTH_PATHS, authModeFromPath } from '../lib/authPaths.js';
 import Button from './ui/Button.jsx';
 import Input from './ui/Input.jsx';
+import PasswordInput from './ui/PasswordInput.jsx';
 import '../styles/AuthForm.css';
 
 function GoogleIcon() {
@@ -33,17 +36,26 @@ function LinkedInIcon({ className }) {
 }
 
 export default function AuthForm({ onSuccess, linkedInOnly = false }) {
+  const navigate = useNavigate();
+  const { pathname } = useLocation();
+  const mode = authModeFromPath(pathname) || 'signin';
+  const isSignUp = mode === 'signup';
+  const resetMode = mode === 'reset';
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [passwordConfirm, setPasswordConfirm] = useState('');
-  const [isSignUp, setIsSignUp] = useState(false);
   const [loading, setLoading] = useState(false);
   const [linkedInLoading, setLinkedInLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
-  const [resetMode, setResetMode] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [showAlreadyHadAccountPopup, setShowAlreadyHadAccountPopup] = useState(false);
+
+  useEffect(() => {
+    setError('');
+    setMessage('');
+    setPasswordConfirm('');
+  }, [mode]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return undefined;
@@ -167,9 +179,9 @@ export default function AuthForm({ onSuccess, linkedInOnly = false }) {
           if (!signInErr) {
             setShowAlreadyHadAccountPopup(true);
           } else if (await offerPasswordForSocialAccount()) {
-            setIsSignUp(false);
+            navigate(AUTH_PATHS.signin);
           } else {
-            setIsSignUp(false);
+            navigate(AUTH_PATHS.signin);
             setError('Vous avez déjà un compte mais le mot de passe saisi est incorrect.');
           }
           setLoading(false);
@@ -234,6 +246,8 @@ export default function AuthForm({ onSuccess, linkedInOnly = false }) {
         </div>
       )}
     <form className="auth-form" onSubmit={handleSubmit}>
+      {!resetMode && (
+        <>
       <button
         type="button"
         className="auth-google-btn"
@@ -255,6 +269,8 @@ export default function AuthForm({ onSuccess, linkedInOnly = false }) {
         <span>{linkedInLoading ? 'Redirection…' : 'Continuer avec LinkedIn'}</span>
       </button>
       <span className="auth-divider">ou</span>
+        </>
+      )}
       <Input
         type="email"
         placeholder="Email"
@@ -269,8 +285,7 @@ export default function AuthForm({ onSuccess, linkedInOnly = false }) {
       <p className="auth-field-hint" id="auth-email-hint">Obligatoire</p>
       {!resetMode && (
         <>
-        <Input
-          type="password"
+        <PasswordInput
           placeholder="Mot de passe"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
@@ -286,8 +301,7 @@ export default function AuthForm({ onSuccess, linkedInOnly = false }) {
         )}
         {isSignUp && (
           <>
-            <Input
-              type="password"
+            <PasswordInput
               placeholder="Confirmer le mot de passe"
               value={passwordConfirm}
               onChange={(e) => setPasswordConfirm(e.target.value)}
@@ -310,11 +324,11 @@ export default function AuthForm({ onSuccess, linkedInOnly = false }) {
         {loading ? '…' : resetMode ? 'Envoyer le lien' : isSignUp ? 'Créer un compte' : 'Se connecter'}
       </Button>
       {!resetMode && (
-        <button type="button" className="auth-toggle" onClick={() => { setResetMode(true); setError(''); setMessage(''); }} {...analyticsAttrs('login-link-forgot', 'login', 'tertiary', 'nav')}>
+        <button type="button" className="auth-toggle" onClick={() => navigate(AUTH_PATHS.reset)} {...analyticsAttrs('login-link-forgot', 'login', 'tertiary', 'nav')}>
           Mot de passe oublié ?
         </button>
       )}
-      <button type="button" className="auth-toggle" onClick={() => { setIsSignUp((v) => !v); setPasswordConfirm(''); setResetMode(false); setError(''); setMessage(''); }} {...analyticsAttrs('login-link-toggle', 'login', 'tertiary', 'nav')}>
+      <button type="button" className="auth-toggle" onClick={() => navigate(resetMode || isSignUp ? AUTH_PATHS.signin : AUTH_PATHS.signup)} {...analyticsAttrs('login-link-toggle', 'login', 'tertiary', 'nav')}>
         {resetMode ? '← Retour à la connexion' : isSignUp ? 'Déjà un compte ? Se connecter' : 'Pas de compte ? Créer un compte'}
       </button>
     </form>

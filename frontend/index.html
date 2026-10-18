@@ -158,7 +158,7 @@ a.ds-button{text-decoration:none}
     <script>
       (function(){
         var p = window.location.pathname;
-        var appOrLogin = p.indexOf('/app') === 0 || p === '/login';
+        var appOrLogin = p.indexOf('/app') === 0 || p === '/login' || p === '/inscription' || p === '/mot-de-passe-oublie';
         if (appOrLogin) {
           document.documentElement.classList.add('js-enabled');
           var s = document.createElement('style');
@@ -189,14 +189,11 @@ a.ds-button{text-decoration:none}
               <img src="/favicon.svg" alt="AxeL Job" class="landing-logo" />
               <span class="landing-brand">AxeL Job</span>
               <nav class="landing-nav" aria-label="Navigation principale">
-                <a href="#comment" data-attr="nav-link-how" data-track="nav" data-zone="header" data-level="tertiary">Comment ça marche</a>
-                <a href="#tarifs" data-attr="nav-link-pricing" data-track="nav" data-zone="header" data-level="tertiary">Tarifs</a>
-                <a href="#features" data-attr="nav-link-features" data-track="nav" data-zone="header" data-level="tertiary">Fonctionnalités</a>
                 <a href="/ats" data-attr="nav-link-ats" data-track="nav" data-zone="header" data-level="tertiary">Qu'est-ce que l'ATS ?</a>
                 <a href="/faq" data-attr="nav-link-faq" data-track="nav" data-zone="header" data-level="tertiary">FAQ</a>
                 <a href="/modeles-cv" data-attr="nav-link-modeles" data-track="nav" data-zone="header" data-level="tertiary">Modèles CV</a>
                 <a href="/guide-cv" data-attr="nav-link-guide" data-track="nav" data-zone="header" data-level="tertiary">Guide CV</a>
-                <a href="/login" class="ds-button ds-button--primary ds-button--md landing-cta-nav" data-attr="nav-cta-signup" data-track="cta" data-zone="header" data-level="primary">Essayer gratuitement</a>
+                <a href="/login" class="ds-button ds-button--primary ds-button--md landing-cta-nav" data-attr="nav-cta-signup" data-track="cta" data-zone="header" data-level="primary">Se connecter</a>
               </nav>
               <a href="/login" class="landing-mobile-cta ds-button ds-button--primary ds-button--md" data-attr="nav-cta-start" data-track="cta" data-zone="header" data-level="primary">Commencer</a>
             </div>

@@ -82,15 +82,12 @@ export default function LandingPage({ onCtaClick, onProClick }) {
             <img src="/favicon.svg" alt="AxeL Job" className="landing-logo" />
             <span className="landing-brand">{landingText.brand}</span>
             <nav className="landing-nav" aria-label="Navigation principale">
-              <a href="#comment" {...analyticsAttrs('nav-link-how', 'header', 'tertiary', 'nav')}>{landingText.navHow}</a>
-              <a href="#tarifs" {...analyticsAttrs('nav-link-pricing', 'header', 'tertiary', 'nav')}>{landingText.navPricing}</a>
-              <a href="#features" {...analyticsAttrs('nav-link-features', 'header', 'tertiary', 'nav')}>{landingText.navFeatures}</a>
               <Link to="/ats" {...analyticsAttrs('nav-link-ats', 'header', 'tertiary', 'nav')}>{landingText.atsLink}</Link>
               <Link to="/faq" {...analyticsAttrs('nav-link-faq', 'header', 'tertiary', 'nav')}>{landingText.footerFaq}</Link>
               <Link to="/modeles-cv" {...analyticsAttrs('nav-link-modeles', 'header', 'tertiary', 'nav')}>{landingText.navModelesShort}</Link>
               <Link to="/guide-cv" {...analyticsAttrs('nav-link-guide', 'header', 'tertiary', 'nav')}>{landingText.navGuide}</Link>
               <Button type="button" variant="primary" className="landing-cta-nav" onClick={() => goLogin('nav-cta-signup', onCtaClick)} {...analyticsAttrs('nav-cta-signup', 'header', 'primary', 'cta')}>
-                {landingText.ctaTry}
+                {landingText.ctaLogin}
               </Button>
             </nav>
             <div className="landing-header-mobile-actions">
@@ -130,18 +127,6 @@ export default function LandingPage({ onCtaClick, onProClick }) {
               </button>
             </div>
             <nav className="landing-nav-drawer-body" aria-label="Navigation mobile">
-              <p className="landing-nav-drawer-section-label">Sur cette page</p>
-              <ul className="landing-nav-drawer-list">
-                <li>
-                  <a href="#comment" onClick={closeMenu}>{landingText.navHow}</a>
-                </li>
-                <li>
-                  <a href="#tarifs" onClick={closeMenu}>{landingText.navPricing}</a>
-                </li>
-                <li>
-                  <a href="#features" onClick={closeMenu}>{landingText.navFeatures}</a>
-                </li>
-              </ul>
               <p className="landing-nav-drawer-section-label">Articles &amp; guides</p>
               <ul className="landing-nav-drawer-list">
                 {ARTICLE_NAV_LINKS.map(({ to, label }) => (
@@ -158,7 +143,7 @@ export default function LandingPage({ onCtaClick, onProClick }) {
               </ul>
               <div className="landing-nav-drawer-cta">
                 <Button type="button" variant="primary" onClick={() => { closeMenu(); goLogin('nav-cta-drawer', onCtaClick); }} {...analyticsAttrs('nav-cta-drawer', 'drawer', 'primary', 'cta')}>
-                  {landingText.ctaTry}
+                  {landingText.ctaLogin}
                 </Button>
               </div>
             </nav>

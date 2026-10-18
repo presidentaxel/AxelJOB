@@ -127,7 +127,6 @@ def _get_cached_user_plan_state(uid: str) -> tuple[str, bool, int, int]:
     return plan, pw, bonus, anchor
 
 
-CV_BASE_PATH = BASE_DIR / "cv_base.json"
 ADAPTATIONS_DIR = BASE_DIR / "adaptations"
 
 # --- Supabase client (lazy) ---
@@ -378,40 +377,31 @@ def _cv_row_id(user_id: str | None) -> str:
 
 
 def load_cv_base(user_id: str | None = None) -> dict:
-    """Charge le CV depuis Supabase (id=user_id). Avec Supabase configuré : jamais de lecture de cv_base.json, uniquement la table Supabase."""
+    """Charge le CV depuis Supabase (id=user_id). Pas de fichier local."""
     row_id = _cv_row_id(user_id)
     sb = _get_supabase()
-    if sb:
-        if USE_SUPABASE_PG:
-            try:
-                from backend import supabase_pg as spg
-
-                data = spg.load_cv_base_data(row_id)
-                if data is not None:
-                    return data
-            except Exception as e:
-                _warn_pg_fallback("load_cv_base", e)
+    if not sb:
+        raise RuntimeError("Supabase requis pour charger le CV.")
+    if USE_SUPABASE_PG:
         try:
-            r = sb.table("cv_base").select("data").eq("id", row_id).limit(1).execute()
-            if r.data and len(r.data) > 0 and r.data[0].get("data"):
-                return r.data[0]["data"]
-        except Exception:
-            pass
-        # Supabase configuré : on ne lit jamais cv_base.json (données exclusivement Supabase)
-        # Pour un utilisateur connecté (row_id != "default"), ne jamais retourner le CV d'exemple :
-        # un PATCH/autre save pourrait le persister et écraser le profil (bug "Marie Dupont").
-        if row_id != "default":
-            return {}
-        raise FileNotFoundError("Aucun CV. Connecte-toi puis complète ton profil (onglet Profil).")
-    # Pas de Supabase : fallback fichier uniquement pour default
-    if row_id == "default" and CV_BASE_PATH.exists():
-        with open(CV_BASE_PATH, encoding="utf-8") as f:
-            return json.load(f)
+            from backend import supabase_pg as spg
+
+            data = spg.load_cv_base_data(row_id)
+            if data is not None:
+                return data
+        except Exception as e:
+            _warn_pg_fallback("load_cv_base", e)
+    try:
+        r = sb.table("cv_base").select("data").eq("id", row_id).limit(1).execute()
+        if r.data and len(r.data) > 0 and r.data[0].get("data"):
+            return r.data[0]["data"]
+    except Exception:
+        pass
+    # Pour un utilisateur connecté (row_id != "default"), ne jamais retourner le CV d'exemple :
+    # un PATCH/autre save pourrait le persister et écraser le profil (bug "Marie Dupont").
     if row_id != "default":
         return {}
-    raise FileNotFoundError(
-        "cv_base.json introuvable. Complète ton profil via l'application ou crée le fichier localement."
-    )
+    raise FileNotFoundError("Aucun CV. Connecte-toi puis complète ton profil (onglet Profil).")
 
 
 def _is_example_cv_data(data: dict) -> bool:
@@ -425,7 +415,7 @@ def _is_example_cv_data(data: dict) -> bool:
 
 
 def save_cv_base(data: dict, user_id: str | None = None) -> None:
-    """Sauvegarde le CV de base dans Supabase ou dans cv_base.json (si default et pas Supabase).
+    """Sauvegarde le CV de base dans Supabase.
     Préserve template_id, template_options et layout existants si absents du payload (évite de
     perdre les réglages template / mise en page lors d'une sauvegarde qui ne les envoie pas)."""
     data = {k: v for k, v in data.items() if k != "__example__"}
@@ -467,11 +457,7 @@ def save_cv_base(data: dict, user_id: str | None = None) -> None:
             return
         except Exception:
             raise
-    if row_id == "default":
-        with open(CV_BASE_PATH, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
-    else:
-        raise RuntimeError("Supabase requis pour enregistrer le CV d'un utilisateur connecté.")
+    raise RuntimeError("Supabase requis pour enregistrer le CV.")
 
 
 # --- Photo CV : Supabase Storage (bucket cv_photos privé) ---

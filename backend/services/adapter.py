@@ -5,7 +5,7 @@ L'IA ne modifie PAS le JSON complet : elle retourne uniquement des TWEAKS :
 - resume (texte réécrit)
 - experiences : liste de { id, bullet_points } (même ordre et ids que le CV source)
 - mots_cles_cache : chaîne de mots-clés/phrases pour la section ATS invisible (même couleur que le fond)
-On fusionne ces tweaks avec cv_base côté app ; cv_base.json n'est jamais écrit.
+On fusionne ces tweaks avec le CV de base côté app. Le profil vit dans Supabase, pas dans un fichier.
 """
 
 import json

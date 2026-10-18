@@ -27,7 +27,7 @@ const sentryRelease = resolveSentryReleaseName({
 const STATIC_ROUTES = ['/ats', '/faq', '/guide-cv', '/modeles-cv', '/erreurs-cv', '/cv-par-metier', '/cv-adapte-chaque-offre', '/mentions-legales', '/confidentialite', '/cgu']
 
 /** En dev, /login reste sur index.html (bundle + injection CSS). En preview, servir dist/login.html comme en prod. */
-const PREVIEW_STATIC_ROUTES = [...STATIC_ROUTES, '/login']
+const PREVIEW_STATIC_ROUTES = [...STATIC_ROUTES, '/login', '/inscription', '/mot-de-passe-oublie']
 
 function staticPagesPlugin() {
   return {

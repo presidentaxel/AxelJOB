@@ -26,12 +26,14 @@ import { supabaseConfigMessage } from './lib/userFacingError.js';
 import { fetchAuthSessionWithTimeout } from './lib/supabaseAuthSession';
 import { analyticsAttrs } from './lib/analyticsAttrs.js';
 import AuthForm from './components/AuthForm';
+import { authModeFromPath, isAuthPath } from './lib/authPaths.js';
 import AppTopbar from './components/AppTopbar';
 import CompanyLogo from './components/CompanyLogo';
 import CandidatureBoardCard from './components/CandidatureBoardCard';
 import { NotFoundPage } from './components/ErrorPages';
 import Button from './components/ui/Button.jsx';
 import Input from './components/ui/Input.jsx';
+import PasswordInput from './components/ui/PasswordInput.jsx';
 import AdaptLanguageChoiceDialog from './components/ui/AdaptLanguageChoiceDialog.jsx';
 import { CONTACT_EMAIL, STORAGE_EXPORT_DIR, STORAGE_EXPORT_ATS_BLOCK_SNOOZE, STORAGE_PRE_EXPORT_TEMPLATE_OPTIONS_DONE, STORAGE_PDF_EXPORT_FILENAME_PATTERN, STATUT_LABELS, KANBAN_COLUMNS, getExportFolderName } from './constants';
 import { buildAdaptedPdfFilename } from './lib/pdfExportFilename';
@@ -210,8 +212,7 @@ function RecoveryPasswordForm({ onDone }) {
         <h1>Nouveau mot de passe</h1>
         <p className="login-screen-intro">Choisis un nouveau mot de passe pour ton compte.</p>
         <form className="auth-form" onSubmit={handleSubmit}>
-          <Input
-            type="password"
+          <PasswordInput
             placeholder="Nouveau mot de passe"
             value={password}
             onChange={(e) => {
@@ -226,8 +227,7 @@ function RecoveryPasswordForm({ onDone }) {
             minLength={6}
             invalid={invalidField === 'password'}
           />
-          <Input
-            type="password"
+          <PasswordInput
             placeholder="Confirmer le mot de passe"
             value={confirm}
             onChange={(e) => {
@@ -1027,6 +1027,8 @@ export default function App() {
       '/faq': "CV, ATS et IA : les réponses aux questions que tout le monde se pose | AxeL Job",
       '/ats': "ATS : qu'est-ce que c'est et comment ça fonctionne vraiment ? | AxeL Job",
       '/login': "Connexion | AxeL Job",
+      '/inscription': "Inscription | AxeL Job",
+      '/mot-de-passe-oublie': "Mot de passe oublié | AxeL Job",
       '/modeles-cv': "Modèles de CV : comment choisir un template qui passe l'ATS et convainc un recruteur | AxeL Job",
       '/guide-cv': "Comment faire un bon CV en 2025 : les règles qui font vraiment la différence | AxeL Job",
       '/erreurs-cv': "Les 7 erreurs les plus courantes dans un CV (et comment les corriger) | AxeL Job",
@@ -1328,7 +1330,7 @@ export default function App() {
     if (!supabase) return;
     if (session) {
       const params = new URLSearchParams(location.search);
-      if (pathname === '/' || pathname === '/login') {
+      if (pathname === '/' || isAuthPath(pathname)) {
         if (wantsProCheckout(location.search)) {
           consumePlanIntentIfPro();
           navigate(APP_DEFAULT_ROUTE, { replace: true });
@@ -3528,7 +3530,9 @@ export default function App() {
 
   /* Non connecté : login visible tout de suite (AXE-372), sans attendre getSession. */
   if (!session) {
-    if (pathname === '/login') {
+    const authMode = authModeFromPath(pathname);
+    if (authMode) {
+      const authTitle = authMode === 'signup' ? 'Créer un compte' : authMode === 'reset' ? 'Mot de passe oublié' : 'Connexion';
       return (
         <div className="login-screen" data-section="login">
           <button type="button" className="login-screen-back" onClick={() => navigate('/')} aria-label="Retour à l'accueil" {...analyticsAttrs('nav-link-back', 'header', 'tertiary', 'nav')}>
@@ -3536,7 +3540,7 @@ export default function App() {
           </button>
           <div className="login-screen-card">
             <img src="/favicon.svg" alt="AxeL Job" className="login-screen-logo" />
-            <h1>AxeL Job</h1>
+            <h1>{authTitle}</h1>
             <p className="login-screen-intro">Adapte ton CV à chaque offre en quelques secondes.</p>
             {loginOtpExpired && (
               <div className="auth-error" style={{ marginBottom: '1rem' }}>
@@ -3564,7 +3568,7 @@ export default function App() {
   }
 
   /* Connecté : redirection / ou /login vers /app (useEffect) ; pages publiques hors /app ; sinon 404 */
-  if (!authLoading && session && (pathname === '/' || pathname === '/login')) {
+  if (!authLoading && session && (pathname === '/' || isAuthPath(pathname))) {
     return (
       <div className="app-shell" style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <span aria-live="polite">Chargement…</span>

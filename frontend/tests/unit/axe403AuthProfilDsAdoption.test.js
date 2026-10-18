@@ -48,7 +48,7 @@ test('AuthForm / Reauth / Profil importent Input pour les champs texte', async (
   assert.match(profile, /import Input from '\.\/ui\/Input\.jsx'/);
   assert.match(app, /import Input from '\.\/components\/ui\/Input\.jsx'/);
   assert.match(auth, /<Input\s+type="email"/);
-  assert.match(auth, /<Input\s+type="password"/);
+  assert.match(auth, /<PasswordInput/);
   assert.match(profile, /<Input type="text"/);
   assert.doesNotMatch(app, /className="button button-primary auth-submit"/);
 });

@@ -251,3 +251,40 @@
   font-size: 0.75rem;
   color: var(--ds-color-text-muted);
 }
+
+.auth-password-field {
+  position: relative;
+}
+
+.auth-password-field .ds-input,
+.auth-password-field .auth-input {
+  width: 100%;
+  padding-right: 2.5rem;
+}
+
+.auth-password-toggle {
+  position: absolute;
+  top: 0;
+  right: 0.125rem;
+  bottom: var(--ds-space-sm);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: auto;
+  padding: 0;
+  border: 0;
+  border-radius: var(--ds-radius-action, 32px);
+  background: transparent;
+  color: var(--ds-color-text-muted);
+  cursor: pointer;
+}
+
+.auth-password-toggle:hover {
+  color: var(--ds-color-text-default);
+}
+
+.auth-password-toggle:focus-visible {
+  outline: 2px solid var(--ds-color-border-focus);
+  outline-offset: 2px;
+}

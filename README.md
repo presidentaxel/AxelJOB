@@ -290,7 +290,6 @@ Il faut un reverse proxy externe (Caddy, nginx, ou Cloudflare) pour HTTPS.
 | Fichier / dossier | Role |
 |-------------------|------|
 | `docs/examples/cv_base_vierge.json` | Structure vide du CV (template) |
-| `cv_base.json` | Ton CV de base (gitignore) |
 | `adaptations/` | Adaptations par offre (gitignore) |
 | `logs/` | Logs structures JSONL (gitignore) |
 | `assets/` | Photo CV (gitignore) |
