@@ -3,6 +3,7 @@ import DOMPurify from 'dompurify';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   apiGet,
+  clearApiOutageCooldown,
   apiPost,
   apiPostStream,
   apiPatch,
@@ -36,7 +37,7 @@ import { CONTACT_EMAIL, STORAGE_EXPORT_DIR, STORAGE_EXPORT_ATS_BLOCK_SNOOZE, STO
 import { buildAdaptedPdfFilename } from './lib/pdfExportFilename';
 import { getPdfSaveStartInDirectoryHandle } from './lib/pdfExportStartDirIdb';
 import { HiDocumentText, HiArrowDownTray, HiClipboardDocumentList, HiPencilSquare, HiChatBubbleLeftRight, HiCheck, HiSwatch, HiChevronDown, HiChevronUp, HiPlus, HiOutlinePaperClip } from 'react-icons/hi2';
-import { lazyWithChunkReload, clearChunkErrorReloadKey } from './lib/lazyChunkReload';
+import { lazyWithChunkReload } from './lib/lazyChunkReload';
 import { APP_DEFAULT_ROUTE, APP_ROUTES, getViewFromPathname, isKnownAppPathname } from './lib/appRoutes';
 import {
   ADAPT_CONTEXT_MAX_FILES,
@@ -1043,11 +1044,6 @@ export default function App() {
     if (pathname.startsWith('/app')) document.title = "AxeL Job - Adapter ton CV à l'offre";
   }, [pathname]);
 
-  // Après chargement réussi, réinitialiser le flag de reload chunk (pour un futur déploiement)
-  useEffect(() => {
-    clearChunkErrorReloadKey();
-  }, []);
-
   // Meta robots : sync client sur les routes SPA ; en prod /login sert login.html (noindex déjà dans le HTML)
   useEffect(() => {
     syncRobotsMeta(pathname);
@@ -1267,7 +1263,9 @@ export default function App() {
       })
       .catch((error) => {
         if (controller.signal.aborted || error?.name === 'AbortError') return;
-        setProfileCvLoadError('Impossible de charger ton profil. Vérifie ta connexion puis réessaie.');
+        setProfileCvLoadError(
+          error?.message || 'Impossible de charger ton profil. Vérifie ta connexion puis réessaie.',
+        );
         setNeedsOnboarding(false);
       })
       .finally(() => {
@@ -3618,7 +3616,14 @@ export default function App() {
             <h1 id="profile-load-err-title">Profil inaccessible</h1>
             <p className="app-mobile-gate-lead">{profileCvLoadError}</p>
             <div className="app-mobile-gate-actions">
-              <Button type="button" variant="primary" onClick={() => setProfileRefreshKey((k) => k + 1)}>
+              <Button
+                type="button"
+                variant="primary"
+                onClick={() => {
+                  clearApiOutageCooldown();
+                  setProfileRefreshKey((k) => k + 1);
+                }}
+              >
                 Réessayer
               </Button>
               <Button

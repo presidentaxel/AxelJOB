@@ -5,6 +5,21 @@
  */
 import { CHUNK_UPDATE_MESSAGE } from './lib/userFacingError.js'
 
+const CHUNK_RELOAD_KEY = 'chunkErrorReloadAt'
+const CHUNK_RELOAD_WINDOW_MS = 60_000
+
+function reloadOnceForChunkError() {
+  try {
+    const at = Number(sessionStorage.getItem(CHUNK_RELOAD_KEY) || 0)
+    if (Number.isFinite(at) && at > 0 && Date.now() - at < CHUNK_RELOAD_WINDOW_MS) return false
+    sessionStorage.setItem(CHUNK_RELOAD_KEY, String(Date.now()))
+  } catch {
+    return false
+  }
+  window.location.reload()
+  return true
+}
+
 function isChunkLoadError(err) {
   const msg = err?.message || ''
   return (
@@ -20,11 +35,7 @@ const loadSpa = p === '/' || p === '/login' || p.indexOf('/app') === 0
 if (loadSpa) {
   import('./main.jsx').catch((err) => {
     if (typeof window !== 'undefined' && isChunkLoadError(err)) {
-      if (!sessionStorage.getItem('chunkErrorReload')) {
-        sessionStorage.setItem('chunkErrorReload', '1')
-        window.location.reload()
-        return
-      }
+      if (reloadOnceForChunkError()) return
       const root = document.getElementById('root')
       if (root) root.textContent = CHUNK_UPDATE_MESSAGE
     }

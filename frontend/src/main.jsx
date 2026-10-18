@@ -16,22 +16,10 @@ export function ScrollToTop() {
   return null
 }
 
-export function ChunkErrorReloadReset() {
-  useEffect(() => {
-    try {
-      sessionStorage.removeItem('chunkErrorReload')
-    } catch {
-      /* ignore */
-    }
-  }, [])
-  return null
-}
-
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <BrowserRouter>
       <ScrollToTop />
-      <ChunkErrorReloadReset />
       <AppErrorBoundary>
         <App />
       </AppErrorBoundary>

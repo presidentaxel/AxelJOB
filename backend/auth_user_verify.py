@@ -14,10 +14,12 @@ import time
 from collections import OrderedDict
 
 from fastapi import HTTPException
+from supabase_auth.errors import AuthApiError
 
 from backend.config import USE_SUPABASE, USE_SUPABASE_PG
 
 logger = logging.getLogger(__name__)
+
 
 _lock = threading.Lock()
 # uid -> monotonic time until which we trust "user exists"
@@ -69,8 +71,6 @@ def _exists_via_rest(uid: str) -> bool | None:
         logger.warning("auth get_user_by_id: client Supabase absent")
         return None
     try:
-        from gotrue.errors import AuthApiError
-
         resp = sb.auth.admin.get_user_by_id(uid)
         user = getattr(resp, "user", None) if resp is not None else None
         return user is not None

@@ -748,8 +748,20 @@ def _get_user_id(request: Request) -> str | None:
     except HTTPException:
         raise
     except Exception as e:
+        from backend.supabase_pg import is_pg_connect_outage
+
+        if is_pg_connect_outage(e):
+            logger.warning("user check unavailable (postgres): %s", e)
+            raise HTTPException(
+                status_code=503,
+                detail=(
+                    "Impossible de vérifier ton compte pour le moment. "
+                    "Réessaie dans quelques secondes."
+                ),
+            ) from e
         hint = ""
-        if "not yet valid" in str(e).lower() or "iat" in str(e).lower():
+        message = str(e).lower()
+        if "not yet valid" in message or "iat" in message:
             hint = " (décalage horaire ? synchronise l’horloge ou augmente JWT_LEEWAY_SECONDS)"
         logger.warning(
             "JWT post-decode user check failed: %s%s",

@@ -26,6 +26,23 @@ const getApiUrl = () => import.meta.env.VITE_API_URL || '';
 
 let authToken = null;
 let onUnauthorized = null;
+let apiOutageUntil = 0;
+const API_OUTAGE_COOLDOWN_MS = 20_000;
+
+/** Ouvre à nouveau les appels après un 503, par exemple au clic sur Réessayer. */
+export function clearApiOutageCooldown() {
+  apiOutageUntil = 0;
+}
+
+function noteApiOutage() {
+  apiOutageUntil = Date.now() + API_OUTAGE_COOLDOWN_MS;
+}
+
+function apiOutageError() {
+  const err = new Error(userFacingHttpMessage(503, ''));
+  err.status = 503;
+  return err;
+}
 
 export function setAuthToken(token) {
   authToken = token || null;
@@ -53,10 +70,14 @@ function checkUnauthorized(r) {
 }
 
 async function fetchApi(url, options) {
+  if (Date.now() < apiOutageUntil) throw apiOutageError();
   try {
-    return await fetchWithDeadline(url, options);
+    const response = await fetchWithDeadline(url, options);
+    if (response.status >= 500) noteApiOutage();
+    return response;
   } catch (error) {
     if (error?.name === 'TimeoutError' || error?.name === 'AbortError') throw error;
+    noteApiOutage();
     const network = new Error(NETWORK_MESSAGE);
     network.name = 'NetworkError';
     throw network;
