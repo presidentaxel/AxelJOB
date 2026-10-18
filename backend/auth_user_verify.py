@@ -14,17 +14,11 @@ import time
 from collections import OrderedDict
 
 from fastapi import HTTPException
+from supabase_auth.errors import AuthApiError
 
 from backend.config import USE_SUPABASE, USE_SUPABASE_PG
 
 logger = logging.getLogger(__name__)
-
-try:
-    from supabase_auth.errors import AuthApiError
-except ImportError:  # pragma: no cover - repli si le paquet auth change de nom
-
-    class AuthApiError(Exception):
-        status: int | None = None
 
 
 _lock = threading.Lock()
