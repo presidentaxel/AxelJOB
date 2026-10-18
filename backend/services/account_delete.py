@@ -21,6 +21,23 @@ OWNED_ROW_DELETES: tuple[tuple[str, str, str], ...] = (
 )
 
 
+_ACTIVE_SUBSCRIPTION = frozenset({"active", "trialing"})
+
+
+def subscription_is_active(status: str | None) -> bool:
+    """Un abonnement Stripe encore facturable (actif ou essai)."""
+    return (status or "").strip().lower() in _ACTIVE_SUBSCRIPTION
+
+
+def assert_subscription_cancel_confirmed(status: str | None, confirmed: bool) -> None:
+    """Refuse la suppression tant que l'abonnement actif n'est pas explicitement annulé."""
+    if subscription_is_active(status) and not confirmed:
+        raise HTTPException(
+            status_code=400,
+            detail="Confirme l'annulation de l'abonnement avant de supprimer le compte.",
+        )
+
+
 def owned_delete_params(user_id: str) -> list[tuple[str, tuple[str, ...]]]:
     """SQL paramétré limité à user_id. Refuse un id vide ou le profil local « default »."""
     uid = (user_id or "").strip()
