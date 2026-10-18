@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
+import { userFacingAuthError } from '../lib/userFacingError.js';
 import { analyticsAttrs } from '../lib/analyticsAttrs.js';
 import {
   currentLoginRedirectTo,
@@ -65,7 +66,7 @@ export default function AuthForm({ onSuccess, linkedInOnly = false }) {
       });
       if (err) throw err;
     } catch (err) {
-      setError(err.message || 'Connexion Google impossible.');
+      setError(userFacingAuthError(err) || 'Connexion Google impossible.');
       setGoogleLoading(false);
     }
   };
@@ -82,7 +83,7 @@ export default function AuthForm({ onSuccess, linkedInOnly = false }) {
       });
       if (err) throw err;
     } catch (err) {
-      setError(err.message || 'Connexion LinkedIn impossible.');
+      setError(userFacingAuthError(err) || 'Connexion LinkedIn impossible.');
       setLinkedInLoading(false);
     }
   };
@@ -103,12 +104,7 @@ export default function AuthForm({ onSuccess, linkedInOnly = false }) {
       if (err) throw err;
       setMessage('Email de réinitialisation envoyé. Vérifie ta boîte mail.');
     } catch (err) {
-      const msg = err?.message || '';
-      if (msg.toLowerCase().includes('rate limit') || msg.toLowerCase().includes('rate_limit') || err?.status === 429) {
-        setError('Trop de demandes d\'email envoyées (limite Supabase). Réessaie dans environ 1 heure ou utilise une autre adresse. Pour augmenter la limite : Supabase Dashboard → Authentication → SMTP (configurer un fournisseur personnalisé).');
-      } else {
-        setError(msg || 'Impossible d\'envoyer l\'email.');
-      }
+      setError(userFacingAuthError(err) || 'Impossible d\'envoyer l\'email.');
     } finally {
       setLoading(false);
     }
@@ -150,7 +146,7 @@ export default function AuthForm({ onSuccess, linkedInOnly = false }) {
         onSuccess?.();
       }
     } catch (err) {
-      setError(err.message || 'Erreur connexion.');
+      setError(userFacingAuthError(err) || 'Erreur connexion.');
     } finally {
       setLoading(false);
     }

@@ -3,6 +3,8 @@
  * Sur / : landing React (menu burger, navigation) ; le HTML statique dans #root est remplacé au montage.
  * Sur /ats, /faq, etc. : pages statiques (public/*.html) ou index sans bundle si autre stratégie de déploiement.
  */
+import { CHUNK_UPDATE_MESSAGE } from './lib/userFacingError.js'
+
 function isChunkLoadError(err) {
   const msg = err?.message || ''
   return (
@@ -23,6 +25,8 @@ if (loadSpa) {
         window.location.reload()
         return
       }
+      const root = document.getElementById('root')
+      if (root) root.textContent = CHUNK_UPDATE_MESSAGE
     }
     throw err
   })

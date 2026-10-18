@@ -3,6 +3,7 @@
  */
 import { defaultCv } from '../data/cvDefault.js';
 import { syncCvDualKeys } from './cvDualKey.js';
+import { userFacingHttpMessage } from './userFacingError.js';
 
 export const CV_IMPORT_SCALAR_KEYS = [
   { key: 'prenom', label: 'Prénom' },
@@ -343,14 +344,9 @@ export function isSparseImportedCv(cv) {
 export function onboardingImportErrorMessage(err) {
   const status = err?.status;
   const fallback = String(err?.message || '').trim();
-  if (status === 429) {
-    return fallback || 'Quota temporairement atteint. Réessaie dans un instant.';
-  }
-  if (status === 502) {
-    return fallback || 'L’analyse n’a pas abouti. Réessaie, ou colle le texte de ton CV.';
-  }
   if (status === 400) {
     return fallback || 'Impossible de lire ce fichier. Essaie un PDF texte, un Word, ou le copier-coller.';
   }
+  if (status) return userFacingHttpMessage(status, fallback);
   return fallback || 'Impossible d’analyser le CV. Réessaie ou saisis ton profil à la main.';
 }
