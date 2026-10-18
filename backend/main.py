@@ -32,7 +32,7 @@ from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
-from fastapi.responses import FileResponse, HTMLResponse, Response, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response, StreamingResponse
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, generate_latest
 from pydantic import BaseModel
 
@@ -64,6 +64,7 @@ from backend.config import (
 )
 from backend.cv_html_render import render_cv_html as _render_cv_html
 from backend.rate_limit import check_rate_limit, rate_limit_max_adapt
+from backend.services.public_error import public_http_detail
 from backend.services.support_ticket import support_ticket_failure_detail
 from backend.template_registry import DEFAULT_TEMPLATE_ID
 
@@ -157,6 +158,17 @@ app = FastAPI(
     docs_url=None if IS_PRODUCTION else "/docs",
     redoc_url=None if IS_PRODUCTION else "/redoc",
 )
+
+
+@app.exception_handler(HTTPException)
+async def _public_http_exception(request: Request, exc: HTTPException) -> JSONResponse:
+    """En production, ne renvoie pas les détails de config (clé API, Resend, webhook)."""
+    detail = public_http_detail(exc.status_code, exc.detail, production=IS_PRODUCTION)
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": detail},
+        headers=exc.headers or None,
+    )
 
 
 @app.on_event("startup")
