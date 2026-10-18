@@ -158,7 +158,7 @@ a.ds-button{text-decoration:none}
     <script>
       (function(){
         var p = window.location.pathname;
-        var appOrLogin = p.indexOf('/app') === 0 || p === '/login';
+        var appOrLogin = p.indexOf('/app') === 0 || p === '/login' || p === '/inscription' || p === '/mot-de-passe-oublie';
         if (appOrLogin) {
           document.documentElement.classList.add('js-enabled');
           var s = document.createElement('style');

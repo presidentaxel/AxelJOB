@@ -1,5 +1,5 @@
 /**
- * Entrée build Vite : charge l'app React sur /, /login et /app/*.
+ * Entrée build Vite : charge l'app React sur /, /login, /inscription, /mot-de-passe-oublie et /app/*.
  * Sur / : landing React (menu burger, navigation) ; le HTML statique dans #root est remplacé au montage.
  * Sur /ats, /faq, etc. : pages statiques (public/*.html) ou index sans bundle si autre stratégie de déploiement.
  */
@@ -31,7 +31,7 @@ function isChunkLoadError(err) {
 }
 
 const p = typeof window !== 'undefined' ? window.location.pathname : ''
-const loadSpa = p === '/' || p === '/login' || p.indexOf('/app') === 0
+const loadSpa = p === '/' || p === '/login' || p === '/inscription' || p === '/mot-de-passe-oublie' || p.indexOf('/app') === 0
 if (loadSpa) {
   import('./main.jsx').catch((err) => {
     if (typeof window !== 'undefined' && isChunkLoadError(err)) {

@@ -5,7 +5,7 @@
 const DEFAULT_ROBOTS =
   'index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1';
 
-const NOINDEX_PATHS = new Set(['/login', '/mentions-legales', '/confidentialite', '/cgu']);
+const NOINDEX_PATHS = new Set(['/login', '/inscription', '/mot-de-passe-oublie', '/mentions-legales', '/confidentialite', '/cgu']);
 
 export function syncRobotsMeta(pathname) {
   if (typeof document === 'undefined') return;
