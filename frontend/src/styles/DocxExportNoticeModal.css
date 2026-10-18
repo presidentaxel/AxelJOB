@@ -12,8 +12,8 @@
 .docx-export-notice-modal__card {
   width: min(400px, 100%);
   padding: 16px;
-  background: var(--color-canvas, #ffffff);
-  border: 1px solid var(--color-hairline, #d9d9dd);
+  background: var(--color-canvas);
+  border: 1px solid var(--color-hairline);
   border-radius: 16px;
 }
 
@@ -32,7 +32,7 @@
   font-weight: 400;
   letter-spacing: 0.28px;
   text-transform: uppercase;
-  color: var(--color-muted, #93939f);
+  color: var(--color-muted);
 }
 
 .docx-export-notice-modal__head h3 {
@@ -41,13 +41,13 @@
   font-size: 24px;
   font-weight: 400;
   line-height: 1.3;
-  color: var(--color-ink, #212121);
+  color: var(--color-ink);
 }
 
 .docx-export-notice-modal__close {
   border: 0;
   background: transparent;
-  color: var(--color-slate, #75758a);
+  color: var(--color-slate);
   font-size: 22px;
   line-height: 1;
   cursor: pointer;
@@ -58,7 +58,7 @@
   margin: 12px 0 0;
   font-size: 16px;
   line-height: 1.5;
-  color: var(--color-body-muted, #616161);
+  color: var(--color-body-muted);
 }
 
 .docx-export-notice-modal__check {
@@ -68,13 +68,13 @@
   margin-top: 14px;
   font-size: 14px;
   line-height: 1.4;
-  color: var(--color-ink, #212121);
+  color: var(--color-ink);
   cursor: pointer;
 }
 
 .docx-export-notice-modal__check input {
   margin-top: 2px;
-  accent-color: var(--color-primary, #17171c);
+  accent-color: var(--color-primary);
 }
 
 .docx-export-notice-modal__actions {
@@ -85,9 +85,9 @@
 }
 
 .docx-export-notice-modal__actions button {
-  border: 1px solid var(--color-primary, #17171c);
+  border: 1px solid var(--color-primary);
   background: transparent;
-  color: var(--color-primary, #17171c);
+  color: var(--color-primary);
   border-radius: 32px;
   padding: 8px 16px;
   font-size: 14px;
@@ -96,14 +96,14 @@
 }
 
 .docx-export-notice-modal__primary {
-  background: var(--color-primary, #17171c) !important;
-  color: var(--color-on-dark, #ffffff) !important;
-  border-color: var(--color-primary, #17171c) !important;
+  background: var(--color-primary) !important;
+  color: var(--color-on-dark) !important;
+  border-color: var(--color-primary) !important;
 }
 
 .docx-export-notice-modal__primary:focus-visible,
 .docx-export-notice-modal__actions button:focus-visible,
 .docx-export-notice-modal__close:focus-visible {
-  outline: 2px solid var(--color-focus-blue, #4c6ee6);
+  outline: 2px solid var(--color-focus-blue);
   outline-offset: 2px;
 }

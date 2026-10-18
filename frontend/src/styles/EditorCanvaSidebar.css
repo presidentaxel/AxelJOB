@@ -3,8 +3,8 @@
   display: flex;
   flex-shrink: 0;
   min-height: 0;
-  background: var(--color-soft-stone, #eeece7);
-  border-right: 1px solid var(--color-hairline, #d9d9dd);
+  background: var(--color-soft-stone);
+  border-right: 1px solid var(--color-hairline);
 }
 
 .editor-canva-rail {
@@ -13,8 +13,8 @@
   width: 56px;
   padding: 8px 4px;
   gap: 4px;
-  background: var(--color-canvas, #ffffff);
-  border-right: 1px solid var(--color-hairline, #d9d9dd);
+  background: var(--color-canvas);
+  border-right: 1px solid var(--color-hairline);
 }
 
 .editor-canva-rail__btn {
@@ -27,19 +27,19 @@
   border: none;
   border-radius: 8px;
   background: transparent;
-  color: var(--color-muted, #93939f);
+  color: var(--color-muted);
   cursor: pointer;
   transition: background 0.15s, color 0.15s;
 }
 
 .editor-canva-rail__btn:hover {
-  background: var(--color-soft-stone, #eeece7);
-  color: var(--color-ink, #212121);
+  background: var(--color-soft-stone);
+  color: var(--color-ink);
 }
 
 .editor-canva-rail__btn--active {
-  background: var(--color-pale-green, #edfce9);
-  color: var(--color-primary, #17171c);
+  background: var(--color-pale-green);
+  color: var(--color-primary);
 }
 
 .editor-canva-rail__label {
@@ -58,24 +58,24 @@
 
 .editor-canva-design-tabs__btn {
   padding: 6px 10px;
-  border: 1px solid var(--color-hairline, #d9d9dd);
+  border: 1px solid var(--color-hairline);
   border-radius: 9999px;
-  background: var(--color-canvas, #ffffff);
-  color: var(--color-body-muted, #616161);
+  background: var(--color-canvas);
+  color: var(--color-body-muted);
   font-size: 0.72rem;
   font-weight: 500;
   cursor: pointer;
 }
 
 .editor-canva-design-tabs__btn:hover {
-  border-color: var(--color-muted, #93939f);
-  color: var(--color-ink, #212121);
+  border-color: var(--color-muted);
+  color: var(--color-ink);
 }
 
 .editor-canva-design-tabs__btn--active {
-  border-color: var(--color-primary, #17171c);
-  background: var(--color-pale-green, #edfce9);
-  color: var(--color-primary, #17171c);
+  border-color: var(--color-primary);
+  background: var(--color-pale-green);
+  color: var(--color-primary);
 }
 
 .editor-canva-drawer__tile--section {
@@ -90,13 +90,13 @@
 .editor-canva-drawer__tile-label {
   font-size: 0.82rem;
   font-weight: 500;
-  color: var(--color-ink, #212121);
+  color: var(--color-ink);
 }
 
 .editor-canva-drawer__tile-hint {
   font-size: 0.68rem;
   line-height: 1.3;
-  color: var(--color-muted, #93939f);
+  color: var(--color-muted);
 }
 
 .editor-canva-drawer {
@@ -106,8 +106,8 @@
   padding: 16px 14px;
   overflow-x: hidden;
   overflow-y: auto;
-  background: var(--color-canvas, #ffffff);
-  border-right: 1px solid var(--color-hairline, #d9d9dd);
+  background: var(--color-canvas);
+  border-right: 1px solid var(--color-hairline);
   box-sizing: border-box;
 }
 
@@ -127,14 +127,14 @@
   margin: 0 0 10px;
   font-size: 0.9rem;
   font-weight: 500;
-  color: var(--color-ink, #212121);
+  color: var(--color-ink);
 }
 
 .editor-canva-drawer__subtitle {
   margin: 14px 0 8px;
   font-size: 0.72rem;
   font-weight: 500;
-  color: var(--color-muted, #93939f);
+  color: var(--color-muted);
   text-transform: uppercase;
   letter-spacing: 0.06em;
 }
@@ -142,7 +142,7 @@
 .editor-canva-drawer__hint {
   margin: 0 0 12px;
   font-size: 0.78rem;
-  color: var(--color-body-muted, #616161);
+  color: var(--color-body-muted);
   line-height: 1.4;
 }
 
@@ -154,17 +154,17 @@
   width: 100%;
   margin: 0 0 12px;
   padding: 12px 14px;
-  border: 1px solid var(--color-primary, #17171c);
+  border: 1px solid var(--color-primary);
   border-radius: 8px;
-  background: var(--color-primary, #17171c);
-  color: var(--color-on-dark, #fff);
+  background: var(--color-primary);
+  color: var(--color-on-dark);
   text-align: left;
   cursor: pointer;
   font-family: inherit;
 }
 
 .editor-canva-composer-cta:hover:not(:disabled) {
-  background: var(--color-ink, #212121);
+  background: var(--color-ink);
 }
 
 .editor-canva-composer-cta:disabled {
@@ -193,14 +193,14 @@
 .editor-canva-composer-cta--compact {
   margin: 0;
   padding: 8px 10px;
-  border-color: var(--color-hairline, #d9d9dd);
-  background: var(--color-canvas, #fff);
-  color: var(--color-ink, #212121);
+  border-color: var(--color-hairline);
+  background: var(--color-canvas);
+  color: var(--color-ink);
 }
 
 .editor-canva-composer-cta--compact:hover:not(:disabled) {
-  background: var(--color-soft-stone, #eeece7);
-  border-color: var(--color-primary, #17171c);
+  background: var(--color-soft-stone);
+  border-color: var(--color-primary);
 }
 
 .editor-canva-composer-cta--compact .editor-canva-composer-cta__label {
@@ -232,17 +232,17 @@
   font-size: 0.78rem;
   font-weight: 500;
   text-align: left;
-  border: 1px solid var(--color-hairline, #d9d9dd);
+  border: 1px solid var(--color-hairline);
   border-radius: 8px;
-  background: var(--color-canvas, #fff);
-  color: var(--color-ink, #212121);
+  background: var(--color-canvas);
+  color: var(--color-ink);
   cursor: pointer;
 }
 
 .editor-canva-drawer__btn:hover:not(:disabled),
 .editor-canva-drawer__tile:hover:not(:disabled) {
-  border-color: var(--color-slate, #75758a);
-  background: var(--color-soft-stone, #eeece7);
+  border-color: var(--color-slate);
+  background: var(--color-soft-stone);
 }
 
 .editor-canva-drawer__btn:disabled,
@@ -252,16 +252,16 @@
 }
 
 .editor-canva-drawer__btn--primary {
-  background: var(--color-primary, #17171c);
-  border-color: var(--color-primary, #17171c);
-  color: var(--color-on-dark, #fff);
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: var(--color-on-dark);
   text-align: center;
   border-radius: 32px;
 }
 
 .editor-canva-drawer__btn--primary:hover:not(:disabled) {
-  background: var(--color-ink, #212121);
-  border-color: var(--color-ink, #212121);
+  background: var(--color-ink);
+  border-color: var(--color-ink);
 }
 
 .editor-canva-drawer__field {
@@ -271,7 +271,7 @@
   margin-bottom: 10px;
   font-size: 0.72rem;
   font-weight: 500;
-  color: var(--color-body-muted, #616161);
+  color: var(--color-body-muted);
 }
 
 .editor-canva-drawer__field select,
@@ -280,7 +280,7 @@
   width: 100%;
   min-height: 35px;
   padding: 8px 10px;
-  border: 1px solid var(--color-hairline, #d9d9dd);
+  border: 1px solid var(--color-hairline);
   border-radius: 8px;
   font-size: 0.78rem;
 }
@@ -288,7 +288,7 @@
 .editor-canva-drawer__field select:focus-visible,
 .editor-canva-drawer__input:focus-visible {
   outline: none;
-  border-color: var(--color-form-focus, #9b60aa);
+  border-color: var(--color-form-focus);
 }
 
 .editor-canva-drawer__toggle {
@@ -297,14 +297,14 @@
   gap: 8px;
   margin-bottom: 10px;
   font-size: 0.8rem;
-  color: var(--color-ink, #212121);
+  color: var(--color-ink);
   cursor: pointer;
 }
 
 .editor-canva-drawer__proposal {
   padding: 8px;
   margin-bottom: 6px;
-  border: 1px solid var(--color-card-border, #f2f2f2);
+  border: 1px solid var(--color-card-border);
   border-radius: 8px;
   font-size: 0.78rem;
 }
@@ -312,9 +312,9 @@
 .editor-canva-drawer__proposal-actions button {
   padding: 2px 8px;
   font-size: 0.7rem;
-  border: 1px solid var(--color-hairline, #d9d9dd);
+  border: 1px solid var(--color-hairline);
   border-radius: 8px;
-  background: var(--color-canvas, #fff);
+  background: var(--color-canvas);
   cursor: pointer;
 }
 
@@ -341,15 +341,15 @@
   flex-direction: column;
   gap: 4px;
   padding: 0;
-  border: 1px solid var(--color-card-border, #f2f2f2);
+  border: 1px solid var(--color-card-border);
   border-radius: 8px;
   overflow: hidden;
-  background: var(--color-canvas, #fff);
+  background: var(--color-canvas);
   cursor: pointer;
 }
 
 .editor-canva-template-card:hover:not(:disabled) {
-  border-color: var(--color-slate, #75758a);
+  border-color: var(--color-slate);
 }
 
 .editor-canva-template-card__thumb {
@@ -363,7 +363,7 @@
   padding: 4px 6px 6px;
   font-size: 0.68rem;
   font-weight: 500;
-  color: var(--color-ink, #212121);
+  color: var(--color-ink);
   text-align: left;
 }
 
@@ -378,15 +378,15 @@
   align-items: center;
   justify-content: center;
   aspect-ratio: 1;
-  border: 1px solid var(--color-hairline, #d9d9dd);
+  border: 1px solid var(--color-hairline);
   border-radius: 8px;
-  background: var(--color-canvas, #fff);
+  background: var(--color-canvas);
   cursor: pointer;
 }
 
 .editor-canva-icon-tile:hover:not(:disabled) {
-  border-color: var(--color-slate, #75758a);
-  background: var(--color-soft-stone, #eeece7);
+  border-color: var(--color-slate);
+  background: var(--color-soft-stone);
 }
 
 .editor-canva-shell--placing .editor-canva-drawer__tile,
@@ -409,9 +409,9 @@
   gap: 8px;
   font-size: 0.72rem;
   font-weight: 500;
-  color: var(--color-ink, #212121);
-  background: var(--color-pale-green, #edfce9);
-  border: 1px solid var(--color-hairline, #d9d9dd);
+  color: var(--color-ink);
+  background: var(--color-pale-green);
+  border: 1px solid var(--color-hairline);
   border-radius: 8px;
   pointer-events: auto;
 }
@@ -424,24 +424,24 @@
 .editor-canva-shell__place-cancel {
   flex: 0 0 auto;
   padding: 4px 10px;
-  border: 1px solid var(--color-primary, #17171c);
+  border: 1px solid var(--color-primary);
   border-radius: 9999px;
-  background: var(--color-canvas, #ffffff);
-  color: var(--color-primary, #17171c);
+  background: var(--color-canvas);
+  color: var(--color-primary);
   font-size: 0.68rem;
   font-weight: 500;
   cursor: pointer;
 }
 
 .editor-canva-shell__place-cancel:focus-visible {
-  outline: 2px solid var(--color-focus-blue, #4c6ee6);
+  outline: 2px solid var(--color-focus-blue);
   outline-offset: 2px;
 }
 
 .editor-canva-drawer__hint--subtle {
   margin: 0 0 8px;
   font-size: 0.72rem;
-  color: var(--color-muted, #93939f);
+  color: var(--color-muted);
 }
 
 .editor-canva-drawer__shape-grid {
@@ -479,7 +479,7 @@
   font-size: 0.65rem;
   font-weight: 500;
   line-height: 1.2;
-  color: var(--color-body-muted, #616161);
+  color: var(--color-body-muted);
 }
 
 .editor-canva-image-history {
@@ -498,15 +498,15 @@
   width: 100%;
   aspect-ratio: 1;
   padding: 0;
-  border: 1px solid var(--color-hairline, #d9d9dd);
+  border: 1px solid var(--color-hairline);
   border-radius: 8px;
-  background: var(--color-soft-stone, #eeece7);
+  background: var(--color-soft-stone);
   overflow: hidden;
   cursor: grab;
 }
 
 .editor-canva-image-history__thumb:hover:not(:disabled) {
-  border-color: var(--color-slate, #75758a);
+  border-color: var(--color-slate);
 }
 
 .editor-canva-image-history__thumb:active:not(:disabled) {
@@ -531,7 +531,7 @@
   font-family: CohereMono, Arial, ui-sans-serif, system-ui, sans-serif;
   font-size: 11px;
   letter-spacing: 0.04em;
-  color: var(--color-slate, #75758a);
+  color: var(--color-slate);
   text-transform: uppercase;
   user-select: none;
   pointer-events: none;

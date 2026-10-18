@@ -84,17 +84,17 @@
   width: 44px;
   height: 44px;
   border-radius: 50%;
-  border: 1px solid var(--color-hairline, #d9d9dd);
-  background: var(--color-canvas, #ffffff);
-  color: var(--color-primary, #17171c);
+  border: 1px solid var(--color-hairline);
+  background: var(--color-canvas);
+  color: var(--color-primary);
   cursor: pointer;
   transition: background-color 150ms ease, border-color 150ms ease, transform 120ms ease;
   font-family: var(--app-font-family);
 }
 
 .free-canvas-add-page-btn:hover {
-  background: var(--color-soft-stone, #eeece7);
-  border-color: var(--color-slate, #75758a);
+  background: var(--color-soft-stone);
+  border-color: var(--color-slate);
 }
 
 .free-canvas-add-page-btn:active {
@@ -169,10 +169,10 @@
   width: min(220mm, 88%);
   margin: 0;
   padding: 16px 18px;
-  border: 1px dashed var(--color-hairline, #d9d9dd);
+  border: 1px dashed var(--color-hairline);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.92);
-  color: var(--color-body-muted, #616161);
+  color: var(--color-body-muted);
   text-align: center;
   /* Laisser passer les clics de placement ; seuls les CTA capturent le pointeur. */
   pointer-events: none;
@@ -184,7 +184,7 @@
   font-size: 11pt;
   font-style: normal;
   font-weight: 500;
-  color: var(--color-ink, #212121);
+  color: var(--color-ink);
 }
 
 .free-canvas-page-empty__text {
@@ -204,22 +204,22 @@
 
 .free-canvas-page-empty__btn {
   padding: 8px 14px;
-  border: 1px solid var(--color-primary, #17171c);
+  border: 1px solid var(--color-primary);
   border-radius: 32px;
   background: transparent;
-  color: var(--color-primary, #17171c);
+  color: var(--color-primary);
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
 }
 
 .free-canvas-page-empty__btn--primary {
-  background: var(--color-primary, #17171c);
-  color: var(--color-on-dark, #ffffff);
+  background: var(--color-primary);
+  color: var(--color-on-dark);
 }
 
 .free-canvas-page-empty__btn:focus-visible {
-  outline: 2px solid var(--color-focus-blue, #4c6ee6);
+  outline: 2px solid var(--color-focus-blue);
   outline-offset: 2px;
 }
 
@@ -371,7 +371,7 @@
 .free-canvas-marquee {
   position: absolute;
   box-sizing: border-box;
-  border: 1px solid var(--color-focus-blue, #4c6ee6);
+  border: 1px solid var(--color-focus-blue);
   background: rgba(76, 110, 230, 0.12);
   pointer-events: none;
   z-index: 5000;
@@ -384,7 +384,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: var(--color-slate, #75758a);
+  color: var(--color-slate);
   opacity: 0.85;
   pointer-events: none;
 }
@@ -400,9 +400,9 @@
   min-width: 22px;
   padding: 1px 5px;
   border-radius: 4px;
-  border: 1px solid var(--color-hairline, #d9d9dd);
-  background: var(--color-soft-stone, #eeece7);
-  color: var(--color-slate, #75758a);
+  border: 1px solid var(--color-hairline);
+  background: var(--color-soft-stone);
+  color: var(--color-slate);
   font-family: CohereMono, Arial, ui-sans-serif, system-ui, sans-serif;
   font-size: 9px;
   font-weight: 400;
@@ -415,19 +415,19 @@
 }
 
 .free-canvas-block__pdf-fidelity-badge--unsupported {
-  border-color: var(--color-coral-soft, #ffad9b);
+  border-color: var(--color-coral-soft);
   background: #fff5f2;
-  color: var(--color-error, #b30000);
+  color: var(--color-error);
 }
 
 .free-canvas-block__pdf-fidelity-badge--partial {
-  border-color: var(--color-hairline, #d9d9dd);
-  background: var(--color-pale-blue, #f1f5ff);
-  color: var(--color-action-blue, #1863dc);
+  border-color: var(--color-hairline);
+  background: var(--color-pale-blue);
+  color: var(--color-action-blue);
 }
 
 .free-canvas-block--editing .free-canvas-block__inner {
-  outline: 2px solid var(--color-focus-blue, #4c6ee6);
+  outline: 2px solid var(--color-focus-blue);
   outline-offset: 2px;
   border-radius: 2px;
 }
@@ -447,7 +447,7 @@
 
 .free-canvas-block--interactive.free-canvas-block--selected::after {
   inset: -0.5mm;
-  border: 2px solid var(--color-focus-blue, #4c6ee6);
+  border: 2px solid var(--color-focus-blue);
   border-radius: 2px;
 }
 
@@ -457,20 +457,20 @@
 
 .free-canvas-block--interactive:focus-visible::after {
   inset: -1mm;
-  border: 2px solid var(--color-focus-blue, #4c6ee6);
+  border: 2px solid var(--color-focus-blue);
   border-radius: 2px;
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-focus-blue, #4c6ee6) 35%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-focus-blue) 35%, transparent);
 }
 
 .free-canvas-block--interactive.free-canvas-block--dragging::after {
   inset: -0.5mm;
-  border-color: var(--color-focus-blue, #4c6ee6);
+  border-color: var(--color-focus-blue);
   transition: none;
 }
 
 .free-canvas-block--interactive.free-canvas-block--resizing::after {
   inset: -0.5mm;
-  border-color: var(--color-focus-blue, #4c6ee6);
+  border-color: var(--color-focus-blue);
   transition: none;
 }
 
@@ -495,8 +495,8 @@
   position: absolute;
   width: 2.4mm;
   height: 2.4mm;
-  background: var(--color-canvas, #ffffff);
-  border: 1.5px solid var(--color-primary, #17171c);
+  background: var(--color-canvas);
+  border: 1.5px solid var(--color-primary);
   border-radius: 50%;
   box-sizing: border-box;
   pointer-events: auto;
@@ -1059,9 +1059,9 @@
   padding: 6px 10px;
   font-size: 0.72rem;
   font-weight: 500;
-  color: var(--color-primary, #17171c);
-  background: var(--color-canvas, #fff);
-  border: 1px dashed var(--color-hairline, #d9d9dd);
+  color: var(--color-primary);
+  background: var(--color-canvas);
+  border: 1px dashed var(--color-hairline);
   border-radius: 8px;
   pointer-events: none;
   box-shadow: none;
@@ -1074,12 +1074,12 @@
 .free-canvas-placement-ghost__hint {
   font-size: 0.65rem;
   font-weight: 400;
-  color: var(--color-muted, #93939f);
+  color: var(--color-muted);
 }
 
 .free-canvas-draw-rect-preview {
   position: absolute;
-  border: 2px dashed var(--color-focus-blue, #4c6ee6);
+  border: 2px dashed var(--color-focus-blue);
   background: rgba(76, 110, 230, 0.08);
   pointer-events: none;
   z-index: 9990;
@@ -1119,13 +1119,13 @@
   font-size: 0.82rem;
   font-weight: 500;
   cursor: pointer;
-  background: var(--color-primary, #17171c);
-  color: var(--color-on-dark, #fff);
+  background: var(--color-primary);
+  color: var(--color-on-dark);
   font-family: var(--editor-font-family, inherit);
 }
 
 .free-canvas-starter-picker__btn:hover {
-  background: var(--color-ink, #212121);
+  background: var(--color-ink);
 }
 
 .free-canvas-starter-picker__btn--secondary {
