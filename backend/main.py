@@ -2568,6 +2568,59 @@ class PasswordSetupBody(BaseModel):
     email: str = ""
 
 
+class DeleteAccountBody(BaseModel):
+    cancel_subscription: bool = False
+
+
+def _cancel_subscription_for_account_deletion(user_id: str, confirmed: bool) -> None:
+    """Annule tout de suite un abonnement actif, seulement si la case a été confirmée."""
+    from backend.services.account_delete import (
+        assert_subscription_cancel_confirmed,
+        subscription_is_active,
+    )
+
+    if not STRIPE_SECRET_KEY or get_paywall_disabled(user_id):
+        return
+    try:
+        import stripe
+
+        client = stripe.StripeClient(STRIPE_SECRET_KEY)
+        cust_id, sub_id = _resolve_pro_subscription_id(client, user_id)
+        if not cust_id or not sub_id:
+            return
+        sub = client.subscriptions.retrieve(sub_id)
+        sub_cust = _stripe_attr(sub, "customer")
+        if isinstance(sub_cust, dict):
+            sub_cust = sub_cust.get("id")
+        if sub_cust and sub_cust != cust_id:
+            raise HTTPException(
+                status_code=403, detail="Cet abonnement n'est pas associé à ton compte."
+            )
+        status = (_stripe_attr(sub, "status") or "").lower()
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.warning("account delete subscription lookup failed: %s", type(exc).__name__)
+        raise HTTPException(
+            status_code=503,
+            detail="Impossible de vérifier l'abonnement. Réessaie.",
+        ) from exc
+    assert_subscription_cancel_confirmed(status, confirmed)
+    if not subscription_is_active(status):
+        return
+    try:
+        client.subscriptions.cancel(sub_id)
+    except Exception as exc:
+        logger.warning("account delete subscription cancel failed: %s", type(exc).__name__)
+        raise HTTPException(
+            status_code=503,
+            detail="Annulation de l'abonnement impossible. Réessaie.",
+        ) from exc
+    _STRIPE_SNAPSHOT_CACHE.invalidate(sub_id)
+    _invalidate_stripe_caches_for_user(user_id)
+    _invalidate_usage_cache(user_id)
+
+
 @app.post("/api/auth/password-setup")
 def api_password_setup(body: PasswordSetupBody):
     """Si l'e-mail est déjà un compte social, prépare un mot de passe sur ce même compte."""
@@ -2577,6 +2630,17 @@ def api_password_setup(body: PasswordSetupBody):
     email = (body.email or "").strip().lower()
     check_rate_limit(email or "anon", max_requests=5, scope="password-setup")
     return password_setup_for_email(email)
+
+
+@app.post("/api/account/delete")
+def api_delete_account(request: Request, body: DeleteAccountBody):
+    """Supprime le compte du JWT. Annule d'abord l'abonnement actif si la case est confirmée."""
+    from backend.services.account_delete import delete_my_account
+
+    user_id = _require_user_id(request)
+    _cancel_subscription_for_account_deletion(user_id, body.cancel_subscription)
+    delete_my_account(user_id)
+    return {"ok": True}
 
 
 @app.post("/api/support-ticket")
