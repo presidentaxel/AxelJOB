@@ -16,6 +16,16 @@ import Input from './ui/Input.jsx';
 import PasswordInput from './ui/PasswordInput.jsx';
 import '../styles/AuthForm.css';
 
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function RequiredMark() {
+  return (
+    <abbr className="auth-required" title="Obligatoire">
+      *
+    </abbr>
+  );
+}
+
 function GoogleIcon() {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" aria-hidden>
@@ -159,6 +169,10 @@ export default function AuthForm({ onSuccess, linkedInOnly = false }) {
       setError('Email et mot de passe requis.');
       return;
     }
+    if (!EMAIL_RE.test(email.trim())) {
+      setError('Adresse e-mail invalide.');
+      return;
+    }
     if (password.length < 6) {
       setError('Mot de passe trop faible : 6 caractères minimum.');
       return;
@@ -214,6 +228,10 @@ export default function AuthForm({ onSuccess, linkedInOnly = false }) {
     }
   };
 
+  const emailInvalid = email.trim().length > 0 && !EMAIL_RE.test(email.trim());
+  const passwordTooShort = password.length > 0 && password.length < 6;
+  const passwordMismatch = isSignUp && passwordConfirm.length > 0 && passwordConfirm !== password;
+
   if (linkedInOnly) {
     return (
       <div className="auth-form auth-form-linkedin-only">
@@ -245,7 +263,7 @@ export default function AuthForm({ onSuccess, linkedInOnly = false }) {
           </div>
         </div>
       )}
-    <form className="auth-form" onSubmit={handleSubmit}>
+    <form className="auth-form" noValidate onSubmit={handleSubmit}>
       {!resetMode && (
         <>
       <button
@@ -271,50 +289,74 @@ export default function AuthForm({ onSuccess, linkedInOnly = false }) {
       <span className="auth-divider">ou</span>
         </>
       )}
-      <Input
-        type="email"
-        placeholder="Email"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-        className="auth-input"
-        autoComplete="email"
-        aria-describedby="auth-email-hint"
-        required
-        {...analyticsAttrs('login-input-email', 'login', 'tertiary', 'input')}
-      />
-      <p className="auth-field-hint" id="auth-email-hint">Obligatoire</p>
+      <div className="auth-field">
+        <label className="auth-field-label" htmlFor="auth-email">
+          Email
+          <RequiredMark />
+        </label>
+        <Input
+          id="auth-email"
+          type="email"
+          placeholder="Email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          className="auth-input"
+          autoComplete="email"
+          required
+          invalid={emailInvalid}
+          aria-describedby={emailInvalid ? 'auth-email-error' : undefined}
+          {...analyticsAttrs('login-input-email', 'login', 'tertiary', 'input')}
+        />
+        {emailInvalid && (
+          <p className="ds-field-error" id="auth-email-error" role="alert">Adresse e-mail invalide.</p>
+        )}
+      </div>
       {!resetMode && (
         <>
-        <PasswordInput
-          placeholder="Mot de passe"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          className="auth-input"
-          autoComplete={isSignUp ? 'new-password' : 'current-password'}
-          aria-describedby="auth-password-hint"
-          required
-          minLength={6}
-        />
-        <p className="auth-field-hint" id="auth-password-hint">Obligatoire. Au moins 6 caractères.</p>
-        {password.length > 0 && password.length < 6 && (
-          <p className="ds-field-error" role="alert">Mot de passe trop faible : 6 caractères minimum.</p>
-        )}
+        <div className="auth-field">
+          <label className="auth-field-label" htmlFor="auth-password">
+            Mot de passe
+            <RequiredMark />
+          </label>
+          <PasswordInput
+            id="auth-password"
+            placeholder="Mot de passe"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="auth-input"
+            autoComplete={isSignUp ? 'new-password' : 'current-password'}
+            required
+            minLength={6}
+            invalid={passwordTooShort}
+            aria-describedby={passwordTooShort ? 'auth-password-hint auth-password-error' : 'auth-password-hint'}
+          />
+          <p className="auth-field-hint" id="auth-password-hint">Au moins 6 caractères.</p>
+          {passwordTooShort && (
+            <p className="ds-field-error" id="auth-password-error" role="alert">Mot de passe trop faible : 6 caractères minimum.</p>
+          )}
+        </div>
         {isSignUp && (
-          <>
+          <div className="auth-field">
+            <label className="auth-field-label" htmlFor="auth-password-confirm">
+              Confirmer le mot de passe
+              <RequiredMark />
+            </label>
             <PasswordInput
+              id="auth-password-confirm"
               placeholder="Confirmer le mot de passe"
               value={passwordConfirm}
               onChange={(e) => setPasswordConfirm(e.target.value)}
               className="auth-input"
               autoComplete="new-password"
-              aria-describedby="auth-password-confirm-hint"
               required
+              invalid={passwordMismatch}
+              aria-describedby={passwordMismatch ? 'auth-password-confirm-hint auth-password-confirm-error' : 'auth-password-confirm-hint'}
             />
-            <p className="auth-field-hint" id="auth-password-confirm-hint">Obligatoire. Doit être identique au mot de passe.</p>
-            {passwordConfirm.length > 0 && passwordConfirm !== password && (
-              <p className="ds-field-error" role="alert">Les deux mots de passe ne correspondent pas.</p>
+            <p className="auth-field-hint" id="auth-password-confirm-hint">Doit être identique au mot de passe.</p>
+            {passwordMismatch && (
+              <p className="ds-field-error" id="auth-password-confirm-error" role="alert">Les deux mots de passe ne correspondent pas.</p>
             )}
-          </>
+          </div>
         )}
         </>
       )}
