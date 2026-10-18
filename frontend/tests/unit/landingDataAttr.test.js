@@ -8,9 +8,6 @@ const FRONTEND_ROOT = fileURLToPath(new URL('../..', import.meta.url));
 
 /** IDs home-* + nav-* posés en miroir React / HTML (AXE-359). */
 const SHARED_IDS = [
-  'nav-link-how',
-  'nav-link-pricing',
-  'nav-link-features',
   'nav-link-ats',
   'nav-link-faq',
   'nav-link-modeles',
