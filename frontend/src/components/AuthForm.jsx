@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
+import { apiPost } from '../api';
 import { analyticsAttrs } from '../lib/analyticsAttrs.js';
 import {
   currentLoginRedirectTo,
@@ -114,6 +115,26 @@ export default function AuthForm({ onSuccess, linkedInOnly = false }) {
     }
   };
 
+  const SAME_ACCOUNT_MESSAGE = 'Un compte existe déjà avec cette adresse (Google ou LinkedIn). On t’a envoyé un email pour créer un mot de passe. Ensuite, les deux méthodes ouvrent le même compte.';
+
+  const offerPasswordForSocialAccount = async () => {
+    try {
+      const result = await apiPost('/api/auth/password-setup', { email: email.trim() });
+      if (!result?.sent) return false;
+      if (result.channel === 'supabase') {
+        const { error: resetErr } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+          redirectTo: currentLoginRedirectTo(),
+        });
+        if (resetErr) return false;
+      }
+      setMessage(SAME_ACCOUNT_MESSAGE);
+      setError('');
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
@@ -134,6 +155,8 @@ export default function AuthForm({ onSuccess, linkedInOnly = false }) {
           const { error: signInErr } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
           if (!signInErr) {
             setShowAlreadyHadAccountPopup(true);
+          } else if (await offerPasswordForSocialAccount()) {
+            setIsSignUp(false);
           } else {
             setIsSignUp(false);
             setError('Vous avez déjà un compte mais le mot de passe saisi est incorrect.');
@@ -146,7 +169,13 @@ export default function AuthForm({ onSuccess, linkedInOnly = false }) {
         setMessage('Compte créé. Un email de confirmation a été envoyé - clique sur le lien pour activer ton compte.');
       } else {
         const { error: err } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
-        if (err) throw err;
+        if (err) {
+          if (await offerPasswordForSocialAccount()) {
+            setLoading(false);
+            return;
+          }
+          throw err;
+        }
         onSuccess?.();
       }
     } catch (err) {
