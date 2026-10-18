@@ -184,8 +184,8 @@
   padding: 0 0.65rem;
   border: 1px solid var(--color-hairline);
   border-radius: 999px;
-  background: var(--color-pale-blue, #f1f5ff);
-  color: var(--color-action-blue, #1863dc);
+  background: var(--color-pale-blue);
+  color: var(--color-action-blue);
   font-size: 0.75rem;
   font-weight: 500;
   font-family: var(--editor-font-family);
@@ -195,7 +195,7 @@
 }
 
 .cv-editor-beta-pdf-fidelity-btn:hover {
-  border-color: var(--color-action-blue, #1863dc);
+  border-color: var(--color-action-blue);
 }
 
 .cv-editor-beta-pdf-fidelity-btn:focus-visible {
@@ -211,7 +211,7 @@
   height: 1.15rem;
   padding: 0 0.25rem;
   border-radius: 999px;
-  background: var(--color-action-blue, #1863dc);
+  background: var(--color-action-blue);
   color: #fff;
   font-size: 0.68rem;
   font-variant-numeric: tabular-nums;
@@ -799,36 +799,36 @@
   justify-content: space-between;
   gap: 12px;
   padding: 10px 16px;
-  background: var(--color-pale-blue, #f1f5ff);
-  border-bottom: 1px solid var(--color-hairline, #d9d9dd);
-  color: var(--color-ink, #212121);
+  background: var(--color-pale-blue);
+  border-bottom: 1px solid var(--color-hairline);
+  color: var(--color-ink);
 }
 
 .cv-editor-beta-desktop-hint__text {
   margin: 0;
   font-size: 0.82rem;
   line-height: 1.45;
-  color: var(--color-body-muted, #616161);
+  color: var(--color-body-muted);
 }
 
 .cv-editor-beta-desktop-hint__dismiss {
   flex-shrink: 0;
   padding: 6px 12px;
-  border: 1px solid var(--color-primary, #17171c);
+  border: 1px solid var(--color-primary);
   border-radius: 30px;
   background: transparent;
   font-size: 0.75rem;
   font-weight: 500;
-  color: var(--color-primary, #17171c);
+  color: var(--color-primary);
   cursor: pointer;
 }
 
 .cv-editor-beta-desktop-hint__dismiss:hover {
-  background: var(--color-canvas, #fff);
+  background: var(--color-canvas);
 }
 
 .cv-editor-beta-desktop-hint__dismiss:focus-visible {
-  outline: 2px solid var(--color-focus-blue, #4c6ee6);
+  outline: 2px solid var(--color-focus-blue);
   outline-offset: 2px;
 }
 
@@ -854,8 +854,8 @@
 }
 
 .cv-editor-beta-semantic-note--identity-hint {
-  background: var(--color-pale-blue, #f1f5ff);
-  color: var(--color-dark-navy, #071829);
+  background: var(--color-pale-blue);
+  color: var(--color-dark-navy);
 }
 
 .cv-editor-beta-semantic-note__actions {
@@ -871,9 +871,9 @@
   font-size: 0.78rem;
   font-weight: 500;
   font-family: inherit;
-  color: var(--color-on-dark, #fff);
-  background: var(--color-primary, #17171c);
-  border: 1px solid var(--color-primary, #17171c);
+  color: var(--color-on-dark);
+  background: var(--color-primary);
+  border: 1px solid var(--color-primary);
   border-radius: 30px;
   cursor: pointer;
 }
@@ -883,7 +883,7 @@
 }
 
 .cv-editor-beta-semantic-note__apply:focus-visible {
-  outline: 2px solid var(--color-focus-blue, #4c6ee6);
+  outline: 2px solid var(--color-focus-blue);
   outline-offset: 2px;
 }
 
@@ -1045,13 +1045,13 @@
   right: 0;
   width: 380px;
   max-width: calc(100vw - 2rem);
-  background: var(--color-canvas, #ffffff);
-  border: 1px solid var(--color-hairline, #d9d9dd);
+  background: var(--color-canvas);
+  border: 1px solid var(--color-hairline);
   border-radius: 8px;
   z-index: 50;
   padding: 0.75rem;
   font-size: 0.8rem;
-  color: var(--color-ink, #212121);
+  color: var(--color-ink);
 }
 
 .ats-coach-panel-heading {
@@ -1064,7 +1064,7 @@
 .ats-coach-status {
   margin: 0;
   font-size: 0.72rem;
-  color: var(--color-body-muted, #616161);
+  color: var(--color-body-muted);
   line-height: 1.35;
 }
 
@@ -1076,9 +1076,9 @@
 
 .ats-coach-mode-btn {
   flex: 1;
-  border: 1px solid var(--color-primary, #17171c);
+  border: 1px solid var(--color-primary);
   background: transparent;
-  color: var(--color-primary, #17171c);
+  color: var(--color-primary);
   border-radius: 30px;
   padding: 0.28rem 0.5rem;
   font-size: 0.7rem;
@@ -1088,8 +1088,8 @@
 }
 
 .ats-coach-mode-btn.is-active {
-  background: var(--color-primary, #17171c);
-  color: var(--color-on-dark, #ffffff);
+  background: var(--color-primary);
+  color: var(--color-on-dark);
 }
 
 .ats-coach-list {
@@ -1105,7 +1105,7 @@
 
 .ats-coach-rule--tradeoff {
   opacity: 0.92;
-  border: 1px dashed var(--color-hairline, #d9d9dd);
+  border: 1px dashed var(--color-hairline);
 }
 
 .ats-coach-rule-main {
@@ -1131,11 +1131,11 @@
 .ats-coach-impact {
   font-size: 0.72rem;
   line-height: 1.35;
-  color: var(--color-body-muted, #616161);
+  color: var(--color-body-muted);
 }
 
 .ats-coach-impact {
-  color: var(--color-deep-green, #003c33);
+  color: var(--color-deep-green);
   font-weight: 500;
 }
 
@@ -1148,7 +1148,7 @@
 .ats-coach-action {
   border: none;
   background: transparent;
-  color: var(--color-action-blue, #1863dc);
+  color: var(--color-action-blue);
   font-size: 0.7rem;
   font-weight: 500;
   padding: 0.15rem 0.25rem;
@@ -1159,7 +1159,7 @@
 }
 
 .ats-coach-action--primary {
-  color: var(--color-primary, #17171c);
+  color: var(--color-primary);
 }
 
 .ats-coach-action:disabled {
@@ -1177,7 +1177,7 @@
 .ats-coach-reset-ignored {
   border: none;
   background: none;
-  color: var(--color-action-blue, #1863dc);
+  color: var(--color-action-blue);
   font-size: 0.7rem;
   cursor: pointer;
   padding: 0;
@@ -1190,7 +1190,7 @@
   justify-content: space-between;
   align-items: flex-start;
   padding-bottom: 0.5rem;
-  border-bottom: 1px solid var(--color-card-border, #f2f2f2);
+  border-bottom: 1px solid var(--color-card-border);
   margin-bottom: 0.5rem;
 }
 

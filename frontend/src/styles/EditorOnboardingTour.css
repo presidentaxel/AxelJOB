@@ -21,9 +21,9 @@
   width: min(420px, calc(100% - 32px));
   padding: 24px;
   border-radius: 16px;
-  border: 1px solid var(--color-card-border, #f2f2f2);
-  background: var(--color-canvas, #ffffff);
-  color: var(--color-ink, #212121);
+  border: 1px solid var(--color-card-border);
+  background: var(--color-canvas);
+  color: var(--color-ink);
   pointer-events: auto;
 }
 
@@ -33,7 +33,7 @@
   font-size: 12px;
   letter-spacing: 0.28px;
   text-transform: uppercase;
-  color: var(--color-muted, #93939f);
+  color: var(--color-muted);
 }
 
 .editor-onboarding__title {
@@ -47,7 +47,7 @@
   margin: 0 0 18px;
   font-size: 16px;
   line-height: 1.5;
-  color: var(--color-body-muted, #616161);
+  color: var(--color-body-muted);
 }
 
 .editor-onboarding__dots {
@@ -62,11 +62,11 @@
   width: 8px;
   height: 8px;
   border-radius: 9999px;
-  background: var(--color-hairline, #d9d9dd);
+  background: var(--color-hairline);
 }
 
 .editor-onboarding__dot--active {
-  background: var(--color-primary, #17171c);
+  background: var(--color-primary);
 }
 
 .editor-onboarding__actions {
@@ -80,7 +80,7 @@
   padding: 8px 0;
   border: none;
   background: transparent;
-  color: var(--color-slate, #75758a);
+  color: var(--color-slate);
   font-size: 14px;
   font-weight: 500;
   text-decoration: underline;
@@ -91,8 +91,8 @@
   padding: 12px 24px;
   border: none;
   border-radius: 32px;
-  background: var(--color-primary, #17171c);
-  color: var(--color-on-dark, #ffffff);
+  background: var(--color-primary);
+  color: var(--color-on-dark);
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
@@ -104,6 +104,6 @@
 
 .editor-onboarding__skip:focus-visible,
 .editor-onboarding__next:focus-visible {
-  outline: 2px solid var(--color-focus-blue, #4c6ee6);
+  outline: 2px solid var(--color-focus-blue);
   outline-offset: 2px;
 }
