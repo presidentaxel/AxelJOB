@@ -126,6 +126,46 @@ def test_acquire_failure_on_enter_opens_cooldown() -> None:
     reset_pg_connect_cooldown()
 
 
+def test_pool_timeout_with_live_connections_does_not_cooldown() -> None:
+    reset_pg_connect_cooldown()
+
+    class PoolTimeout(Exception):
+        pass
+
+    class _CM:
+        def __init__(self, exc: Exception) -> None:
+            self._exc = exc
+
+        def __enter__(self) -> None:
+            raise self._exc
+
+        def __exit__(self, *_args: object) -> None:
+            return None
+
+    class _Pool:
+        def __init__(self, pool_size: int) -> None:
+            self.pool_size = pool_size
+
+        def connection(self) -> _CM:
+            return _CM(PoolTimeout("couldn't get a connection after 5.00 sec"))
+
+        def get_stats(self) -> dict[str, int]:
+            return {"pool_size": self.pool_size}
+
+    busy = _SentryAwarePool(_Pool(4))
+    with pytest.raises(PoolTimeout):
+        with busy.connection():
+            pass
+    assert not pg_connect_cooling_down()
+
+    empty = _SentryAwarePool(_Pool(0))
+    with pytest.raises(PoolTimeout):
+        with empty.connection():
+            pass
+    assert pg_connect_cooling_down()
+    reset_pg_connect_cooldown()
+
+
 def test_connect_outage_opens_cooldown() -> None:
     reset_pg_connect_cooldown()
     assert is_pg_connect_outage(OSError("failed to resolve host"))

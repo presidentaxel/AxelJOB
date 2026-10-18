@@ -89,14 +89,29 @@ class _SentryAwarePool:
     def __init__(self, pool: Any) -> None:
         self._pool = pool
 
+    def _pool_has_no_live_connection(self) -> bool:
+        get_stats = getattr(self._pool, "get_stats", None)
+        if not callable(get_stats):
+            return True
+        try:
+            return int(get_stats().get("pool_size", 0)) == 0
+        except Exception:
+            return True
+
     def _on_acquire_failure(self, exc: BaseException) -> None:
         name = type(exc).__name__
-        if name in {"PoolTimeout", "PoolClosed"} or "pooltimeout" in name.lower():
+        timed_out = name == "PoolTimeout" or "pooltimeout" in name.lower()
+        if timed_out or name == "PoolClosed":
             from backend.sentry_business import capture_pg_pool_exhausted
 
             capture_pg_pool_exhausted(exc)
         text = str(exc).lower()
-        if is_pg_connect_outage(exc) or name in {"PoolTimeout", "PoolClosed"}:
+        # PoolTimeout avec des connexions déjà ouvertes = saturation, pas une coupure.
+        if (
+            is_pg_connect_outage(exc)
+            or name == "PoolClosed"
+            or (timed_out and self._pool_has_no_live_connection())
+        ):
             note_pg_connect_failure()
         if is_pg_connect_outage(exc) or "another command is already in progress" in text:
             check = getattr(self._pool, "check", None)
