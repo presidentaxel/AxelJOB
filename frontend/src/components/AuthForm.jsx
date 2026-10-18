@@ -169,16 +169,7 @@ export default function AuthForm({ onSuccess, linkedInOnly = false }) {
       setError('Email et mot de passe requis.');
       return;
     }
-    if (!EMAIL_RE.test(email.trim())) {
-      setError('Adresse e-mail invalide.');
-      return;
-    }
-    if (password.length < 6) {
-      setError('Mot de passe trop faible : 6 caractères minimum.');
-      return;
-    }
-    if (isSignUp && password !== passwordConfirm) {
-      setError('Les deux mots de passe ne correspondent pas.');
+    if (!EMAIL_RE.test(email.trim()) || password.length < 6 || (isSignUp && password !== passwordConfirm)) {
       return;
     }
     setLoading(true);
@@ -297,7 +288,7 @@ export default function AuthForm({ onSuccess, linkedInOnly = false }) {
         <Input
           type="email"
           id="auth-email"
-          placeholder="Email"
+          placeholder="toi@email.fr"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           className="auth-input"
@@ -320,7 +311,7 @@ export default function AuthForm({ onSuccess, linkedInOnly = false }) {
           </label>
           <PasswordInput
             id="auth-password"
-            placeholder="Mot de passe"
+            placeholder="6 caractères minimum"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             className="auth-input"
@@ -328,11 +319,10 @@ export default function AuthForm({ onSuccess, linkedInOnly = false }) {
             required
             minLength={6}
             invalid={passwordTooShort}
-            aria-describedby={passwordTooShort ? 'auth-password-hint auth-password-error' : 'auth-password-hint'}
+            aria-describedby={passwordTooShort ? 'auth-password-error' : undefined}
           />
-          <p className="auth-field-hint" id="auth-password-hint">Au moins 6 caractères.</p>
           {passwordTooShort && (
-            <p className="ds-field-error" id="auth-password-error" role="alert">Mot de passe trop faible : 6 caractères minimum.</p>
+            <p className="ds-field-error" id="auth-password-error" role="alert">Au moins 6 caractères.</p>
           )}
         </div>
         {isSignUp && (
@@ -343,18 +333,17 @@ export default function AuthForm({ onSuccess, linkedInOnly = false }) {
             </label>
             <PasswordInput
               id="auth-password-confirm"
-              placeholder="Confirmer le mot de passe"
+              placeholder="Le même mot de passe"
               value={passwordConfirm}
               onChange={(e) => setPasswordConfirm(e.target.value)}
               className="auth-input"
               autoComplete="new-password"
               required
               invalid={passwordMismatch}
-              aria-describedby={passwordMismatch ? 'auth-password-confirm-hint auth-password-confirm-error' : 'auth-password-confirm-hint'}
+              aria-describedby={passwordMismatch ? 'auth-password-confirm-error' : undefined}
             />
-            <p className="auth-field-hint" id="auth-password-confirm-hint">Doit être identique au mot de passe.</p>
             {passwordMismatch && (
-              <p className="ds-field-error" id="auth-password-confirm-error" role="alert">Les deux mots de passe ne correspondent pas.</p>
+              <p className="ds-field-error" id="auth-password-confirm-error" role="alert">Doit être identique au mot de passe.</p>
             )}
           </div>
         )}
