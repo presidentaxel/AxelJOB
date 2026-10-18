@@ -60,11 +60,13 @@ export default function AuthForm({ onSuccess, linkedInOnly = false }) {
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [showAlreadyHadAccountPopup, setShowAlreadyHadAccountPopup] = useState(false);
+  const [submitAttempted, setSubmitAttempted] = useState(false);
 
   useEffect(() => {
     setError('');
     setMessage('');
     setPasswordConfirm('');
+    setSubmitAttempted(false);
   }, [mode]);
 
   useEffect(() => {
@@ -120,6 +122,7 @@ export default function AuthForm({ onSuccess, linkedInOnly = false }) {
       setError('Entre ton email pour réinitialiser le mot de passe.');
       return;
     }
+    if (!EMAIL_RE.test(email.trim())) return;
     setLoading(true);
     try {
       const { error: err } = await supabase.auth.resetPasswordForEmail(email.trim(), {
@@ -162,6 +165,7 @@ export default function AuthForm({ onSuccess, linkedInOnly = false }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setSubmitAttempted(true);
     setError('');
     setMessage('');
     if (resetMode) return handleResetPassword(e);
@@ -221,7 +225,7 @@ export default function AuthForm({ onSuccess, linkedInOnly = false }) {
 
   const emailInvalid = email.trim().length > 0 && !EMAIL_RE.test(email.trim());
   const passwordTooShort = password.length > 0 && password.length < 6;
-  const passwordMismatch = isSignUp && passwordConfirm.length > 0 && passwordConfirm !== password;
+  const passwordMismatch = isSignUp && password !== passwordConfirm && (passwordConfirm.length > 0 || submitAttempted);
 
   if (linkedInOnly) {
     return (
