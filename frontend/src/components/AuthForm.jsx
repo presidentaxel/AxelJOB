@@ -35,6 +35,7 @@ function LinkedInIcon({ className }) {
 export default function AuthForm({ onSuccess, linkedInOnly = false }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [passwordConfirm, setPasswordConfirm] = useState('');
   const [isSignUp, setIsSignUp] = useState(false);
   const [loading, setLoading] = useState(false);
   const [linkedInLoading, setLinkedInLoading] = useState(false);
@@ -146,6 +147,14 @@ export default function AuthForm({ onSuccess, linkedInOnly = false }) {
       setError('Email et mot de passe requis.');
       return;
     }
+    if (password.length < 6) {
+      setError('Mot de passe trop faible : 6 caractères minimum.');
+      return;
+    }
+    if (isSignUp && password !== passwordConfirm) {
+      setError('Les deux mots de passe ne correspondent pas.');
+      return;
+    }
     setLoading(true);
     try {
       if (isSignUp) {
@@ -253,9 +262,13 @@ export default function AuthForm({ onSuccess, linkedInOnly = false }) {
         onChange={(e) => setEmail(e.target.value)}
         className="auth-input"
         autoComplete="email"
+        aria-describedby="auth-email-hint"
+        required
         {...analyticsAttrs('login-input-email', 'login', 'tertiary', 'input')}
       />
+      <p className="auth-field-hint" id="auth-email-hint">Obligatoire</p>
       {!resetMode && (
+        <>
         <Input
           type="password"
           placeholder="Mot de passe"
@@ -263,7 +276,33 @@ export default function AuthForm({ onSuccess, linkedInOnly = false }) {
           onChange={(e) => setPassword(e.target.value)}
           className="auth-input"
           autoComplete={isSignUp ? 'new-password' : 'current-password'}
+          aria-describedby="auth-password-hint"
+          required
+          minLength={6}
         />
+        <p className="auth-field-hint" id="auth-password-hint">Obligatoire. Au moins 6 caractères.</p>
+        {password.length > 0 && password.length < 6 && (
+          <p className="ds-field-error" role="alert">Mot de passe trop faible : 6 caractères minimum.</p>
+        )}
+        {isSignUp && (
+          <>
+            <Input
+              type="password"
+              placeholder="Confirmer le mot de passe"
+              value={passwordConfirm}
+              onChange={(e) => setPasswordConfirm(e.target.value)}
+              className="auth-input"
+              autoComplete="new-password"
+              aria-describedby="auth-password-confirm-hint"
+              required
+            />
+            <p className="auth-field-hint" id="auth-password-confirm-hint">Obligatoire. Doit être identique au mot de passe.</p>
+            {passwordConfirm.length > 0 && passwordConfirm !== password && (
+              <p className="ds-field-error" role="alert">Les deux mots de passe ne correspondent pas.</p>
+            )}
+          </>
+        )}
+        </>
       )}
       {error && <div className="auth-error">{error}</div>}
       {message && <div className="auth-message">{message}</div>}
@@ -275,7 +314,7 @@ export default function AuthForm({ onSuccess, linkedInOnly = false }) {
           Mot de passe oublié ?
         </button>
       )}
-      <button type="button" className="auth-toggle" onClick={() => { setIsSignUp((v) => !v); setResetMode(false); setError(''); setMessage(''); }} {...analyticsAttrs('login-link-toggle', 'login', 'tertiary', 'nav')}>
+      <button type="button" className="auth-toggle" onClick={() => { setIsSignUp((v) => !v); setPasswordConfirm(''); setResetMode(false); setError(''); setMessage(''); }} {...analyticsAttrs('login-link-toggle', 'login', 'tertiary', 'nav')}>
         {resetMode ? '← Retour à la connexion' : isSignUp ? 'Déjà un compte ? Se connecter' : 'Pas de compte ? Créer un compte'}
       </button>
     </form>

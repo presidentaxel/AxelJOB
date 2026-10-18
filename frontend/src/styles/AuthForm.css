@@ -245,3 +245,9 @@
 .auth-popup-ok {
   width: 100%;
 }
+
+.auth-field-hint {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--ds-color-text-muted);
+}
