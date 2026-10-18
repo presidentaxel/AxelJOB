@@ -96,6 +96,36 @@ def test_get_user_id_propagates_503(monkeypatch) -> None:
     assert exc.value.status_code == 503
 
 
+def test_acquire_failure_on_enter_opens_cooldown() -> None:
+    reset_pg_connect_cooldown()
+
+    class _CM:
+        def __enter__(self) -> None:
+            raise OSError("failed to resolve host")
+
+        def __exit__(self, *_args: object) -> None:
+            raise AssertionError("pas de restitution si la connexion n'a pas été prise")
+
+    class _Pool:
+        def __init__(self) -> None:
+            self.checked = False
+
+        def connection(self) -> _CM:
+            return _CM()
+
+        def check(self) -> None:
+            self.checked = True
+
+    pool = _Pool()
+    wrapper = _SentryAwarePool(pool)
+    with pytest.raises(OSError, match="failed to resolve"):
+        with wrapper.connection():
+            pass
+    assert pg_connect_cooling_down()
+    assert pool.checked
+    reset_pg_connect_cooldown()
+
+
 def test_connect_outage_opens_cooldown() -> None:
     reset_pg_connect_cooldown()
     assert is_pg_connect_outage(OSError("failed to resolve host"))

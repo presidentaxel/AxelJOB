@@ -65,34 +65,56 @@ def is_pg_connect_outage(exc: BaseException) -> bool:
     return any(marker in text for marker in _CONNECT_OUTAGE_MARKERS)
 
 
+class _GuardedConnection:
+    """Entre dans le contexte du pool : getconn() n'est appelé qu'à ce moment-là."""
+
+    def __init__(self, owner: _SentryAwarePool, cm: Any) -> None:
+        self._owner = owner
+        self._cm = cm
+
+    def __enter__(self) -> Any:
+        try:
+            return self._cm.__enter__()
+        except Exception as exc:
+            self._owner._on_acquire_failure(exc)
+            raise
+
+    def __exit__(self, *args: Any) -> Any:
+        return self._cm.__exit__(*args)
+
+
 class _SentryAwarePool:
     """Relais ConnectionPool : signale un PoolTimeout et coupe les rafales de connexion."""
 
     def __init__(self, pool: Any) -> None:
         self._pool = pool
 
-    def connection(self, *args: Any, **kwargs: Any) -> Any:
+    def _on_acquire_failure(self, exc: BaseException) -> None:
+        name = type(exc).__name__
+        if name in {"PoolTimeout", "PoolClosed"} or "pooltimeout" in name.lower():
+            from backend.sentry_business import capture_pg_pool_exhausted
+
+            capture_pg_pool_exhausted(exc)
+        text = str(exc).lower()
+        if is_pg_connect_outage(exc) or name in {"PoolTimeout", "PoolClosed"}:
+            note_pg_connect_failure()
+        if is_pg_connect_outage(exc) or "another command is already in progress" in text:
+            check = getattr(self._pool, "check", None)
+            if callable(check):
+                try:
+                    check()
+                except Exception:
+                    logger.debug("pool check after connect failure failed", exc_info=True)
+
+    def connection(self, *args: Any, **kwargs: Any) -> _GuardedConnection:
         if pg_connect_cooling_down():
             raise RuntimeError("PostgreSQL temporairement injoignable")
         try:
-            return self._pool.connection(*args, **kwargs)
+            cm = self._pool.connection(*args, **kwargs)
         except Exception as exc:
-            name = type(exc).__name__
-            if name in {"PoolTimeout", "PoolClosed"} or "pooltimeout" in name.lower():
-                from backend.sentry_business import capture_pg_pool_exhausted
-
-                capture_pg_pool_exhausted(exc)
-            text = str(exc).lower()
-            if is_pg_connect_outage(exc) or name in {"PoolTimeout", "PoolClosed"}:
-                note_pg_connect_failure()
-            if is_pg_connect_outage(exc) or "another command is already in progress" in text:
-                check = getattr(self._pool, "check", None)
-                if callable(check):
-                    try:
-                        check()
-                    except Exception:
-                        logger.debug("pool check after connect failure failed", exc_info=True)
+            self._on_acquire_failure(exc)
             raise
+        return _GuardedConnection(self, cm)
 
     def __enter__(self) -> _SentryAwarePool:
         enter = getattr(self._pool, "__enter__", None)
@@ -130,9 +152,11 @@ def get_pool():
     _pool = _SentryAwarePool(
         ConnectionPool(
             conninfo=SUPABASE_DATABASE_URL,
-            # min_size 0 : ne pas garder un client ouvert ni le recréer en boucle
-            # pendant une coupure DNS (sinon le plafond session Supabase, 15, saute).
+            # min_size 0 : démarrer sans connexion. Celles rendues au pool
+            # sont fermées au prochain rétrécissement (max_idle), aligné sur le
+            # délai de coupure, pour ne pas garder des clients vers Supabase.
             min_size=0,
+            max_idle=8.0,
             max_size=supabase_pg_pool_max(),
             timeout=5.0,
             max_waiting=4,
