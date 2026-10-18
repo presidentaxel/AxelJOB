@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { apiGet } from '../api';
+import { apiGet, apiPost } from '../api';
 import { supabase } from '../lib/supabase';
 import {
   STORAGE_EXPORT_DIR,
@@ -112,6 +112,10 @@ export default function SettingsView({
   const [setPasswordConfirm, setSetPasswordConfirm] = useState('');
   const [setPasswordLoading, setSetPasswordLoading] = useState(false);
   const [setPasswordError, setSetPasswordError] = useState('');
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState('');
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
 
   const pdfPatternInputRef = useRef(null);
   const messageTimerRef = useRef(null);
@@ -391,6 +395,80 @@ export default function SettingsView({
             <span className="settings-inline-meta__muted">Modèle&nbsp;: {templateName}</span>
           )}
         </p>
+        <div className="settings-delete">
+          <p>
+            Supprime ce compte, la session et le CV lié à cette adresse. Si tu as un abonnement Pro, résilie-le avant. Cette action est définitive.
+          </p>
+          {!deleteOpen ? (
+            <Button
+              type="button"
+              variant="danger"
+              size="sm"
+              onClick={() => {
+                setDeleteOpen(true);
+                setDeleteConfirm('');
+                setDeleteError('');
+              }}
+              {...analyticsAttrs('settings-account-cta-delete', 'account', 'danger', 'cta')}
+            >
+              Supprimer mon compte
+            </Button>
+          ) : (
+            <>
+              <label className="settings-field">
+                Écris SUPPRIMER pour confirmer
+                <input
+                  className="ds-input"
+                  type="text"
+                  value={deleteConfirm}
+                  onChange={(e) => setDeleteConfirm(e.target.value)}
+                  autoComplete="off"
+                  aria-invalid={deleteError ? 'true' : undefined}
+                />
+              </label>
+              {deleteError && <p className="ds-field-error">{deleteError}</p>}
+              <div className="settings-actions">
+                <Button
+                  type="button"
+                  variant="danger"
+                  size="sm"
+                  loading={deleteLoading}
+                  disabled={deleteLoading || deleteConfirm.trim() !== 'SUPPRIMER'}
+                  onClick={async () => {
+                    setDeleteError('');
+                    setDeleteLoading(true);
+                    try {
+                      await apiPost('/api/account/delete', {});
+                      clearCanvasLayoutDrafts();
+                      clearLayoutProposals();
+                      clearUserCanvasImageLibrary();
+                      if (supabase) await supabase.auth.signOut();
+                      window.location.assign('/');
+                    } catch (err) {
+                      setDeleteError(err?.message || 'Suppression impossible. Réessaie.');
+                      setDeleteLoading(false);
+                    }
+                  }}
+                >
+                  Confirmer la suppression
+                </Button>
+                <Button
+                  type="button"
+                  variant="tertiary"
+                  size="sm"
+                  disabled={deleteLoading}
+                  onClick={() => {
+                    setDeleteOpen(false);
+                    setDeleteConfirm('');
+                    setDeleteError('');
+                  }}
+                >
+                  Annuler
+                </Button>
+              </div>
+            </>
+          )}
+        </div>
       </SettingsSection>
 
       <SettingsSection

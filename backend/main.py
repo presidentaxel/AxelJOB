@@ -2564,6 +2564,16 @@ def _send_support_ticket_email(
         return support_ticket_failure_detail(e, production=IS_PRODUCTION)
 
 
+@app.post("/api/account/delete")
+def api_delete_account(request: Request):
+    """Supprime le compte du JWT, sa session Auth et ses données CV. Pas les autres comptes."""
+    from backend.services.account_delete import delete_my_account
+
+    user_id = _require_user_id(request)
+    delete_my_account(user_id)
+    return {"ok": True}
+
+
 @app.post("/api/support-ticket")
 def api_support_ticket(request: Request, body: SupportTicketBody):
     """Ouvre un ticket support : envoie un email au support (Reply-To = user) pour que vous répondiez par mail."""
