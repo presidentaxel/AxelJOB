@@ -295,8 +295,8 @@ export default function AuthForm({ onSuccess, linkedInOnly = false }) {
           <RequiredMark />
         </label>
         <Input
-          id="auth-email"
           type="email"
+          id="auth-email"
           placeholder="Email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
