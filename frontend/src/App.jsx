@@ -33,6 +33,7 @@ import CandidatureBoardCard from './components/CandidatureBoardCard';
 import { NotFoundPage } from './components/ErrorPages';
 import Button from './components/ui/Button.jsx';
 import Input from './components/ui/Input.jsx';
+import PasswordInput from './components/ui/PasswordInput.jsx';
 import AdaptLanguageChoiceDialog from './components/ui/AdaptLanguageChoiceDialog.jsx';
 import { CONTACT_EMAIL, STORAGE_EXPORT_DIR, STORAGE_EXPORT_ATS_BLOCK_SNOOZE, STORAGE_PRE_EXPORT_TEMPLATE_OPTIONS_DONE, STORAGE_PDF_EXPORT_FILENAME_PATTERN, STATUT_LABELS, KANBAN_COLUMNS, getExportFolderName } from './constants';
 import { buildAdaptedPdfFilename } from './lib/pdfExportFilename';
@@ -211,8 +212,7 @@ function RecoveryPasswordForm({ onDone }) {
         <h1>Nouveau mot de passe</h1>
         <p className="login-screen-intro">Choisis un nouveau mot de passe pour ton compte.</p>
         <form className="auth-form" onSubmit={handleSubmit}>
-          <Input
-            type="password"
+          <PasswordInput
             placeholder="Nouveau mot de passe"
             value={password}
             onChange={(e) => {
@@ -227,8 +227,7 @@ function RecoveryPasswordForm({ onDone }) {
             minLength={6}
             invalid={invalidField === 'password'}
           />
-          <Input
-            type="password"
+          <PasswordInput
             placeholder="Confirmer le mot de passe"
             value={confirm}
             onChange={(e) => {

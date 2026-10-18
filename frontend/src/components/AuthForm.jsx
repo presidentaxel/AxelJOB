@@ -13,6 +13,7 @@ import {
 import { AUTH_PATHS, authModeFromPath } from '../lib/authPaths.js';
 import Button from './ui/Button.jsx';
 import Input from './ui/Input.jsx';
+import PasswordInput from './ui/PasswordInput.jsx';
 import '../styles/AuthForm.css';
 
 function GoogleIcon() {
@@ -270,8 +271,7 @@ export default function AuthForm({ onSuccess, linkedInOnly = false }) {
         {...analyticsAttrs('login-input-email', 'login', 'tertiary', 'input')}
       />
       {!resetMode && (
-        <Input
-          type="password"
+        <PasswordInput
           placeholder="Mot de passe"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
