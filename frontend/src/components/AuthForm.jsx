@@ -16,6 +16,16 @@ import Input from './ui/Input.jsx';
 import PasswordInput from './ui/PasswordInput.jsx';
 import '../styles/AuthForm.css';
 
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function RequiredMark() {
+  return (
+    <abbr className="auth-required" title="Obligatoire">
+      *
+    </abbr>
+  );
+}
+
 function GoogleIcon() {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" aria-hidden>
@@ -43,16 +53,20 @@ export default function AuthForm({ onSuccess, linkedInOnly = false }) {
   const resetMode = mode === 'reset';
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [passwordConfirm, setPasswordConfirm] = useState('');
   const [loading, setLoading] = useState(false);
   const [linkedInLoading, setLinkedInLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [showAlreadyHadAccountPopup, setShowAlreadyHadAccountPopup] = useState(false);
+  const [submitAttempted, setSubmitAttempted] = useState(false);
 
   useEffect(() => {
     setError('');
     setMessage('');
+    setPasswordConfirm('');
+    setSubmitAttempted(false);
   }, [mode]);
 
   useEffect(() => {
@@ -108,6 +122,7 @@ export default function AuthForm({ onSuccess, linkedInOnly = false }) {
       setError('Entre ton email pour réinitialiser le mot de passe.');
       return;
     }
+    if (!EMAIL_RE.test(email.trim())) return;
     setLoading(true);
     try {
       const { error: err } = await supabase.auth.resetPasswordForEmail(email.trim(), {
@@ -150,11 +165,15 @@ export default function AuthForm({ onSuccess, linkedInOnly = false }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setSubmitAttempted(true);
     setError('');
     setMessage('');
     if (resetMode) return handleResetPassword(e);
     if (!email.trim() || !password) {
       setError('Email et mot de passe requis.');
+      return;
+    }
+    if (!EMAIL_RE.test(email.trim()) || password.length < 6 || (isSignUp && password !== passwordConfirm)) {
       return;
     }
     setLoading(true);
@@ -204,6 +223,10 @@ export default function AuthForm({ onSuccess, linkedInOnly = false }) {
     }
   };
 
+  const emailInvalid = email.trim().length > 0 && !EMAIL_RE.test(email.trim());
+  const passwordTooShort = password.length > 0 && password.length < 6;
+  const passwordMismatch = isSignUp && password !== passwordConfirm && (passwordConfirm.length > 0 || submitAttempted);
+
   if (linkedInOnly) {
     return (
       <div className="auth-form auth-form-linkedin-only">
@@ -235,7 +258,7 @@ export default function AuthForm({ onSuccess, linkedInOnly = false }) {
           </div>
         </div>
       )}
-    <form className="auth-form" onSubmit={handleSubmit}>
+    <form className="auth-form" noValidate onSubmit={handleSubmit}>
       {!resetMode && (
         <>
       <button
@@ -261,23 +284,74 @@ export default function AuthForm({ onSuccess, linkedInOnly = false }) {
       <span className="auth-divider">ou</span>
         </>
       )}
-      <Input
-        type="email"
-        placeholder="Email"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-        className="auth-input"
-        autoComplete="email"
-        {...analyticsAttrs('login-input-email', 'login', 'tertiary', 'input')}
-      />
-      {!resetMode && (
-        <PasswordInput
-          placeholder="Mot de passe"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
+      <div className="auth-field">
+        <label className="auth-field-label" htmlFor="auth-email">
+          Email
+          <RequiredMark />
+        </label>
+        <Input
+          type="email"
+          id="auth-email"
+          placeholder="toi@email.fr"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
           className="auth-input"
-          autoComplete={isSignUp ? 'new-password' : 'current-password'}
+          autoComplete="email"
+          required
+          invalid={emailInvalid}
+          aria-describedby={emailInvalid ? 'auth-email-error' : undefined}
+          {...analyticsAttrs('login-input-email', 'login', 'tertiary', 'input')}
         />
+        {emailInvalid && (
+          <p className="ds-field-error" id="auth-email-error" role="alert">Adresse e-mail invalide.</p>
+        )}
+      </div>
+      {!resetMode && (
+        <>
+        <div className="auth-field">
+          <label className="auth-field-label" htmlFor="auth-password">
+            Mot de passe
+            <RequiredMark />
+          </label>
+          <PasswordInput
+            id="auth-password"
+            placeholder="6 caractères minimum"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="auth-input"
+            autoComplete={isSignUp ? 'new-password' : 'current-password'}
+            required
+            minLength={6}
+            invalid={passwordTooShort}
+            aria-describedby={passwordTooShort ? 'auth-password-error' : undefined}
+          />
+          {passwordTooShort && (
+            <p className="ds-field-error" id="auth-password-error" role="alert">Au moins 6 caractères.</p>
+          )}
+        </div>
+        {isSignUp && (
+          <div className="auth-field">
+            <label className="auth-field-label" htmlFor="auth-password-confirm">
+              Confirmer le mot de passe
+              <RequiredMark />
+            </label>
+            <PasswordInput
+              id="auth-password-confirm"
+              placeholder="Le même mot de passe"
+              value={passwordConfirm}
+              onChange={(e) => setPasswordConfirm(e.target.value)}
+              className="auth-input"
+              autoComplete="new-password"
+              required
+              invalid={passwordMismatch}
+              aria-describedby={passwordMismatch ? 'auth-password-confirm-error' : undefined}
+            />
+            {passwordMismatch && (
+              <p className="ds-field-error" id="auth-password-confirm-error" role="alert">Doit être identique au mot de passe.</p>
+            )}
+          </div>
+        )}
+        </>
       )}
       {error && <div className="auth-error">{error}</div>}
       {message && <div className="auth-message">{message}</div>}
