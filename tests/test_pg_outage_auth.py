@@ -36,6 +36,15 @@ def test_transaction_mode_keeps_a_higher_ceiling(monkeypatch) -> None:
     assert _pg_pool_max() == 12
 
 
+def test_pooler_host_is_the_parsed_hostname_only() -> None:
+    assert not _session_mode_database_url(
+        "postgresql://evil.example/postgres?x=pooler.supabase.com"
+    )
+    assert _session_mode_database_url(
+        "postgresql://user:secret@aws-1-eu-central-1.pooler.supabase.com/postgres"
+    )
+
+
 def test_exists_via_rest_does_not_raise_unbound_local(monkeypatch) -> None:
     class _Admin:
         def get_user_by_id(self, uid: str):

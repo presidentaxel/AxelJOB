@@ -27,10 +27,15 @@ def _session_mode_database_url(url: str) -> bool:
     """True pour le pooler session (port 5432, plafond projet ~15 clients).
 
     Le mode transaction (port 6543) n'a pas ce plafond aussi bas.
+    On lit l'hôte parsé, pas une sous-chaîne de l'URL entière.
     """
-    if ":6543" in url:
+    parsed = urlparse(url)
+    if parsed.port == 6543:
         return False
-    return ":5432" in url or "pooler.supabase.com" in url
+    if parsed.port == 5432:
+        return True
+    host = (parsed.hostname or "").lower().rstrip(".")
+    return host == "pooler.supabase.com" or host.endswith(".pooler.supabase.com")
 
 
 def _pg_pool_max() -> int:
