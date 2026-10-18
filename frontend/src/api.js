@@ -12,6 +12,7 @@ import {
 } from './lib/blobDownload.js';
 import { fetchWithDeadline } from './lib/fetchWithDeadline.js';
 import { httpDetailMessage } from './lib/httpDetailMessage.js';
+import { NETWORK_MESSAGE, userFacingHttpMessage } from './lib/userFacingError.js';
 
 export {
   closePreopenedDownloadWindow,
@@ -51,6 +52,17 @@ function checkUnauthorized(r) {
   if (r.status === 401 && onUnauthorized) onUnauthorized();
 }
 
+async function fetchApi(url, options) {
+  try {
+    return await fetchWithDeadline(url, options);
+  } catch (error) {
+    if (error?.name === 'TimeoutError' || error?.name === 'AbortError') throw error;
+    const network = new Error(NETWORK_MESSAGE);
+    network.name = 'NetworkError';
+    throw network;
+  }
+}
+
 function buildHttpError(message, r, data = undefined) {
   const err = new Error(typeof message === 'string' ? message : JSON.stringify(message));
   err.status = r?.status;
@@ -66,9 +78,9 @@ async function parseErrorResponse(r) {
   try {
     data = JSON.parse(text);
     const detail = data?.detail;
-    msg = httpDetailMessage(detail, data?.error || msg);
+    msg = userFacingHttpMessage(r.status, httpDetailMessage(detail, data?.error || msg));
   } catch {
-    if (text?.trim()) msg = text.trim();
+    if (text?.trim()) msg = userFacingHttpMessage(r.status, text.trim());
   }
   return { msg, data };
 }
@@ -80,7 +92,7 @@ export function apiUrl(path) {
 }
 
 export async function apiGet(path, { signal } = {}) {
-  const r = await fetchWithDeadline(apiUrl(path), { headers: getHeaders(), signal });
+  const r = await fetchApi(apiUrl(path), { headers: getHeaders(), signal });
   const ct = r.headers.get('content-type');
   const isJson = ct && ct.includes('application/json');
   const text = await r.text();
@@ -90,7 +102,7 @@ export async function apiGet(path, { signal } = {}) {
     let data = null;
     try {
       data = JSON.parse(text);
-      msg = httpDetailMessage(data.detail, data.error || msg);
+      msg = userFacingHttpMessage(r.status, httpDetailMessage(data.detail, data.error || msg));
     } catch {
       /* body not JSON */
     }
@@ -100,7 +112,7 @@ export async function apiGet(path, { signal } = {}) {
 }
 
 export async function apiPost(path, body) {
-  const r = await fetchWithDeadline(apiUrl(path), {
+  const r = await fetchApi(apiUrl(path), {
     method: 'POST',
     headers: getHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify(body),
@@ -139,7 +151,7 @@ async function _yieldForStreamUi(parsed) {
 export async function apiPostStream(path, body, { onMessage, signal } = {}) {
   let r;
   try {
-    r = await fetchWithDeadline(apiUrl(path), {
+    r = await fetchApi(apiUrl(path), {
       method: 'POST',
       headers: getHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify(body),
@@ -212,7 +224,7 @@ function _parseStreamLine(line) {
 }
 
 export async function apiPatch(path, body) {
-  const r = await fetchWithDeadline(apiUrl(path), {
+  const r = await fetchApi(apiUrl(path), {
     method: 'PATCH',
     headers: getHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify(body),
@@ -226,7 +238,7 @@ export async function apiPatch(path, body) {
 }
 
 export async function apiPut(path, body, { keepalive = false } = {}) {
-  const r = await fetchWithDeadline(apiUrl(path), {
+  const r = await fetchApi(apiUrl(path), {
     method: 'PUT',
     headers: getHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify(body),
@@ -251,7 +263,7 @@ export async function apiPostFile(path, file, fieldName = 'file') {
 
 /** POST FormData (ex. type + file pour upload-doc). */
 export async function apiPostFormData(path, formData) {
-  const r = await fetchWithDeadline(apiUrl(path), {
+  const r = await fetchApi(apiUrl(path), {
     method: 'POST',
     headers: getHeaders(),
     body: formData,
@@ -267,7 +279,7 @@ export async function apiPostFormData(path, formData) {
 }
 
 export async function apiPostBlob(path, body) {
-  const r = await fetchWithDeadline(apiUrl(path), {
+  const r = await fetchApi(apiUrl(path), {
     method: 'POST',
     headers: getHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify(body),
@@ -300,7 +312,7 @@ export async function apiPostBlob(path, body) {
 
 /** GET request that returns blob + optional filename from Content-Disposition (for PDF downloads). */
 export async function apiGetBlob(path) {
-  const r = await fetchWithDeadline(apiUrl(path), { headers: getHeaders() });
+  const r = await fetchApi(apiUrl(path), { headers: getHeaders() });
   if (!r.ok) {
     checkUnauthorized(r);
     const { msg, data } = await parseErrorResponse(r);
@@ -336,7 +348,7 @@ export function trackEvent(eventType, context = {}) {
     } catch {
       /* ignore */
     }
-    fetchWithDeadline(apiUrl('/api/events/track'), {
+    fetchApi(apiUrl('/api/events/track'), {
       method: 'POST',
       headers: getHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({ event_type: eventType, context, session_id }),
@@ -351,7 +363,7 @@ export function trackEvent(eventType, context = {}) {
 
 /** Télécharge un fichier via GET (ex. export CSV pour mémoire). */
 export async function apiDownload(path, defaultFilename = 'download') {
-  const r = await fetchWithDeadline(apiUrl(path), { headers: getHeaders() });
+  const r = await fetchApi(apiUrl(path), { headers: getHeaders() });
   if (!r.ok) {
     checkUnauthorized(r);
     const { msg, data } = await parseErrorResponse(r);

@@ -550,3 +550,91 @@
     padding-right: 1rem;
   }
 }
+
+.settings-delete {
+  margin-top: var(--ds-space-lg, 1rem);
+  padding-top: var(--ds-space-md, 0.75rem);
+  border-top: 1px solid var(--ds-color-border-default);
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--ds-space-sm, 0.5rem);
+  width: 100%;
+  max-width: 32rem;
+}
+
+.settings-delete .settings-field {
+  width: 100%;
+}
+
+.settings-delete-confirm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  min-height: 1.5rem;
+}
+
+.settings-delete-word {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.1rem;
+  flex: 0 0 auto;
+}
+
+.settings-delete-token,
+.settings-delete-copy {
+  border: 0;
+  background: transparent;
+  color: var(--ds-color-text-default);
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.settings-delete-token {
+  padding: 0;
+  letter-spacing: 0.04em;
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+.settings-delete-copy {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.25rem;
+  height: 1.25rem;
+  padding: 0;
+  color: var(--ds-color-text-muted);
+}
+
+.settings-delete-token:focus-visible,
+.settings-delete-copy:focus-visible {
+  outline: 2px solid var(--ds-color-border-focus);
+  outline-offset: 2px;
+}
+
+.settings-delete-copied {
+  flex: 0 0 3.25rem;
+  color: var(--ds-color-text-muted);
+  font-weight: 400;
+}
+
+.settings-delete-check {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--ds-space-sm, 0.5rem);
+  margin-top: var(--ds-space-md, 0.75rem);
+  min-height: var(--ds-size-touch-min);
+  color: var(--ds-color-text-default);
+  cursor: pointer;
+}
+
+.settings-delete-check input {
+  flex-shrink: 0;
+  width: 1rem;
+  height: 1rem;
+  margin-top: 0.2rem;
+  accent-color: var(--ds-color-action-primary-bg);
+}

@@ -1,4 +1,5 @@
 import { lazy } from 'react';
+import { CHUNK_UPDATE_MESSAGE } from './userFacingError.js';
 
 /** Erreur de chargement d'un chunk (ex. 404 après un nouveau déploiement). */
 export function isChunkLoadError(err) {
@@ -8,6 +9,8 @@ export function isChunkLoadError(err) {
     msg.includes('Importing a module script failed') ||
     msg.includes('Loading chunk') ||
     msg.includes('Loading CSS chunk') ||
+    msg.includes('Une mise à jour est disponible') ||
+    err?.name === 'ChunkLoadError' ||
     (err?.name === 'TypeError' && msg.includes('fetch'))
   );
 }
@@ -33,6 +36,9 @@ export function lazyWithChunkReload(importFn) {
           } catch {
             /* sessionStorage indisponible : on affiche l'erreur, sans recharger */
           }
+          const update = new Error(CHUNK_UPDATE_MESSAGE);
+          update.name = 'ChunkLoadError';
+          throw update;
         }
         throw err;
       }),

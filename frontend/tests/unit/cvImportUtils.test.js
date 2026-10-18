@@ -71,8 +71,8 @@ test('AXE-341: CV importé vide = sparse', () => {
 });
 
 test('AXE-341: messages d’erreur d’analyse à l’onboarding', () => {
-  assert.match(onboardingImportErrorMessage({ status: 429 }), /Quota/);
-  assert.match(onboardingImportErrorMessage({ status: 502 }), /analyse n’a pas abouti/);
+  assert.match(onboardingImportErrorMessage({ status: 429 }), /Trop de tentatives/);
+  assert.match(onboardingImportErrorMessage({ status: 502 }), /n'a pas répondu/);
   assert.equal(
     onboardingImportErrorMessage({ status: 400, message: 'PDF scanné.' }),
     'PDF scanné.',

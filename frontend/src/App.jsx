@@ -21,6 +21,7 @@ import { maybeEmitProductLogin, clearProductLoginSent } from './lib/productLogin
 import { resetTemplateOptionsToDefaults } from './lib/templateOptionsSchema.js';
 import { useViewAnalytics } from './useViewAnalytics';
 import { supabase } from './lib/supabase';
+import { supabaseConfigMessage } from './lib/userFacingError.js';
 import { fetchAuthSessionWithTimeout } from './lib/supabaseAuthSession';
 import { analyticsAttrs } from './lib/analyticsAttrs.js';
 import AuthForm from './components/AuthForm';
@@ -2882,8 +2883,7 @@ export default function App() {
       if (url) window.location.href = url;
       else setError('Impossible d\'accéder au portail de gestion.');
     } catch (e) {
-      if (e.status === 503) setError('Le portail de gestion des abonnements n\'est pas disponible (paiement non configuré).');
-      else setError(e.message || 'Gestion non disponible.');
+      setError(e.message || 'Ce service n\'est pas disponible pour le moment.');
     } finally {
       setCheckoutLoading(false);
     }
@@ -3496,7 +3496,7 @@ export default function App() {
           <img src="/favicon.svg" alt="AxeL Job" className="login-screen-logo" />
           <h1>AxeL Job</h1>
           <p className="login-screen-intro">
-            Configure Supabase pour utiliser l'application. Ajoute <code>VITE_SUPABASE_URL</code> et <code>VITE_SUPABASE_ANON_KEY</code> dans <code>.env</code> (voir <code>.env.example</code>).
+            {supabaseConfigMessage(import.meta.env.DEV)}
           </p>
         </div>
       </div>
