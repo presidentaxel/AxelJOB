@@ -116,11 +116,17 @@ export default function AuthForm({ onSuccess, linkedInOnly = false }) {
   };
 
   const SAME_ACCOUNT_MESSAGE = 'Un compte existe déjà avec cette adresse (Google ou LinkedIn). On t’a envoyé un email pour créer un mot de passe. Ensuite, les deux méthodes ouvrent le même compte.';
+  const ALREADY_SENT_MESSAGE = 'Un compte existe déjà avec cette adresse (Google ou LinkedIn). Le lien pour créer ton mot de passe a déjà été envoyé : vérifie ta boîte mail.';
 
   const offerPasswordForSocialAccount = async () => {
     try {
       const result = await apiPost('/api/auth/password-setup', { email: email.trim() });
       if (!result?.sent) return false;
+      if (result.channel === 'already') {
+        setMessage(ALREADY_SENT_MESSAGE);
+        setError('');
+        return true;
+      }
       if (result.channel === 'supabase') {
         const { error: resetErr } = await supabase.auth.resetPasswordForEmail(email.trim(), {
           redirectTo: currentLoginRedirectTo(),
@@ -171,6 +177,12 @@ export default function AuthForm({ onSuccess, linkedInOnly = false }) {
         const { error: err } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
         if (err) {
           if (await offerPasswordForSocialAccount()) {
+            setLoading(false);
+            return;
+          }
+          const raw = (err.message || '').toLowerCase();
+          if (raw.includes('invalid login') || raw.includes('invalid credentials')) {
+            setError('E-mail ou mot de passe incorrect.');
             setLoading(false);
             return;
           }

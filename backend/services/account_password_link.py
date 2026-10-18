@@ -32,8 +32,10 @@ def _is_plausible_email(value: str) -> bool:
     return bool(dot and host and tld)
 
 
-def needs_password_setup(providers: set[str]) -> bool:
-    """Vrai seulement si le compte a un social et pas encore d'identité e-mail/mot de passe."""
+def needs_password_setup(providers: set[str], *, has_password: bool = False) -> bool:
+    """Vrai seulement si le compte a un social et pas encore de mot de passe."""
+    if has_password:
+        return False
     normalized = {p.strip().lower() for p in providers if p}
     return bool(normalized & SOCIAL_PROVIDERS) and "email" not in normalized
 
@@ -51,8 +53,8 @@ def recently_sent(email: str) -> bool:
     return at is not None and (time.monotonic() - at) < _RECENT_S
 
 
-def providers_for_email(email: str) -> set[str] | None:
-    """Providers du compte, ensemble vide s'il n'existe pas, None si la lecture échoue."""
+def providers_for_email(email: str) -> tuple[set[str], bool] | None:
+    """Providers et présence d'un mot de passe. None si la lecture échoue."""
     from backend.supabase_pg import get_pool
 
     pool = get_pool()
@@ -62,11 +64,16 @@ def providers_for_email(email: str) -> set[str] | None:
         with pool.connection() as conn, conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT COALESCE(array_agg(DISTINCT i.provider) FILTER (WHERE i.provider IS NOT NULL), '{}')
+                SELECT
+                    COALESCE(
+                        array_agg(DISTINCT i.provider) FILTER (WHERE i.provider IS NOT NULL),
+                        '{}'
+                    ),
+                    (COALESCE(u.encrypted_password, '') <> '')
                 FROM auth.users u
                 LEFT JOIN auth.identities i ON i.user_id = u.id
                 WHERE lower(u.email) = lower(%s)
-                GROUP BY u.id
+                GROUP BY u.id, u.encrypted_password
                 LIMIT 1
                 """,
                 (email,),
@@ -76,9 +83,9 @@ def providers_for_email(email: str) -> set[str] | None:
         logger.warning("password setup lookup failed: %s", type(exc).__name__)
         return None
     if not row:
-        return set()
+        return set(), False
     providers = row[0] or []
-    return {str(item) for item in providers}
+    return {str(item) for item in providers}, bool(row[1])
 
 
 def _send_with_resend(email: str, link: str) -> bool:
@@ -138,11 +145,14 @@ def password_setup_for_email(email: str) -> dict[str, str | bool]:
     normalized = (email or "").strip().lower()
     if not _is_plausible_email(normalized):
         return {"sent": False, "channel": ""}
+    account = providers_for_email(normalized)
+    if account is None:
+        return {"sent": False, "channel": ""}
+    providers, has_password = account
+    if not needs_password_setup(providers, has_password=has_password):
+        return {"sent": False, "channel": ""}
     if recently_sent(normalized):
         return {"sent": True, "channel": "already"}
-    providers = providers_for_email(normalized)
-    if providers is None or not needs_password_setup(providers):
-        return {"sent": False, "channel": ""}
     link = _recovery_link(normalized)
     if link and _send_with_resend(normalized, link):
         _remember(normalized)
