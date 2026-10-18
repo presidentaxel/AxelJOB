@@ -81,7 +81,7 @@ def supabase_data_mode_info() -> dict:
     if not USE_SUPABASE:
         return {
             "backend": "disabled",
-            "hint": "cv_base.json et adaptations/ en local",
+            "hint": "Supabase requis pour le CV. adaptations/ reste un fallback local",
         }
     if USE_SUPABASE_PG:
         return {
