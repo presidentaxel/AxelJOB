@@ -12,6 +12,8 @@ from __future__ import annotations
 
 import logging
 import os
+import threading
+import time
 from datetime import datetime, timezone
 from typing import Any
 
@@ -19,14 +21,59 @@ logger = logging.getLogger(__name__)
 
 _pool = None
 
+# Après un échec de connexion (DNS, session saturée), on n'ouvre plus de socket
+# pendant quelques secondes. Sinon le pool relance des clients jusqu'au plafond
+# Supabase (15 en mode session) et reste bloqué après le retour du réseau.
+_CONNECT_COOLDOWN_S = 8.0
+_cooldown_lock = threading.Lock()
+_cooldown_until = 0.0
+
+_CONNECT_OUTAGE_MARKERS = (
+    "failed to resolve",
+    "could not translate",
+    "can't assign requested address",
+    "cannot assign requested address",
+    "connection refused",
+    "timeout expired",
+    "emaxconnsession",
+    "max clients reached",
+    "temporairement injoignable",
+    "name or service not known",
+    "temporary failure in name resolution",
+)
+
+
+def note_pg_connect_failure() -> None:
+    global _cooldown_until
+    with _cooldown_lock:
+        _cooldown_until = time.monotonic() + _CONNECT_COOLDOWN_S
+
+
+def reset_pg_connect_cooldown() -> None:
+    global _cooldown_until
+    with _cooldown_lock:
+        _cooldown_until = 0.0
+
+
+def pg_connect_cooling_down() -> bool:
+    with _cooldown_lock:
+        return time.monotonic() < _cooldown_until
+
+
+def is_pg_connect_outage(exc: BaseException) -> bool:
+    text = str(exc).lower()
+    return any(marker in text for marker in _CONNECT_OUTAGE_MARKERS)
+
 
 class _SentryAwarePool:
-    """Relais ConnectionPool : signale un PoolTimeout sans changer l'API."""
+    """Relais ConnectionPool : signale un PoolTimeout et coupe les rafales de connexion."""
 
     def __init__(self, pool: Any) -> None:
         self._pool = pool
 
     def connection(self, *args: Any, **kwargs: Any) -> Any:
+        if pg_connect_cooling_down():
+            raise RuntimeError("PostgreSQL temporairement injoignable")
         try:
             return self._pool.connection(*args, **kwargs)
         except Exception as exc:
@@ -35,6 +82,16 @@ class _SentryAwarePool:
                 from backend.sentry_business import capture_pg_pool_exhausted
 
                 capture_pg_pool_exhausted(exc)
+            text = str(exc).lower()
+            if is_pg_connect_outage(exc) or name in {"PoolTimeout", "PoolClosed"}:
+                note_pg_connect_failure()
+            if is_pg_connect_outage(exc) or "another command is already in progress" in text:
+                check = getattr(self._pool, "check", None)
+                if callable(check):
+                    try:
+                        check()
+                    except Exception:
+                        logger.debug("pool check after connect failure failed", exc_info=True)
             raise
 
     def __enter__(self) -> _SentryAwarePool:
@@ -73,8 +130,14 @@ def get_pool():
     _pool = _SentryAwarePool(
         ConnectionPool(
             conninfo=SUPABASE_DATABASE_URL,
-            min_size=1,
+            # min_size 0 : ne pas garder un client ouvert ni le recréer en boucle
+            # pendant une coupure DNS (sinon le plafond session Supabase, 15, saute).
+            min_size=0,
             max_size=supabase_pg_pool_max(),
+            timeout=5.0,
+            max_waiting=4,
+            num_workers=1,
+            reconnect_timeout=8.0,
             kwargs={
                 "connect_timeout": int(os.environ.get("SUPABASE_PG_CONNECT_TIMEOUT", "10")),
                 "options": "-c statement_timeout=30000",  # 30s max par statement

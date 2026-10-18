@@ -23,11 +23,25 @@ USE_SUPABASE = bool(SUPABASE_URL and SUPABASE_SERVICE_KEY)
 USE_SUPABASE_PG = bool(USE_SUPABASE and SUPABASE_DATABASE_URL)
 
 
+def _session_mode_database_url(url: str) -> bool:
+    """True pour le pooler session (port 5432, plafond projet ~15 clients).
+
+    Le mode transaction (port 6543) n'a pas ce plafond aussi bas.
+    """
+    if ":6543" in url:
+        return False
+    return ":5432" in url or "pooler.supabase.com" in url
+
+
 def _pg_pool_max() -> int:
     try:
-        return max(1, min(32, int(os.environ.get("SUPABASE_PG_POOL_MAX", "8"))))
+        requested = int(os.environ.get("SUPABASE_PG_POOL_MAX", "4"))
     except ValueError:
-        return 8
+        requested = 4
+    url = os.environ.get("SUPABASE_DATABASE_URL", "") or ""
+    # Session mode : un process ne doit pas pouvoir prendre une grosse part des 15 slots.
+    ceiling = 4 if _session_mode_database_url(url) else 32
+    return max(1, min(ceiling, requested))
 
 
 def supabase_pg_pool_max() -> int:
