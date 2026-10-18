@@ -1,6 +1,7 @@
 """Un e-mail déjà social reçoit un mot de passe, pas un second compte."""
 
 from backend.services.account_password_link import (
+    _is_plausible_email,
     needs_password_setup,
     password_setup_for_email,
 )
@@ -16,6 +17,13 @@ def test_email_identity_is_left_alone() -> None:
     assert needs_password_setup({"email"}) is False
     assert needs_password_setup({"google", "email"}) is False
     assert needs_password_setup(set()) is False
+
+
+def test_email_check_rejects_a_long_input_quickly() -> None:
+    crafted = "!@!." + ("!." * 20000)
+    assert _is_plausible_email(crafted) is False
+    assert _is_plausible_email("ada@example.com") is True
+    assert password_setup_for_email(crafted) == {"sent": False, "channel": ""}
 
 
 def test_unknown_email_does_not_send(monkeypatch) -> None:

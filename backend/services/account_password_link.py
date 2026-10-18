@@ -4,13 +4,12 @@ from __future__ import annotations
 
 import html
 import logging
-import re
 import time
 
 logger = logging.getLogger(__name__)
 
 SOCIAL_PROVIDERS = frozenset({"google", "linkedin", "linkedin_oidc"})
-_EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+_MAX_EMAIL_LEN = 320
 _RECENT_S = 600.0
 _recent: dict[str, float] = {}
 
@@ -18,6 +17,19 @@ ACCOUNT_EXISTS_SENTENCE = (
     "Un compte existe déjà avec cet e-mail (connexion Google ou LinkedIn). "
     "Choisis un mot de passe : ensuite, la connexion sociale et le mot de passe ouvrent le même compte."
 )
+
+
+def _is_plausible_email(value: str) -> bool:
+    """Contrôle linéaire : pas d'expression régulière sur une saisie utilisateur."""
+    if not value or len(value) > _MAX_EMAIL_LEN:
+        return False
+    if any(ch.isspace() for ch in value):
+        return False
+    local, separator, domain = value.partition("@")
+    if separator != "@" or not local or not domain or "@" in domain:
+        return False
+    host, dot, tld = domain.rpartition(".")
+    return bool(dot and host and tld)
 
 
 def needs_password_setup(providers: set[str]) -> bool:
@@ -124,7 +136,7 @@ def _recovery_link(email: str) -> str:
 def password_setup_for_email(email: str) -> dict[str, str | bool]:
     """N'envoie rien si le compte n'est pas social-only. Ne crée jamais d'utilisateur."""
     normalized = (email or "").strip().lower()
-    if not _EMAIL.fullmatch(normalized):
+    if not _is_plausible_email(normalized):
         return {"sent": False, "channel": ""}
     if recently_sent(normalized):
         return {"sent": True, "channel": "already"}
