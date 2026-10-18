@@ -23,7 +23,7 @@ function EyeIcon({ off }) {
 
 /**
  * Mot de passe masqué par défaut.
- * L'œil est décalé du bord droit pour laisser l'icône Bitwarden cliquable.
+ * L'œil est centré dans le champ, au bord droit. Le gestionnaire se décale tout seul.
  */
 export default function PasswordInput({ className = '', ...props }) {
   const [visible, setVisible] = useState(false);
