@@ -35,7 +35,7 @@ import { CONTACT_EMAIL, STORAGE_EXPORT_DIR, STORAGE_EXPORT_ATS_BLOCK_SNOOZE, STO
 import { buildAdaptedPdfFilename } from './lib/pdfExportFilename';
 import { getPdfSaveStartInDirectoryHandle } from './lib/pdfExportStartDirIdb';
 import { HiDocumentText, HiArrowDownTray, HiClipboardDocumentList, HiPencilSquare, HiChatBubbleLeftRight, HiCheck, HiSwatch, HiChevronDown, HiChevronUp, HiPlus, HiOutlinePaperClip } from 'react-icons/hi2';
-import { lazyWithChunkReload, clearChunkErrorReloadKey } from './lib/lazyChunkReload';
+import { lazyWithChunkReload } from './lib/lazyChunkReload';
 import { APP_DEFAULT_ROUTE, APP_ROUTES, getViewFromPathname, isKnownAppPathname } from './lib/appRoutes';
 import {
   ADAPT_CONTEXT_MAX_FILES,
@@ -1041,11 +1041,6 @@ export default function App() {
     }
     if (pathname.startsWith('/app')) document.title = "AxeL Job - Adapter ton CV à l'offre";
   }, [pathname]);
-
-  // Après chargement réussi, réinitialiser le flag de reload chunk (pour un futur déploiement)
-  useEffect(() => {
-    clearChunkErrorReloadKey();
-  }, []);
 
   // Meta robots : sync client sur les routes SPA ; en prod /login sert login.html (noindex déjà dans le HTML)
   useEffect(() => {

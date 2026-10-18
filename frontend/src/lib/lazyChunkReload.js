@@ -12,26 +12,37 @@ export function isChunkLoadError(err) {
   );
 }
 
+const CHUNK_RELOAD_KEY = 'chunkErrorReload';
+
 /** lazy() avec repli : en cas de 404 sur un chunk (nouveau déploiement), recharge la page une fois. */
 export function lazyWithChunkReload(importFn) {
   return lazy(() =>
-    importFn().catch((err) => {
-      if (isChunkLoadError(err) && typeof window !== 'undefined') {
-        const key = 'chunkErrorReload';
-        if (!sessionStorage.getItem(key)) {
-          sessionStorage.setItem(key, '1');
-          window.location.reload();
+    importFn()
+      .then((mod) => {
+        clearChunkErrorReloadKey();
+        return mod;
+      })
+      .catch((err) => {
+        if (isChunkLoadError(err) && typeof window !== 'undefined') {
+          try {
+            if (!sessionStorage.getItem(CHUNK_RELOAD_KEY)) {
+              sessionStorage.setItem(CHUNK_RELOAD_KEY, '1');
+              window.location.reload();
+              return new Promise(() => {});
+            }
+          } catch {
+            /* sessionStorage indisponible : on affiche l'erreur, sans recharger */
+          }
         }
-      }
-      throw err;
-    }),
+        throw err;
+      }),
   );
 }
 
-/** Réinitialise le flag de reload chunk après chargement réussi. */
+/** Efface le drapeau seulement après un chunk réellement chargé, jamais au démarrage. */
 export function clearChunkErrorReloadKey() {
   try {
-    sessionStorage.removeItem('chunkErrorReload');
+    sessionStorage.removeItem(CHUNK_RELOAD_KEY);
   } catch {
     /* ignore */
   }
