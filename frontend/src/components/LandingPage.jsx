@@ -35,7 +35,7 @@ function BurgerIcon({ open }) {
   );
 }
 
-export default function LandingPage({ onCtaClick, onProClick }) {
+export default function LandingPage({ onCtaClick, onSignupClick, onProClick }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const drawerId = useId();
   const closeMenu = useCallback(() => setMenuOpen(false), []);
@@ -163,7 +163,7 @@ export default function LandingPage({ onCtaClick, onProClick }) {
                 {landingText.heroSubtitle}
               </p>
               <div className="landing-hero-ctas">
-                <Button type="button" variant="primary" className="landing-cta-hero" onClick={() => goLogin('home-hero-cta-signup', onCtaClick)} {...analyticsAttrs('home-hero-cta-signup', 'hero', 'primary', 'cta')}>
+                <Button type="button" variant="primary" className="landing-cta-hero" onClick={() => goLogin('home-hero-cta-signup', onSignupClick)} {...analyticsAttrs('home-hero-cta-signup', 'hero', 'primary', 'cta')}>
                   {landingText.ctaTry}
                 </Button>
                 <span className="landing-hero-hint">{landingText.heroHint}</span>
@@ -252,7 +252,7 @@ export default function LandingPage({ onCtaClick, onProClick }) {
                   </li>
                 ))}
               </ul>
-              <Button type="button" variant="secondary" className="pricing-cta" onClick={() => goLogin('home-pricing-cta-free', onCtaClick)} {...analyticsAttrs('home-pricing-cta-free', 'pricing', 'secondary', 'cta')}>
+              <Button type="button" variant="secondary" className="pricing-cta" onClick={() => goLogin('home-pricing-cta-free', onSignupClick)} {...analyticsAttrs('home-pricing-cta-free', 'pricing', 'secondary', 'cta')}>
                 {landingText.ctaFree}
               </Button>
             </div>
@@ -274,7 +274,7 @@ export default function LandingPage({ onCtaClick, onProClick }) {
                   </li>
                 ))}
               </ul>
-              <Button type="button" variant="primary" className="pricing-cta" onClick={() => goLogin('home-pricing-cta-pro', onProClick || onCtaClick)} {...analyticsAttrs('home-pricing-cta-pro', 'pricing', 'primary', 'cta')}>
+              <Button type="button" variant="primary" className="pricing-cta" onClick={() => goLogin('home-pricing-cta-pro', onProClick)} {...analyticsAttrs('home-pricing-cta-pro', 'pricing', 'primary', 'cta')}>
                 {landingText.ctaPro}
               </Button>
             </div>
@@ -317,7 +317,7 @@ export default function LandingPage({ onCtaClick, onProClick }) {
         <div className="landing-container">
           <h2>{landingText.finalTitle}</h2>
           <p>{landingText.finalSubtitle}</p>
-          <Button type="button" variant="primary" className="landing-cta-hero" onClick={() => goLogin('home-final-cta-signup', onCtaClick)} {...analyticsAttrs('home-final-cta-signup', 'final', 'primary', 'cta')}>
+          <Button type="button" variant="primary" className="landing-cta-hero" onClick={() => goLogin('home-final-cta-signup', onSignupClick)} {...analyticsAttrs('home-final-cta-signup', 'final', 'primary', 'cta')}>
             {landingText.ctaTry}
           </Button>
         </div>

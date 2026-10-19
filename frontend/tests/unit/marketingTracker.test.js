@@ -29,7 +29,7 @@ test('cta React sans href : link_url depuis le catalogue, jamais unknown', () =>
   assert.equal(events[0].params.cta_id, 'home-hero-cta-signup');
   assert.equal(events[0].params.cta_zone, 'hero');
   assert.equal(events[0].params.cta_level, 'primary');
-  assert.equal(events[0].params.link_url, '/login');
+  assert.equal(events[0].params.link_url, '/inscription?plan=free');
   assert.equal(events[0].params.cta_text, 'Essayer gratuitement');
   assert.equal(events[0].params.cta_zone === 'unknown', false);
 });
@@ -49,7 +49,7 @@ test('home-pricing-cta-pro → cta_click et select_plan pro', () => {
     ['cta_click', 'select_plan'],
   );
   assert.deepEqual(events[1].params, { plan: 'pro', price: 10, zone: 'pricing' });
-  assert.equal(events[0].params.link_url, '/login?plan=pro');
+  assert.equal(events[0].params.link_url, '/inscription?plan=pro');
 });
 
 test('home-pricing-cta-free → cta_click et select_plan free', () => {
@@ -58,7 +58,7 @@ test('home-pricing-cta-free → cta_click et select_plan free', () => {
     dataTrack: 'cta',
     dataZone: 'pricing',
     dataLevel: 'secondary',
-    href: '/login',
+    href: '/inscription?plan=free',
     text: 'Commencer gratuitement',
     pageHost: 'job.axelproject.fr',
   });
@@ -72,7 +72,10 @@ test('home-pricing-cta-free → cta_click et select_plan free', () => {
 test('href réel gagne sur la map catalogue', () => {
   assert.equal(resolveLinkUrl('nav-cta-signup', '/login?plan=pro'), '/login?plan=pro');
   assert.equal(resolveLinkUrl('nav-cta-signup', ''), '/login');
-  assert.equal(CTA_LINK_URLS['home-pricing-cta-pro'], '/login?plan=pro');
+  assert.equal(CTA_LINK_URLS['home-pricing-cta-pro'], '/inscription?plan=pro');
+  assert.equal(CTA_LINK_URLS['home-hero-cta-signup'], '/inscription?plan=free');
+  assert.equal(CTA_LINK_URLS['nav-cta-signup'], '/login');
+  assert.equal(CTA_LINK_URLS['nav-cta-start'], '/login');
 });
 
 test('nav_click utilise nav_id + nav_type, pas cta_id', () => {
