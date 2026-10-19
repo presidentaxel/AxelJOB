@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import Button from './ui/Button.jsx';
 import { analyticsAttrs } from '../lib/analyticsAttrs.js';
 import { persistLoginCta } from '../../public/signupAttribution.js';
+import { loginNavOptions } from '../lib/publicEntry.js';
 import { CHUNK_UPDATE_MESSAGE, userFacingHttpMessage } from '../lib/userFacingError.js';
 
 function setNoindexFollow() {
@@ -38,7 +39,7 @@ export function NotFoundPage() {
           <Button variant="primary" onClick={() => navigate('/')} {...analyticsAttrs('error-cta-home', 'error', 'primary', 'cta')}>
             Accueil
           </Button>
-          <Button variant="secondary" onClick={() => { persistLoginCta('error-cta-login'); navigate('/login'); }} {...analyticsAttrs('error-cta-login', 'error', 'secondary', 'cta')}>
+          <Button variant="secondary" onClick={() => { persistLoginCta('error-cta-login'); navigate('/login', loginNavOptions()); }} {...analyticsAttrs('error-cta-login', 'error', 'secondary', 'cta')}>
             Connexion
           </Button>
         </div>

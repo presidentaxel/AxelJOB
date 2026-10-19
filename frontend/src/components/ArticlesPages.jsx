@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import { ARTICLE_SOURCE_URLS as U } from '../content/articleSources.js';
 import { analyticsAttrs } from '../lib/analyticsAttrs.js';
 import { persistLoginCta } from '../../public/signupAttribution.js';
+import { loginNavOptions } from '../lib/publicEntry.js';
 import ContentScrollToTop from './ContentScrollToTop';
 import Button from './ui/Button.jsx';
 import './ContentPages.css';
@@ -108,7 +109,7 @@ function ArticleLayout({ title, lead, sections, onBack, prose, signupId }) {
         <div className="content-cta-inner">
           <h2>Un CV adapté à chaque offre, en un clic</h2>
           <p>Essaie AxeL Job gratuitement. 3 adaptations offertes, sans carte bancaire.</p>
-          <Button as={Link} to="/login" variant="primary" onClick={() => persistLoginCta(signupId)} {...analyticsAttrs(signupId, 'content', 'primary', 'cta')}>
+          <Button as={Link} to="/login" state={loginNavOptions().state} variant="primary" onClick={() => persistLoginCta(signupId)} {...analyticsAttrs(signupId, 'content', 'primary', 'cta')}>
             Essayer gratuitement
           </Button>
         </div>

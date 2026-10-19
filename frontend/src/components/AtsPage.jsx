@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import { ARTICLE_SOURCE_URLS as U } from '../content/articleSources.js';
 import { analyticsAttrs } from '../lib/analyticsAttrs.js';
 import { persistLoginCta } from '../../public/signupAttribution.js';
+import { loginNavOptions } from '../lib/publicEntry.js';
 import ContentScrollToTop from './ContentScrollToTop';
 import Button from './ui/Button.jsx';
 import './ContentPages.css';
@@ -187,7 +188,7 @@ export default function AtsPage({ onBack }) {
         <div className="content-cta-inner">
           <h2>Passe les filtres ATS à chaque candidature</h2>
           <p>Adapte ton CV en un clic à chaque offre. Essai gratuit, sans carte bancaire.</p>
-          <Button as={Link} to="/login" variant="primary" onClick={() => persistLoginCta('ats-cta-signup')} {...analyticsAttrs('ats-cta-signup', 'content', 'primary', 'cta')}>
+          <Button as={Link} to="/login" state={loginNavOptions().state} variant="primary" onClick={() => persistLoginCta('ats-cta-signup')} {...analyticsAttrs('ats-cta-signup', 'content', 'primary', 'cta')}>
             Essayer AxeL Job gratuitement
           </Button>
         </div>
