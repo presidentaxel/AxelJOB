@@ -137,6 +137,8 @@ class TestCreateCheckoutSession(unittest.TestCase):
             patch.object(main, "_require_user_id", return_value="user_1"),
             patch.object(main, "STRIPE_SECRET_KEY", "sk_test_xxx"),
             patch.object(main, "STRIPE_PRICE_ID_PRO_MONTHLY", "price_pro_monthly_123"),
+            patch.object(main, "ensure_stripe_customer", return_value="cus_123"),
+            patch.object(main, "_get_user_email_from_jwt", return_value="a@b.c"),
             patch.dict("sys.modules", {"stripe": fake_stripe}),
         ):
             out = main.api_create_checkout_session(req)
@@ -146,6 +148,7 @@ class TestCreateCheckoutSession(unittest.TestCase):
         params = fake_client.checkout.sessions.create.call_args.kwargs["params"]
         self.assertEqual(params["mode"], "subscription")
         self.assertEqual(params["client_reference_id"], "user_1")
+        self.assertEqual(params["customer"], "cus_123")
         self.assertEqual(params["line_items"], [{"price": "price_pro_monthly_123", "quantity": 1}])
 
     def test_create_checkout_session_requires_auth(self):
@@ -211,6 +214,7 @@ class TestStripeWebhook(unittest.TestCase):
             patch.object(main, "STRIPE_SECRET_KEY", "sk_test"),
             patch.dict("sys.modules", {"stripe": fake_stripe}),
             patch.object(main, "set_user_plan") as fake_set,
+            patch.object(main, "cancel_free_subscriptions") as cancel_free,
             patch.object(main, "_invalidate_stripe_caches_for_user"),
             patch.object(main, "_invalidate_usage_cache"),
         ):
@@ -223,6 +227,7 @@ class TestStripeWebhook(unittest.TestCase):
             stripe_customer_id="cus_123",
             stripe_subscription_id="sub_456",
         )
+        cancel_free.assert_called_once_with("cus_123", "sub_456")
 
     def test_subscription_deleted_reverts_to_free(self):
         """customer.subscription.deleted -> set_user_plan(user_id, 'free')."""
@@ -242,6 +247,7 @@ class TestStripeWebhook(unittest.TestCase):
             patch.dict("sys.modules", {"stripe": fake_stripe}),
             patch.object(main, "find_user_id_by_stripe_subscription_id", return_value="user_1"),
             patch.object(main, "set_user_plan") as fake_set,
+            patch.object(main, "ensure_stripe_customer"),
             patch.object(main, "_invalidate_stripe_caches_for_user"),
             patch.object(main, "_invalidate_usage_cache"),
         ):
@@ -252,6 +258,26 @@ class TestStripeWebhook(unittest.TestCase):
         args, kwargs = fake_set.call_args
         self.assertEqual(args[0], "user_1")
         self.assertEqual(args[1], "free")
+
+    def test_free_price_deletion_does_not_reset_the_plan(self):
+        event = {
+            "type": "customer.subscription.deleted",
+            "id": "evt_free",
+            "data": {"object": {"id": "sub_free", "metadata": {"user_id": "user_1"}}},
+        }
+        req = _FakeRequest(body=json.dumps(event).encode())
+        fake_stripe = MagicMock()
+        fake_stripe.Webhook.construct_event.return_value = event
+        with (
+            patch.object(main, "STRIPE_WEBHOOK_SECRET", "whsec_test"),
+            patch.object(main, "STRIPE_SECRET_KEY", "sk_test"),
+            patch.dict("sys.modules", {"stripe": fake_stripe}),
+            patch.object(main, "subscription_uses_free_price", return_value=True),
+            patch.object(main, "set_user_plan") as fake_set,
+        ):
+            out = self._run(main.api_stripe_webhook(req))
+        self.assertEqual(out, {"received": True})
+        fake_set.assert_not_called()
 
 
 class TestCreatePortalSession(unittest.TestCase):
@@ -479,6 +505,53 @@ class TestUsageEndpoint(unittest.TestCase):
         self.assertEqual(out["plan"], "pro")
         self.assertTrue(out["paywall_disabled"])
         self.assertEqual(out["adaptations_limit"], 999999)
+
+
+class TestAccountDeletionCancelsSubscriptions(unittest.TestCase):
+    """La suppression annule le Free à 0€ et le Pro, sans créer de client."""
+
+    def _sub(self, sub_id: str, price: str, status: str = "active"):
+        return SimpleNamespace(
+            id=sub_id,
+            status=status,
+            customer="cus_1",
+            items={"data": [{"price": {"id": price}}]},
+        )
+
+    def _cancel(self, confirmed: bool, subs: list):
+        client = MagicMock()
+        fake_stripe = MagicMock()
+        fake_stripe.StripeClient.return_value = client
+        with (
+            patch.object(main, "STRIPE_SECRET_KEY", "sk_test"),
+            patch.object(main, "get_paywall_disabled", return_value=False),
+            patch.object(main, "ensure_stripe_customer", return_value="cus_1") as lookup,
+            patch.object(main, "get_user_stripe_ids", return_value=("cus_1", None)),
+            patch.object(main, "list_billable_subscriptions", return_value=subs),
+            patch.object(main, "_invalidate_stripe_caches_for_user"),
+            patch.object(main, "_invalidate_usage_cache"),
+            patch("backend.services.stripe_customer.STRIPE_PRICE_ID_FREE", "price_free"),
+            patch.dict("sys.modules", {"stripe": fake_stripe}),
+        ):
+            main._cancel_subscription_for_account_deletion("user-1", confirmed)
+        lookup.assert_called_once_with("user-1", create_if_missing=False)
+        return client
+
+    def test_free_and_pro_are_both_cancelled_once_confirmed(self):
+        subs = [self._sub("sub_free", "price_free"), self._sub("sub_pro", "price_pro")]
+        client = self._cancel(True, subs)
+        cancelled = {call.args[0] for call in client.subscriptions.cancel.call_args_list}
+        self.assertEqual(cancelled, {"sub_free", "sub_pro"})
+
+    def test_paid_subscription_blocks_delete_until_confirmed(self):
+        subs = [self._sub("sub_free", "price_free"), self._sub("sub_pro", "price_pro")]
+        with self.assertRaises(HTTPException) as ctx:
+            self._cancel(False, subs)
+        self.assertEqual(ctx.exception.status_code, 400)
+
+    def test_free_subscription_is_cancelled_without_the_pro_checkbox(self):
+        client = self._cancel(False, [self._sub("sub_free", "price_free")])
+        client.subscriptions.cancel.assert_called_once_with("sub_free")
 
 
 if __name__ == "__main__":

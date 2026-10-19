@@ -852,6 +852,42 @@ def upsert_user_plan(
             )
 
 
+def attach_user_stripe_ids(
+    uid: str,
+    updated_at_iso: str,
+    stripe_customer_id: str,
+    stripe_subscription_id: str | None = None,
+) -> None:
+    """Enregistre les ids Stripe. Ne remplace pas le plan d'une ligne déjà là."""
+    pool = get_pool()
+    if not pool:
+        raise RuntimeError("Pool PG indisponible")
+    with pool.connection() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO public.user_plans (
+                user_id, plan, updated_at,
+                stripe_customer_id, stripe_subscription_id
+            )
+            VALUES (%s, 'free', %s::timestamptz, %s, %s)
+            ON CONFLICT (user_id) DO UPDATE SET
+                updated_at = EXCLUDED.updated_at,
+                stripe_customer_id = EXCLUDED.stripe_customer_id,
+                stripe_subscription_id = CASE
+                    WHEN EXCLUDED.stripe_subscription_id IS NOT NULL
+                     AND (
+                        public.user_plans.plan IS DISTINCT FROM 'pro'
+                        OR public.user_plans.stripe_subscription_id IS NULL
+                        OR btrim(public.user_plans.stripe_subscription_id) = ''
+                     )
+                    THEN EXCLUDED.stripe_subscription_id
+                    ELSE public.user_plans.stripe_subscription_id
+                END
+            """,
+            (uid, updated_at_iso, stripe_customer_id, stripe_subscription_id),
+        )
+
+
 def upsert_free_adaptation_count_anchor(uid: str, anchor: int) -> None:
     """Met à jour l’ancre seule, ou insère une ligne free minimale si absente."""
     pool = get_pool()
