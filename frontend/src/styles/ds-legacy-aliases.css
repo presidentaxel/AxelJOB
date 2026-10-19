@@ -1,5 +1,5 @@
 /**
- * Alias legacy → tokens sémantiques Cohere.
+ * Alias legacy → tokens sémantiques Axel.
  * Les composants existants (`--color-primary`, `--radius-pill`) consomment
  * encore ces noms. Ne plus ajouter de hex ici : pointer vers --ds-*.
  */

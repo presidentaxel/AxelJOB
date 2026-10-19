@@ -27,7 +27,7 @@ const GENERATED_CSS = path.join(SRC_ROOT, 'styles/ds-tokens.generated.css');
 
 const LEGACY_CTA_CLASS_RE = /\b(?:className|class)\s*=\s*["'`][^"'`]*\bbtn-(?:primary|secondary|tertiary|success|ghost|outline)\b/;
 
-const PRIMITIVE_COLOR_ROOTS = new Set(['neutral', 'green', 'navy', 'blue', 'coral', 'purple', 'red', 'amber']);
+const PRIMITIVE_COLOR_ROOTS = new Set(['neutral', 'orange', 'sun', 'green', 'blue', 'red', 'amber']);
 
 function classTokens(cls) {
   return cls.split(/\s+/).filter(Boolean);
@@ -98,12 +98,12 @@ test('les tokens sémantiques se résolvent sans hex dans la référence', async
   const jsonText = await readFile(TOKENS_PATH, 'utf8');
   const tree = loadTokenTree(jsonText);
   const primary = resolveValue(tree, '{color.action.primary.bg}');
-  assert.equal(primary, '#17171c');
+  assert.equal(primary, '#d63d0c');
   const hover = resolveValue(tree, '{color.action.primary.bg-hover}');
-  assert.equal(hover, '#212121');
+  assert.equal(hover, '#b0330a');
   const entries = flattenResolved(tree);
   const semanticAction = entries.find((e) => e.cssName === '--ds-color-action-primary-bg');
-  assert.equal(semanticAction.value, '#17171c');
+  assert.equal(semanticAction.value, '#d63d0c');
   const primitiveLeak = entries.filter(
     (e) => e.path[0] === 'color' && PRIMITIVE_COLOR_ROOTS.has(e.path[1]),
   );

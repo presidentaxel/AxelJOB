@@ -528,7 +528,7 @@
 }
 
 .editor-canva-image-history__thumb-label {
-  font-family: CohereMono, Arial, ui-sans-serif, system-ui, sans-serif;
+  font-family: var(--ds-font-family-mono);
   font-size: 11px;
   letter-spacing: 0.04em;
   color: var(--color-slate);

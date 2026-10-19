@@ -5,7 +5,7 @@
  * Police : alias de --app-font-family (App.css) pour les composants editeur.
  */
 .cv-editor-beta {
-  /* Tokens Cohere 2026 - voir docs/DESIGN-cohere.md */
+  /* Tokens Axel - voir docs/design-system.md */
   --color-primary: #17171c;
   --color-ink: #212121;
   --color-deep-green: #003c33;
