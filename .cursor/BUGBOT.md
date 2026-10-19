@@ -22,7 +22,7 @@ Règles de revue automatique pour les PRs GitHub.
 
 ## Frontend
 
-- Respecter `docs/DESIGN-cohere.md` / tokens design system pour l’UI shell.
+- Respecter `docs/design-system.md` / tokens design system pour l’UI shell.
 - Préférer des changements ciblés ; pas de refactors hors scope du ticket.
 
 ## Backend

@@ -13,8 +13,8 @@
   line-height: var(--ds-font-line-height-body);
   color: var(--ds-color-text-default);
   background: var(--ds-color-bg-default);
-  border: 1px solid var(--ds-color-border-default);
-  border-radius: var(--ds-radius-xs);
+  border: 1px solid var(--ds-color-border-input);
+  border-radius: var(--ds-radius-md);
   transition:
     border-color var(--ds-motion-duration-fast) var(--ds-motion-easing-standard),
     box-shadow var(--ds-motion-duration-fast) var(--ds-motion-easing-standard);
@@ -22,17 +22,16 @@
 
 .ds-input:hover:not(:disabled):not(:focus):not([aria-invalid='true']),
 .input-field:hover:not(:disabled):not(:focus) {
-  border-color: var(--ds-color-text-muted);
+  border-color: var(--ds-color-text-default);
 }
 
 .ds-input:focus,
 .ds-input:focus-visible,
 .input-field:focus,
 .input-field:focus-visible {
-  outline: 2px solid var(--ds-color-border-focus);
-  outline-offset: 2px;
+  outline: none;
   border-color: var(--ds-color-border-input-focus);
-  box-shadow: none;
+  box-shadow: 0 0 0 3px var(--ds-color-accent-highlight);
 }
 
 .ds-input[aria-invalid='true'],
