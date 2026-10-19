@@ -12,6 +12,8 @@ import { fileURLToPath } from 'node:url';
 import { FAQ_ITEMS, LANDING_FAQ_ITEMS, faqStrings } from '../../src/content/faqItems.js';
 import { landingText, BENEFITS, STEPS, FEATURES } from '../../src/content/landingCopy.js';
 
+import { visibleText } from './helpers/htmlText.js';
+
 const ROOT = fileURLToPath(new URL('../..', import.meta.url));
 const read = (rel) => readFileSync(path.join(ROOT, rel), 'utf8').replace(/\r\n/g, '\n');
 const PUBLIC_HTML = readdirSync(path.join(ROOT, 'public')).filter((f) => f.endsWith('.html'));
@@ -24,13 +26,6 @@ const SEO_PAGES = {
   'cv-par-metier': landingText.footerMetier,
   'cv-adapte-chaque-offre': landingText.footerAdapte,
 };
-
-/** Texte visible d'une page HTML : sans head, script, style, commentaires ni balises. */
-function visibleText(src, { keepH1 = false } = {}) {
-  let body = src.replace(/<head>[\s\S]*?<\/head>/, '').replace(/<script[\s\S]*?<\/script>/g, '').replace(/<style[\s\S]*?<\/style>/g, '').replace(/<!--[\s\S]*?-->/g, '');
-  if (!keepH1) body = body.replace(/<h1>[\s\S]*?<\/h1>/g, ' ');
-  return body.replace(/<[^>]+>/g, '').replace(/&nbsp;/g, '\u00a0').replace(/&amp;/g, '&');
-}
 
 const SPACE_BEFORE = /[^\s] [?!:;»]/;
 

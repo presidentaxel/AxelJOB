@@ -12,6 +12,7 @@ import { fileURLToPath } from 'node:url';
 
 import { landingText } from '../../src/content/landingCopy.js';
 import { contentSlug } from '../../src/lib/contentSlug.js';
+import { decodeEntities, stripTags } from './helpers/htmlText.js';
 import { GENERATED_RELS } from '../../scripts/check-token-drift.mjs';
 import { OUT_PATHS, buildTokensCss } from '../../scripts/build-tokens.mjs';
 
@@ -43,7 +44,7 @@ function seoOf(src) {
     description: src.match(/<meta name="description" content="([^"]*)"/)[1],
     canonical: src.match(/<link rel="canonical" href="([^"]*)"/)[1],
     // textContent du H1 : le mot mis en valeur (<em class="ds-highlight">) ne change pas le texte.
-    h1: src.match(/<h1>([\s\S]*?)<\/h1>/)[1].replace(/<[^>]+>/g, ''),
+    h1: stripTags(src.match(/<h1>([\s\S]*?)<\/h1>/)[1]),
     ld: [...src.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)].map((m) =>
       crypto.createHash('sha256').update(m[1].trim()).digest('hex').slice(0, 16),
     ),
@@ -181,7 +182,7 @@ test('sommaire : ancres = slug des H2, présent à partir de 4 sections', () => 
     const ids = [...src.matchAll(/<h2 id="([^"]+)"/g)].map((m) => m[1]);
     assert.deepEqual(anchors, ids, page);
     for (const m of src.matchAll(/<h2 id="([^"]+)">([\s\S]*?)<\/h2>/g)) {
-      assert.equal(m[1], contentSlug(m[2].replace(/&amp;/g, '&').replace(/&nbsp;/g, ' ')), page);
+      assert.equal(m[1], contentSlug(decodeEntities(m[2], ' ')), page);
     }
   }
   for (const page of ['guide-cv', 'erreurs-cv']) assert.doesNotMatch(html(page), /content-toc/, page);
