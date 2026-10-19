@@ -8,6 +8,7 @@ import { CONTACT_EMAIL } from '../constants';
 import { landingCopyright, landingText } from '../content/landingCopy.js';
 import { analyticsAttrs } from '../lib/analyticsAttrs.js';
 import { persistLoginCta } from '../../public/signupAttribution.js';
+import { loginNavOptions } from '../lib/publicEntry.js';
 import Button from './ui/Button.jsx';
 import './ContentPages.css';
 
@@ -60,7 +61,7 @@ export function ContentHeader() {
           <div className="content-nav-actions">
             <Button
               as={Link}
-              to="/login"
+              to="/login" state={loginNavOptions().state}
               variant="tertiary"
               className="content-nav-login"
               onClick={() => persistLoginCta('nav-link-login')}
@@ -70,7 +71,7 @@ export function ContentHeader() {
             </Button>
             <Button
               as={Link}
-              to="/login"
+              to="/login" state={loginNavOptions().state}
               variant="primary"
               onClick={() => persistLoginCta('nav-cta-signup')}
               {...analyticsAttrs('nav-cta-signup', 'header', 'primary', 'cta')}
@@ -87,7 +88,7 @@ export function ContentHeader() {
           </summary>
           <div className="content-burger-panel">
             {links('nav-drawer-')}
-            <Link to="/login" onClick={() => persistLoginCta('nav-drawer-login')} {...analyticsAttrs('nav-drawer-login', 'header', 'tertiary', 'nav')}>
+            <Link to="/login" state={loginNavOptions().state} onClick={() => persistLoginCta('nav-drawer-login')} {...analyticsAttrs('nav-drawer-login', 'header', 'tertiary', 'nav')}>
               {landingText.ctaLogin}
             </Link>
           </div>
@@ -130,7 +131,7 @@ export function ContentCta({
         <p>{text}</p>
         <Button
           as={Link}
-          to="/login"
+          to="/login" state={loginNavOptions().state}
           variant="primary"
           size="lg"
           onClick={() => persistLoginCta(signupId)}
@@ -175,7 +176,7 @@ export function ContentFooter() {
               <a href={`mailto:${CONTACT_EMAIL}?subject=Support%20AxeL%20Job`} {...analyticsAttrs('footer-link-support', 'footer', 'tertiary', 'nav')}>{landingText.footerSupport}</a>
             </li>
             <li>
-              <Link to="/login" onClick={() => persistLoginCta('footer-link-login')} {...analyticsAttrs('footer-link-login', 'footer', 'tertiary', 'nav')}>{landingText.ctaLogin}</Link>
+              <Link to="/login" state={loginNavOptions().state} onClick={() => persistLoginCta('footer-link-login')} {...analyticsAttrs('footer-link-login', 'footer', 'tertiary', 'nav')}>{landingText.ctaLogin}</Link>
             </li>
           </ul>
         </nav>

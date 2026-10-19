@@ -100,7 +100,7 @@ test('AXE-360 : FAQ, login, 404 et CTA contenu en miroir, sans doublon par fichi
 
   assert.ok(errorJsx.includes("'error-cta-home'"));
   assert.ok(errorJsx.includes("'error-cta-login'"));
-  assert.ok(errorJsx.includes("navigate('/login')"));
+  assert.ok(errorJsx.includes("navigate('/login', loginNavOptions())"));
   assert.equal(errorJsx.includes('navigate(-1)'), false);
   assert.ok(errorHtml.includes('data-attr="error-cta-home"'));
   assert.ok(errorHtml.includes('data-attr="error-cta-login"'));

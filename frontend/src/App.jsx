@@ -26,7 +26,8 @@ import { supabaseConfigMessage } from './lib/userFacingError.js';
 import { fetchAuthSessionWithTimeout } from './lib/supabaseAuthSession';
 import { analyticsAttrs } from './lib/analyticsAttrs.js';
 import AuthForm from './components/AuthForm';
-import { authModeFromPath, isAuthPath } from './lib/authPaths.js';
+import { authModeFromPath } from './lib/authPaths.js';
+import { consumeAuthCallback, decidePublicEntry, hasPendingAuthCallback, isPublicEntryPath, loginNavOptions } from './lib/publicEntry.js';
 import AppTopbar from './components/AppTopbar';
 import CompanyLogo from './components/CompanyLogo';
 import CandidatureBoardCard from './components/CandidatureBoardCard';
@@ -1330,7 +1331,16 @@ export default function App() {
     if (!supabase) return;
     if (session) {
       const params = new URLSearchParams(location.search);
-      if (pathname === '/' || isAuthPath(pathname)) {
+      const entry = decidePublicEntry({
+        hasSession: true,
+        pathname,
+        locationState: location.state,
+        authCallback: hasPendingAuthCallback(),
+      });
+      if (entry === 'stay') {
+        /* AXE-504 : simple visite d'une page publique, la session reste en mémoire sans rediriger */
+      } else if (entry === 'enter') {
+        consumeAuthCallback();
         if (wantsProCheckout(location.search)) {
           consumePlanIntentIfPro();
           navigate(APP_DEFAULT_ROUTE, { replace: true });
@@ -1357,7 +1367,7 @@ export default function App() {
         navigate('/', { replace: true });
       }
     }
-  }, [session, pathname, authLoading, navigate, location.search]);
+  }, [session, pathname, authLoading, navigate, location.search, location.state]);
 
   /* /app sans sous-chemin reconnu → CV (évite état incohérent URL / contenu) */
   useEffect(() => {
@@ -3529,7 +3539,14 @@ export default function App() {
   }
 
   /* Non connecté : login visible tout de suite (AXE-372), sans attendre getSession. */
-  if (!session) {
+  /* AXE-504 : session ouverte mais simple visite de / ou /login -> on affiche la page publique */
+  const publicStay = !!session && decidePublicEntry({
+    hasSession: true,
+    pathname,
+    locationState: location.state,
+    authCallback: hasPendingAuthCallback(),
+  }) === 'stay';
+  if (!session || publicStay) {
     const authMode = authModeFromPath(pathname);
     if (authMode) {
       const authTitle = authMode === 'signup' ? 'Créer un compte' : authMode === 'reset' ? 'Mot de passe oublié' : 'Connexion';
@@ -3553,7 +3570,7 @@ export default function App() {
       );
     }
     if (pathname === '/') {
-      return <Suspense fallback={<div className="landing" style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><span aria-hidden>Chargement…</span></div>}><LandingPage onCtaClick={() => navigate('/login')} onProClick={() => navigate('/login?plan=pro')} /></Suspense>;
+      return <Suspense fallback={<div className="landing" style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><span aria-hidden>Chargement…</span></div>}><LandingPage onCtaClick={() => navigate('/login', loginNavOptions())} onProClick={() => navigate('/login?plan=pro', loginNavOptions())} /></Suspense>;
     }
     const marketing = renderPublicMarketingPage(pathname, navigate);
     if (marketing) return marketing;
@@ -3568,7 +3585,7 @@ export default function App() {
   }
 
   /* Connecté : redirection / ou /login vers /app (useEffect) ; pages publiques hors /app ; sinon 404 */
-  if (!authLoading && session && (pathname === '/' || isAuthPath(pathname))) {
+  if (!authLoading && session && isPublicEntryPath(pathname)) {
     return (
       <div className="app-shell" style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <span aria-live="polite">Chargement…</span>
