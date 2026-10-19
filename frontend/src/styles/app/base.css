@@ -86,10 +86,11 @@ body {
   width: 100%;
 }
 
-/* Pages publiques (landing, contenu) : le wrapper prend la hauteur de son contenu au lieu de
+/* Pages publiques (landing, contenu, légales) : le wrapper prend la hauteur de son contenu au lieu de
    se réduire à celle du viewport, sinon l'en-tête sticky quitte l'écran après un viewport. */
 #root > .landing,
-#root > .content-page {
+#root > .content-page,
+#root > .legal-page {
   flex-shrink: 0;
 }
 

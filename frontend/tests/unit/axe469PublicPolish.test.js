@@ -170,3 +170,11 @@ test('seoHead : la 404 reste en noindex quand syncRobotsMeta s’exécute ensuit
     delete globalThis.document;
   }
 });
+
+test('les wrappers des pages publiques ne rétrécissent pas à la hauteur du viewport (#root est un flex à height: 100%)', () => {
+  const css = read('src/styles/app/base.css');
+  const rule = css.match(/#root > \.landing,[\s\S]*?\{([^}]*)\}/);
+  assert.ok(rule, 'règle flex-shrink absente');
+  for (const cls of ['.landing', '.content-page', '.legal-page']) assert.ok(rule[0].includes(`#root > ${cls}`), `${cls} manquant`);
+  assert.match(rule[1], /flex-shrink:\s*0/);
+});
