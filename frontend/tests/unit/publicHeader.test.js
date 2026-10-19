@@ -110,3 +110,50 @@ test('React et script statique gèrent Échap, clic extérieur, aria-expanded et
   assert.match(script, /data-public-header="static"/);
   assert.match(react, /data-public-header="react"/);
 });
+
+const SUBNAV_PAGES = PUBLIC_RESOURCE_LINKS.map((l) => l.to);
+
+test('barre secondaire Ressources : 7 onglets, aria-current sur la page courante, absente ailleurs', async () => {
+  for (const file of await targets()) {
+    const source = await readFile(file, 'utf8');
+    const page = pagePath(file);
+    const subnav = source.match(/<nav class="resources-subnav"[\s\S]*?<\/nav>/);
+    if (!SUBNAV_PAGES.includes(page)) {
+      assert.equal(subnav, null, `${page} : pas de barre secondaire`);
+      continue;
+    }
+    assert.ok(subnav, `${page} : barre secondaire`);
+    const links = [...subnav[0].matchAll(/<a href="([^"]+)"( aria-current="page")?[^>]*>([^<]+)<\/a>/g)];
+    assert.deepEqual(links.map((m) => m[1]), SUBNAV_PAGES);
+    assert.deepEqual(links.map((m) => m[3]), PUBLIC_RESOURCE_LINKS.map((l) => l.label));
+    assert.deepEqual(links.filter((m) => m[2]).map((m) => m[1]), [page]);
+    // La navbar principale garde « Ressources » actif et son menu complet.
+    assert.match(source, /public-header-menu-toggle is-current/);
+    assert.equal((source.match(/class="public-header-menu-list"[\s\S]*?<\/ul>/)[0].match(/<li>/g) || []).length, 7);
+    // Barre secondaire hors de <header> (collante sous lui), dans le bloc généré.
+    assert.ok(source.indexOf('</header>') < source.indexOf('resources-subnav'));
+    assert.ok(source.indexOf('resources-subnav') < source.indexOf('PUBLIC-HEADER:END'));
+  }
+  for (const page of ['/', '/404', '/500', '/cgu', '/mentions-legales', '/confidentialite']) {
+    assert.doesNotMatch(renderPublicHeaderHtml(page), /resources-subnav/, page);
+  }
+});
+
+test('barre secondaire : 44 px collée sous la navbar, scroll-margin des ancres, composant React partagé', async () => {
+  const css = await read('src/components/PublicHeader.css');
+  assert.match(css, /--public-header-subnav-height: 44px;/);
+  assert.match(css, /\.resources-subnav \{[^}]*position: sticky;[^}]*top: var\(--ds-layout-nav-height\);/);
+  assert.match(css, /overflow-x: auto;/);
+  assert.match(css, /scrollbar-width: none;/);
+  assert.match(css, /scroll-snap-type: x proximity;/);
+  assert.match(css, /mask-image: linear-gradient/);
+  assert.match(css, /\.resources-subnav a\[aria-current='page'\]::after \{[^}]*height: 2px;[^}]*background: var\(--ds-color-accent-brand\);/);
+  assert.match(css, /\.resources-subnav a:focus-visible/);
+  assert.doesNotMatch(css, /#[0-9a-fA-F]{3,8}\b/);
+  assert.match(await read('public/static-pages.css'), /scroll-margin-top: calc\(var\(--ds-layout-nav-height\) \+ var\(--public-header-subnav-height, 0px\)/);
+  assert.match(await read('src/components/ContentChrome.jsx'), /<ResourcesSubnav \/>/);
+  const jsx = await read('src/components/ResourcesSubnav.jsx');
+  assert.match(jsx, /PUBLIC_RESOURCE_LINKS/);
+  assert.match(jsx, /isResourcePath\(current\)/);
+  assert.match(await read('public/public-header.js'), /data-resources-subnav/);
+});

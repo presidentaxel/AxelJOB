@@ -6,6 +6,7 @@
  *   - scripts/sync-public-header.mjs, qui écrit le même balisage dans index.html et dans
  *     les pages HTML statiques de public/ (`npm run public-header:sync`).
  * Les libellés viennent de landingCopy.js ; les ids d'analytics (data-attr) sont ceux du catalogue AXE-358/359.
+ * Sur les 7 pages de ressources, une barre secondaire en onglets suit la barre principale.
  * Le style est dans src/components/PublicHeader.css, le comportement mobile des pages
  * statiques dans public/public-header.js (même logique que PublicHeader.jsx).
  */
@@ -22,14 +23,17 @@ export const PUBLIC_HEADER_LABELS = {
 
 /** Menu « Ressources » : les 7 pages de contenu, dans l'ordre d'affichage. */
 export const PUBLIC_RESOURCE_LINKS = [
-  { to: '/ats', label: landingText.footerAts, id: 'nav-link-ats', drawerId: 'nav-drawer-ats' },
-  { to: '/faq', label: landingText.footerFaq, id: 'nav-link-faq', drawerId: 'nav-drawer-faq' },
-  { to: '/modeles-cv', label: landingText.navModelesShort, id: 'nav-link-modeles', drawerId: 'nav-drawer-modeles' },
-  { to: '/guide-cv', label: landingText.navGuide, id: 'nav-link-guide', drawerId: 'nav-drawer-guide' },
-  { to: '/erreurs-cv', label: landingText.footerErreurs, id: 'nav-link-erreurs', drawerId: 'nav-drawer-erreurs' },
-  { to: '/cv-par-metier', label: landingText.footerMetier, id: 'nav-link-metier', drawerId: 'nav-drawer-metier' },
-  { to: '/cv-adapte-chaque-offre', label: landingText.footerAdapte, id: 'nav-link-adapte', drawerId: 'nav-drawer-adapte' },
+  { to: '/ats', label: landingText.footerAts, id: 'nav-link-ats', drawerId: 'nav-drawer-ats', subnavId: 'nav-subnav-ats' },
+  { to: '/faq', label: landingText.footerFaq, id: 'nav-link-faq', drawerId: 'nav-drawer-faq', subnavId: 'nav-subnav-faq' },
+  { to: '/modeles-cv', label: landingText.navModelesShort, id: 'nav-link-modeles', drawerId: 'nav-drawer-modeles', subnavId: 'nav-subnav-modeles' },
+  { to: '/guide-cv', label: landingText.navGuide, id: 'nav-link-guide', drawerId: 'nav-drawer-guide', subnavId: 'nav-subnav-guide' },
+  { to: '/erreurs-cv', label: landingText.footerErreurs, id: 'nav-link-erreurs', drawerId: 'nav-drawer-erreurs', subnavId: 'nav-subnav-erreurs' },
+  { to: '/cv-par-metier', label: landingText.footerMetier, id: 'nav-link-metier', drawerId: 'nav-drawer-metier', subnavId: 'nav-subnav-metier' },
+  { to: '/cv-adapte-chaque-offre', label: landingText.footerAdapte, id: 'nav-link-adapte', drawerId: 'nav-drawer-adapte', subnavId: 'nav-subnav-adapte' },
 ];
+
+/** Barre secondaire (onglets) des 7 pages de ressources : libellé accessible. */
+export const RESOURCES_SUBNAV_LABEL = 'Pages de ressources';
 
 export const PUBLIC_HEADER = {
   brand: landingText.brand,
@@ -121,5 +125,14 @@ export function renderPublicHeaderHtml(currentPath = '/', indent = '') {
   add(2, `<a href="${h.cta.to}" class="public-header-panel-cta" ${attrs(h.cta.drawerId, 'drawer', 'primary', 'cta')}>${escapeHtml(h.cta.label)}</a>`);
   add(1, '</nav>');
   add(0, '</header>');
+  if (isResourcePath(current)) {
+    add(0, `<nav class="resources-subnav" aria-label="${RESOURCES_SUBNAV_LABEL}" data-resources-subnav="static">`);
+    add(1, '<ul class="resources-subnav-list">');
+    for (const link of PUBLIC_RESOURCE_LINKS) {
+      add(2, `<li><a href="${link.to}"${cur(link.to)} ${attrs(link.subnavId, 'subnav', 'tertiary', 'nav')}>${escapeHtml(link.label)}</a></li>`);
+    }
+    add(1, '</ul>');
+    add(0, '</nav>');
+  }
   return lines.join('\n');
 }

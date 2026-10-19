@@ -11,6 +11,7 @@ import { persistLoginCta } from '../../public/signupAttribution.js';
 import { loginNavOptions } from '../lib/publicEntry.js';
 import Button from './ui/Button.jsx';
 import PublicHeader from './PublicHeader.jsx';
+import ResourcesSubnav from './ResourcesSubnav.jsx';
 import './ContentPages.css';
 
 const GUIDE_LINKS = [
@@ -39,9 +40,14 @@ function Brand({ id, zone }) {
   );
 }
 
-/** Barre de navigation unique des pages publiques (voir PublicHeader.jsx). */
+/** Barre de navigation unique des pages publiques (voir PublicHeader.jsx), plus la barre secondaire des 7 pages de ressources. */
 export function ContentHeader() {
-  return <PublicHeader />;
+  return (
+    <>
+      <PublicHeader />
+      <ResourcesSubnav />
+    </>
+  );
 }
 
 /**

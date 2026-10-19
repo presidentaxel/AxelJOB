@@ -375,3 +375,109 @@
   outline: 2px solid var(--ds-color-border-focus);
   outline-offset: 2px;
 }
+
+/* ---------- Barre secondaire « Ressources » (7 pages de contenu) ---------- */
+:root {
+  /* Hauteur de la barre secondaire : sert aux scroll-margin-top des ancres (static-pages.css). */
+  --public-header-subnav-height: 44px;
+}
+
+.resources-subnav {
+  position: sticky;
+  top: var(--ds-layout-nav-height);
+  z-index: calc(var(--ds-z-sticky) - 1);
+  width: 100%;
+  height: var(--public-header-subnav-height);
+  margin: 0;
+  background: var(--ds-color-bg-subtle);
+  background: color-mix(in srgb, var(--ds-color-bg-subtle) 92%, transparent);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--ds-color-border-subtle);
+  font-family: var(--ds-font-family-body);
+  font-size: var(--ds-font-size-label-md);
+  line-height: var(--ds-font-line-height-button);
+}
+
+.resources-subnav,
+.resources-subnav *,
+.resources-subnav *::before,
+.resources-subnav *::after {
+  box-sizing: border-box;
+}
+
+.resources-subnav .resources-subnav-list {
+  display: flex;
+  align-items: stretch;
+  gap: var(--ds-space-xs);
+  height: 100%;
+  max-width: var(--ds-layout-container-public);
+  margin: 0 auto;
+  padding: 0 var(--ds-layout-gutter-public);
+  list-style: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  scroll-snap-type: x proximity;
+  -webkit-overflow-scrolling: touch;
+  /* Fondu de bord : les onglets s'effacent vers les côtés quand la barre défile. */
+  -webkit-mask-image: linear-gradient(to right, transparent 0, black var(--ds-space-lg), black calc(100% - var(--ds-space-lg)), transparent 100%);
+  mask-image: linear-gradient(to right, transparent 0, black var(--ds-space-lg), black calc(100% - var(--ds-space-lg)), transparent 100%);
+}
+
+.resources-subnav .resources-subnav-list::-webkit-scrollbar {
+  display: none;
+}
+
+/* Centré quand tout tient ; sans couper le premier onglet quand ça déborde. */
+.resources-subnav .resources-subnav-list > li:first-child {
+  margin-left: auto;
+}
+
+.resources-subnav .resources-subnav-list > li:last-child {
+  margin-right: auto;
+}
+
+.resources-subnav .resources-subnav-list > li {
+  flex-shrink: 0;
+  scroll-snap-align: center;
+}
+
+.resources-subnav a {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 100%;
+  padding: 0 var(--ds-space-md);
+  color: var(--ds-color-text-muted);
+  font-weight: var(--ds-font-weight-regular);
+  text-decoration: none;
+  white-space: nowrap;
+  transition: color var(--ds-motion-duration-base) var(--ds-motion-easing-standard);
+}
+
+.resources-subnav a:hover {
+  color: var(--ds-color-text-default);
+}
+
+.resources-subnav a[aria-current='page'] {
+  color: var(--ds-color-text-default);
+  font-weight: var(--ds-font-weight-medium);
+}
+
+/* Soulignement orange de la page courante (couleur de marque, pas du texte orange). */
+.resources-subnav a[aria-current='page']::after {
+  content: '';
+  position: absolute;
+  right: var(--ds-space-md);
+  bottom: 0;
+  left: var(--ds-space-md);
+  height: 2px;
+  background: var(--ds-color-accent-brand);
+}
+
+.resources-subnav a:focus-visible {
+  outline: 2px solid var(--ds-color-border-focus);
+  outline-offset: -2px;
+  border-radius: var(--ds-radius-xs);
+}

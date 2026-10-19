@@ -103,7 +103,15 @@
     else if (mq.addListener) mq.addListener(onChange);
   }
 
+  /* Barre secondaire « Ressources » : l'onglet courant est amené au centre de la barre (sans défiler la page). */
+  function centerCurrentTab() {
+    var tab = document.querySelector('[data-resources-subnav] [aria-current="page"]');
+    var list = tab && tab.closest('.resources-subnav-list');
+    if (list) list.scrollLeft = tab.offsetLeft - (list.clientWidth - tab.offsetWidth) / 2;
+  }
+
   function start() {
+    centerCurrentTab();
     var headers = document.querySelectorAll('header.public-header[data-public-header="static"]');
     for (var i = 0; i < headers.length; i += 1) init(headers[i]);
   }

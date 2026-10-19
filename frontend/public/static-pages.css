@@ -316,7 +316,7 @@ html.static-page {
 /* Les ancres ne passent pas sous la nav fixe. */
 .content-section-body h2,
 .faq-item {
-  scroll-margin-top: calc(var(--ds-layout-nav-height) + var(--ds-space-xl));
+  scroll-margin-top: calc(var(--ds-layout-nav-height) + var(--public-header-subnav-height, 0px) + var(--ds-space-xl));
 }
 
 /* ------------------------------------------------------------------ */
