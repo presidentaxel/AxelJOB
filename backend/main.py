@@ -116,7 +116,11 @@ from backend.security import check_user_input_for_injection
 from backend.sentry_business import capture_business_event, record_jwt_reject
 from backend.sentry_config import bind_sentry_user, init_sentry
 from backend.services import billing_notifications, template_access
-from backend.services.stripe_customer import ensure_stripe_customer
+from backend.services.stripe_customer import (
+    cancel_free_subscriptions,
+    ensure_stripe_customer,
+    subscription_uses_free_price,
+)
 
 init_sentry()
 
@@ -2312,6 +2316,12 @@ async def api_stripe_webhook(request: Request):
                         stripe_customer_id=stripe_customer_id,
                         stripe_subscription_id=stripe_sub_id,
                     )
+                    if stripe_customer_id and stripe_sub_id:
+                        await asyncio.to_thread(
+                            cancel_free_subscriptions,
+                            stripe_customer_id,
+                            stripe_sub_id,
+                        )
                     _invalidate_stripe_caches_for_user(user_id)
                     _invalidate_usage_cache(user_id)
                     if stripe_sub_id:
@@ -2342,8 +2352,14 @@ async def api_stripe_webhook(request: Request):
                     _stripe_attr(sub, "id") or "",
                 )
                 uid = (found or "").strip()
-            if uid:
+            if subscription_uses_free_price(sub):
+                logger.info(
+                    "Abonnement gratuit retiré, plan inchangé (sub=%s)",
+                    _stripe_attr(sub, "id"),
+                )
+            elif uid:
                 await asyncio.to_thread(set_user_plan, uid, "free", stripe_subscription_id="")
+                await asyncio.to_thread(ensure_stripe_customer, uid)
                 _invalidate_stripe_caches_for_user(uid)
                 _invalidate_usage_cache(uid)
                 deleted_sub_id = (_stripe_attr(sub, "id") or "").strip()
@@ -2634,6 +2650,19 @@ def _cancel_subscription_for_account_deletion(user_id: str, confirmed: bool) -> 
             status_code=503,
             detail="Impossible de vérifier l'abonnement. Réessaie.",
         ) from exc
+    if subscription_uses_free_price(sub):
+        try:
+            client.subscriptions.cancel(sub_id)
+        except Exception as exc:
+            logger.warning("account delete free subscription cancel failed: %s", type(exc).__name__)
+            raise HTTPException(
+                status_code=503,
+                detail="Annulation de l'abonnement impossible. Réessaie.",
+            ) from exc
+        _STRIPE_SNAPSHOT_CACHE.invalidate(sub_id)
+        _invalidate_stripe_caches_for_user(user_id)
+        _invalidate_usage_cache(user_id)
+        return
     assert_subscription_cancel_confirmed(status, confirmed)
     if not subscription_is_active(status):
         return

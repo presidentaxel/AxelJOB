@@ -214,6 +214,7 @@ class TestStripeWebhook(unittest.TestCase):
             patch.object(main, "STRIPE_SECRET_KEY", "sk_test"),
             patch.dict("sys.modules", {"stripe": fake_stripe}),
             patch.object(main, "set_user_plan") as fake_set,
+            patch.object(main, "cancel_free_subscriptions") as cancel_free,
             patch.object(main, "_invalidate_stripe_caches_for_user"),
             patch.object(main, "_invalidate_usage_cache"),
         ):
@@ -226,6 +227,7 @@ class TestStripeWebhook(unittest.TestCase):
             stripe_customer_id="cus_123",
             stripe_subscription_id="sub_456",
         )
+        cancel_free.assert_called_once_with("cus_123", "sub_456")
 
     def test_subscription_deleted_reverts_to_free(self):
         """customer.subscription.deleted -> set_user_plan(user_id, 'free')."""
@@ -245,6 +247,7 @@ class TestStripeWebhook(unittest.TestCase):
             patch.dict("sys.modules", {"stripe": fake_stripe}),
             patch.object(main, "find_user_id_by_stripe_subscription_id", return_value="user_1"),
             patch.object(main, "set_user_plan") as fake_set,
+            patch.object(main, "ensure_stripe_customer"),
             patch.object(main, "_invalidate_stripe_caches_for_user"),
             patch.object(main, "_invalidate_usage_cache"),
         ):
@@ -255,6 +258,26 @@ class TestStripeWebhook(unittest.TestCase):
         args, kwargs = fake_set.call_args
         self.assertEqual(args[0], "user_1")
         self.assertEqual(args[1], "free")
+
+    def test_free_price_deletion_does_not_reset_the_plan(self):
+        event = {
+            "type": "customer.subscription.deleted",
+            "id": "evt_free",
+            "data": {"object": {"id": "sub_free", "metadata": {"user_id": "user_1"}}},
+        }
+        req = _FakeRequest(body=json.dumps(event).encode())
+        fake_stripe = MagicMock()
+        fake_stripe.Webhook.construct_event.return_value = event
+        with (
+            patch.object(main, "STRIPE_WEBHOOK_SECRET", "whsec_test"),
+            patch.object(main, "STRIPE_SECRET_KEY", "sk_test"),
+            patch.dict("sys.modules", {"stripe": fake_stripe}),
+            patch.object(main, "subscription_uses_free_price", return_value=True),
+            patch.object(main, "set_user_plan") as fake_set,
+        ):
+            out = self._run(main.api_stripe_webhook(req))
+        self.assertEqual(out, {"received": True})
+        fake_set.assert_not_called()
 
 
 class TestCreatePortalSession(unittest.TestCase):

@@ -1,61 +1,127 @@
-"""Client Stripe créé à l'auth, sans abonnement."""
+"""Client Stripe créé à l'auth, avec l'abonnement Free à 0€."""
 
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 from backend.services import stripe_customer
 
+FREE_PRICE = "price_1USHy0JGqri52lIWa3xd5Ha3"
+
 
 def _reset_failures():
     stripe_customer._failed_until.clear()
 
 
-def test_existing_customer_is_not_created_again():
+def test_existing_customer_and_subscription_are_not_created_again():
     _reset_failures()
     with (
-        patch.object(stripe_customer, "get_user_stripe_ids", return_value=("cus_123", None)),
+        patch.object(stripe_customer, "get_user_stripe_ids", return_value=("cus_123", "sub_free")),
+        patch.object(stripe_customer, "get_user_plan", return_value="free"),
         patch.object(stripe_customer, "stripe_client") as factory,
     ):
         assert stripe_customer.ensure_stripe_customer("user-1", "a@b.c") == "cus_123"
     factory.assert_not_called()
 
 
-def test_creates_free_customer_without_subscription():
+def test_creates_free_customer_and_zero_subscription():
     _reset_failures()
     client = MagicMock()
     client.customers.search.return_value = SimpleNamespace(data=[])
     client.checkout.sessions.list.return_value = SimpleNamespace(data=[])
     client.customers.create.return_value = SimpleNamespace(id="cus_new")
+    client.subscriptions.list.return_value = SimpleNamespace(data=[])
+    client.subscriptions.create.return_value = SimpleNamespace(id="sub_free")
     with (
         patch.object(stripe_customer, "get_user_stripe_ids", return_value=(None, None)),
         patch.object(stripe_customer, "STRIPE_SECRET_KEY", "sk_test"),
+        patch.object(stripe_customer, "STRIPE_PRICE_ID_FREE", FREE_PRICE),
         patch.object(stripe_customer, "stripe_client", return_value=client),
         patch.object(stripe_customer, "get_user_plan", return_value="free"),
         patch.object(stripe_customer, "set_user_plan") as set_plan,
     ):
         assert stripe_customer.ensure_stripe_customer("user-1", "a@b.c") == "cus_new"
-    client.customers.create.assert_called_once_with(
-        params={"metadata": {"user_id": "user-1"}, "email": "a@b.c"},
-        options={"idempotency_key": "axeljob-customer-user-1"},
+    client.customers.create.assert_called_once()
+    client.subscriptions.create.assert_called_once_with(
+        params={
+            "customer": "cus_new",
+            "items": [{"price": FREE_PRICE}],
+            "metadata": {"user_id": "user-1", "plan": "free"},
+        }
     )
-    client.subscriptions.create.assert_not_called()
-    set_plan.assert_called_once_with("user-1", "free", stripe_customer_id="cus_new")
+    set_plan.assert_called_once_with(
+        "user-1",
+        "free",
+        stripe_customer_id="cus_new",
+        stripe_subscription_id="sub_free",
+    )
 
 
-def test_reuses_customer_found_by_metadata():
+def test_existing_customer_without_subscription_gets_the_free_price():
     _reset_failures()
     client = MagicMock()
-    client.customers.search.return_value = SimpleNamespace(data=[SimpleNamespace(id="cus_old")])
+    client.subscriptions.list.return_value = SimpleNamespace(data=[])
+    client.subscriptions.create.return_value = SimpleNamespace(id="sub_free")
     with (
-        patch.object(stripe_customer, "get_user_stripe_ids", return_value=(None, None)),
+        patch.object(stripe_customer, "get_user_stripe_ids", return_value=("cus_old", None)),
         patch.object(stripe_customer, "STRIPE_SECRET_KEY", "sk_test"),
+        patch.object(stripe_customer, "STRIPE_PRICE_ID_FREE", FREE_PRICE),
         patch.object(stripe_customer, "stripe_client", return_value=client),
-        patch.object(stripe_customer, "get_user_plan", return_value="pro"),
+        patch.object(stripe_customer, "get_user_plan", return_value="free"),
         patch.object(stripe_customer, "set_user_plan") as set_plan,
     ):
         assert stripe_customer.ensure_stripe_customer("user-1") == "cus_old"
     client.customers.create.assert_not_called()
-    set_plan.assert_called_once_with("user-1", "pro", stripe_customer_id="cus_old")
+    client.subscriptions.create.assert_called_once()
+    set_plan.assert_called_once_with(
+        "user-1",
+        "free",
+        stripe_customer_id="cus_old",
+        stripe_subscription_id="sub_free",
+    )
+
+
+def test_pro_account_does_not_receive_a_free_subscription():
+    _reset_failures()
+    client = MagicMock()
+    client.customers.search.return_value = SimpleNamespace(data=[])
+    client.checkout.sessions.list.return_value = SimpleNamespace(data=[])
+    client.customers.create.return_value = SimpleNamespace(id="cus_pro")
+    with (
+        patch.object(stripe_customer, "get_user_stripe_ids", return_value=(None, None)),
+        patch.object(stripe_customer, "STRIPE_SECRET_KEY", "sk_test"),
+        patch.object(stripe_customer, "STRIPE_PRICE_ID_FREE", FREE_PRICE),
+        patch.object(stripe_customer, "stripe_client", return_value=client),
+        patch.object(stripe_customer, "get_user_plan", return_value="pro"),
+        patch.object(stripe_customer, "set_user_plan") as set_plan,
+    ):
+        assert stripe_customer.ensure_stripe_customer("user-1") == "cus_pro"
+    client.subscriptions.create.assert_not_called()
+    set_plan.assert_called_once_with("user-1", "pro", stripe_customer_id="cus_pro")
+
+
+def test_cancel_free_subscriptions_keeps_the_pro_one():
+    client = MagicMock()
+    client.subscriptions.list.return_value = SimpleNamespace(
+        data=[
+            SimpleNamespace(
+                id="sub_free",
+                items=SimpleNamespace(data=[SimpleNamespace(price=SimpleNamespace(id=FREE_PRICE))]),
+            ),
+            SimpleNamespace(
+                id="sub_pro",
+                items=SimpleNamespace(
+                    data=[SimpleNamespace(price=SimpleNamespace(id="price_pro"))]
+                ),
+            ),
+        ]
+    )
+    with (
+        patch.object(stripe_customer, "STRIPE_SECRET_KEY", "sk_test"),
+        patch.object(stripe_customer, "STRIPE_PRICE_ID_FREE", FREE_PRICE),
+        patch.object(stripe_customer, "stripe_client", return_value=client),
+    ):
+        stripe_customer.cancel_free_subscriptions("cus_123", "sub_pro")
+    client.subscriptions.cancel.assert_called_once_with("sub_free")
 
 
 def test_stripe_failure_does_not_raise_and_retries_later():
@@ -65,7 +131,9 @@ def test_stripe_failure_does_not_raise_and_retries_later():
     with (
         patch.object(stripe_customer, "get_user_stripe_ids", return_value=(None, None)),
         patch.object(stripe_customer, "STRIPE_SECRET_KEY", "sk_test"),
+        patch.object(stripe_customer, "STRIPE_PRICE_ID_FREE", FREE_PRICE),
         patch.object(stripe_customer, "stripe_client", return_value=client),
+        patch.object(stripe_customer, "get_user_plan", return_value="free"),
         patch.object(stripe_customer, "set_user_plan") as set_plan,
     ):
         assert stripe_customer.ensure_stripe_customer("user-1") is None
