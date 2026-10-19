@@ -224,7 +224,14 @@ html.static-page {
   color: var(--ds-color-text-muted);
 }
 
-/* Kicker : tag blanc, puce orange (utilisé sur 404/500). */
+/* Mot mis en valeur dans un titre : italique + surlignage chaud (même rendu que ds-typography.css côté React). */
+.ds-highlight {
+  font-style: italic;
+  padding: 0 0.08em;
+  background-image: linear-gradient(transparent 62%, var(--ds-color-accent-highlight) 62%);
+}
+
+/* Kicker : tag blanc, puce orange (en-tête des pages de contenu, 404/500). */
 .content-kicker,
 .error-static-code {
   display: inline-flex;
@@ -691,8 +698,13 @@ html.static-page {
   list-style: none;
 }
 
-.content-footer-col li { margin-bottom: var(--ds-space-md); }
-.content-footer-col li:last-child { margin-bottom: 0; }
+/* Cibles tactiles >= 24 px : le padding vertical remplace l'ancien espacement entre items. */
+.content-footer-col li { margin: 0; }
+
+.content-footer-col a {
+  display: inline-block;
+  padding: var(--ds-space-xs) 0;
+}
 
 .content-footer a {
   color: var(--ds-color-text-muted);
@@ -734,7 +746,11 @@ html.static-page {
   gap: var(--ds-space-xs) var(--ds-space-xl);
 }
 
-.content-footer-legal a { font-size: 13px; }
+.content-footer-legal a {
+  display: inline-block;
+  padding: var(--ds-space-xs) 0;
+  font-size: 13px;
+}
 
 /* ------------------------------------------------------------------ */
 /* Retour en haut                                                      */

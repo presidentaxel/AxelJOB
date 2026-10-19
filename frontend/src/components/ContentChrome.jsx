@@ -44,6 +44,28 @@ export function ContentHeader() {
   return <PublicHeader />;
 }
 
+/**
+ * Tête de page : kicker (tag blanc, puce orange) + H1 dont UN mot est mis en valeur (ds-highlight).
+ * Le texte du H1 reste celui de `title` (le mot surligné est seulement enveloppé dans <em>).
+ */
+export function ContentHeroTitle({ kicker, title, highlight }) {
+  const at = highlight ? title.indexOf(highlight) : -1;
+  return (
+    <>
+      {kicker && <p className="content-kicker">{kicker}</p>}
+      <h1>
+        {at < 0 ? title : (
+          <>
+            {title.slice(0, at)}
+            <em className="ds-highlight">{highlight}</em>
+            {title.slice(at + highlight.length)}
+          </>
+        )}
+      </h1>
+    </>
+  );
+}
+
 /** Sommaire d'ancres (pages de 4 sections ou plus). items : [{ id, label }]. */
 export function ContentToc({ items }) {
   if (!items || items.length < 4) return null;

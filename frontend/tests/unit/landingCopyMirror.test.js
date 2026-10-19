@@ -15,6 +15,7 @@ const ROOT = fileURLToPath(new URL('../..', import.meta.url));
 function norm(value) {
   return String(value)
     .replace(/&amp;/g, '&')
+    .replace(/&nbsp;/g, ' ')
     .replace(/\u2019/g, "'")
     .replace(/\s+/g, ' ')
     .trim();
@@ -24,7 +25,10 @@ function staticLines(html) {
   const start = html.indexOf('<div class="static-crawlable landing">');
   const end = html.indexOf('</footer>', start);
   assert.ok(start >= 0 && end > start, 'bloc statique introuvable');
-  const block = html.slice(start, end).replace(/<[^>]+>/g, '\n');
+  const block = html
+    .slice(start, end)
+    .replace(/<span data-year>(\d{4})<\/span>/g, '$1')
+    .replace(/<[^>]+>/g, '\n');
   return block
     .split('\n')
     .map(norm)
@@ -62,6 +66,7 @@ test('le HTML statique et landingCopy disent la même chose', async () => {
     `pied de page attendu : ${copyright}`,
   );
   assert.match(html, /data-landing-copyright/);
-  assert.match(html, /new Date\(\)\.getFullYear\(\)/);
+  assert.match(html, /<span data-year>\d{4}<\/span>/);
+  assert.match(html, /<script src="\/footer-year\.js" defer><\/script>/);
   assert.doesNotMatch(html, /Adaptez votre|Améliorez votre|suivez vos/);
 });

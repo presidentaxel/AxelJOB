@@ -1,7 +1,8 @@
 import { ARTICLE_SOURCE_URLS as U } from '../content/articleSources.js';
 import { contentSlug } from '../lib/contentSlug.js';
 import ContentScrollToTop from './ContentScrollToTop';
-import { ContentHeader, ContentToc, ContentCta, ContentFooter } from './ContentChrome.jsx';
+import { landingText } from '../content/landingCopy.js';
+import { ContentHeader, ContentHeroTitle, ContentToc, ContentCta, ContentFooter } from './ContentChrome.jsx';
 
 function Out({ href, children }) {
   return (
@@ -64,7 +65,7 @@ const ICONS = {
   chart: IconChart,
 };
 
-function ArticleLayout({ title, lead, sections, prose, signupId }) {
+function ArticleLayout({ kicker, title, highlight, lead, sections, prose, signupId }) {
   const proseClass = prose ? ' content-prose' : '';
   const tocItems = sections.map((sec) => ({ id: contentSlug(sec.heading), label: sec.heading }));
   return (
@@ -75,7 +76,7 @@ function ArticleLayout({ title, lead, sections, prose, signupId }) {
 
       <section className="content-hero">
         <div className="content-hero-inner">
-          <h1>{title}</h1>
+          <ContentHeroTitle kicker={kicker} title={title} highlight={highlight} />
           <p className="content-lead">{lead}</p>
         </div>
       </section>
@@ -112,7 +113,9 @@ function ArticleLayout({ title, lead, sections, prose, signupId }) {
 const ARTICLES = {
   'modeles-cv': {
     prose: true,
+    kicker: landingText.footerModeles,
     title: 'Modèles de CV : comment choisir le bon',
+    highlight: 'bon',
     lead: "Il existe des milliers de modèles de CV gratuits en ligne. Certains sont beaux. Certains passent l'ATS. Peu font les deux. Voici comment choisir.",
     sections: [
       {
@@ -173,7 +176,7 @@ const ARTICLES = {
       },
       {
         icon: 'document',
-        heading: 'Longueur : une ou deux pages ?',
+        heading: 'Longueur\u00a0: une ou deux pages\u00a0?',
         body: (
           <p>
             <Out href={U.RESUME_GENIUS_STATS}>Resume Genius</Out>
@@ -194,7 +197,9 @@ const ARTICLES = {
   },
   'guide-cv': {
     prose: true,
+    kicker: landingText.footerGuide,
     title: 'Comment faire un bon CV',
+    highlight: 'bon',
     lead: "Ton CV a environ 7 secondes pour convaincre. Pas pour être lu en entier - pour survivre au premier scan. Voici ce que les recruteurs regardent vraiment.",
     sections: [
       {
@@ -265,7 +270,9 @@ const ARTICLES = {
   },
   'erreurs-cv': {
     prose: true,
+    kicker: landingText.footerErreurs,
     title: 'Erreurs fréquentes dans un CV',
+    highlight: 'fréquentes',
     lead: "Les 7 erreurs les plus courantes - et comment les corriger pour passer le filtre recruteur et ATS.",
     sections: [
       {
@@ -274,7 +281,7 @@ const ARTICLES = {
         body: (
           <>
             <div className="content-error-block content-card">
-              <h3>Erreur n°1 : Les fautes d&apos;orthographe</h3>
+              <h3>Erreur n°1&nbsp;: Les fautes d&apos;orthographe</h3>
               <p>
                 C&apos;est la plus éliminatoire. Selon{' '}
                 <Out href={U.RESUME_GENIUS_STATS}>Resume Genius</Out>
@@ -282,10 +289,10 @@ const ARTICLES = {
                 <Out href={U.MIT_SLOAN_AI_RESUME}>MIT Sloan</Out>
                 {' '}confirme le coût réel&nbsp;: les candidats avec moins de 90&nbsp;% de mots correctement orthographiés n&apos;ont que 3&nbsp;% de chances d&apos;être recrutés dans leur premier mois.
               </p>
-              <div className="content-solution"><strong>Solution :</strong> relis à voix haute, utilise un correcteur, fais relire par quelqu&apos;un.</div>
+              <div className="content-solution"><strong>Solution&nbsp;:</strong> relis à voix haute, utilise un correcteur, fais relire par quelqu&apos;un.</div>
             </div>
             <div className="content-error-block content-card">
-              <h3>Erreur n°2 : Envoyer le même CV partout</h3>
+              <h3>Erreur n°2&nbsp;: Envoyer le même CV partout</h3>
               <p>
                 Selon{' '}
                 <Out href={U.JOBSCAN_TAILOR}>Jobscan</Out>
@@ -293,7 +300,7 @@ const ARTICLES = {
               </p>
             </div>
             <div className="content-error-block content-card">
-              <h3>Erreur n°3 : Une adresse email non professionnelle</h3>
+              <h3>Erreur n°3&nbsp;: Une adresse email non professionnelle</h3>
               <p>
                 Selon{' '}
                 <Out href={U.RESUME_GENIUS_STATS}>Resume Genius</Out>
@@ -301,7 +308,7 @@ const ARTICLES = {
               </p>
             </div>
             <div className="content-error-block content-card">
-              <h3>Erreur n°4 : Un format illisible par l&apos;ATS</h3>
+              <h3>Erreur n°4&nbsp;: Un format illisible par l&apos;ATS</h3>
               <p>
                 Colonnes, tableaux, graphiques, barres de compétences en image&nbsp;: tout ce que tu ne peux pas copier-coller en texte brut, l&apos;ATS ne peut pas le lire non plus. L&apos;analyse{' '}
                 <Out href={U.EDLIGO_1000_CV}>EDLIGO</Out>
@@ -309,7 +316,7 @@ const ARTICLES = {
               </p>
             </div>
             <div className="content-error-block content-card">
-              <h3>Erreur n°5 : Ne pas contextualiser ses compétences</h3>
+              <h3>Erreur n°5&nbsp;: Ne pas contextualiser ses compétences</h3>
               <p>
                 Selon{' '}
                 <Out href={U.EDLIGO_1000_CV}>EDLIGO</Out>
@@ -317,14 +324,14 @@ const ARTICLES = {
               </p>
             </div>
             <div className="content-error-block content-card">
-              <h3>Erreur n°6 : Un CV trop long ou trop court</h3>
+              <h3>Erreur n°6&nbsp;: Un CV trop long ou trop court</h3>
               <p>
                 <Out href={U.RESUME_GENIUS_STATS}>Resume Genius</Out>
                 {' '}documente que 54&nbsp;% des recruteurs préfèrent deux pages, et que 70&nbsp;% sont plus enclins à considérer un CV de deux pages plutôt qu&apos;une. À l&apos;inverse, un CV d&apos;une seule page pour un profil de 10 ans d&apos;expérience envoie un signal de sous-qualification.
               </p>
             </div>
             <div className="content-error-block content-card">
-              <h3>Erreur n°7 : Un résumé vague ou absent</h3>
+              <h3>Erreur n°7&nbsp;: Un résumé vague ou absent</h3>
               <p>
                 «&nbsp;Professionnel passionné et polyvalent&nbsp;» ne dit rien de toi.{' '}
                 <Out href={U.RESUME_GENIUS_STATS}>Resume Genius</Out>
@@ -347,7 +354,9 @@ const ARTICLES = {
   },
   'cv-par-metier': {
     prose: true,
+    kicker: landingText.footerMetier,
     title: 'CV par secteur : tech, marketing, finance',
+    highlight: 'secteur',
     lead: "Un bon CV ne se rédige pas de la même façon selon le secteur. Ce ne sont pas seulement des mots différents - c'est une logique différente de ce que les recruteurs cherchent en premier.",
     sections: [
       {
@@ -433,7 +442,9 @@ const ARTICLES = {
   },
   'cv-adapte-chaque-offre': {
     prose: true,
+    kicker: landingText.footerAdapte,
     title: 'CV adapté à chaque offre',
+    highlight: 'adapté',
     lead: "Envoyer le même CV partout, c'est la stratégie la plus répandue. C'est aussi l'une des moins efficaces.",
     sections: [
       {
@@ -506,7 +517,7 @@ const ARTICLES = {
       },
       {
         icon: 'sparkles',
-        heading: 'Comment ça marche avec AxeL Job ?',
+        heading: 'Comment ça marche avec AxeL Job\u00a0?',
         body: (
           <>
             <p>
@@ -536,7 +547,9 @@ export default function ArticlesPages({ slug }) {
 
   return (
     <ArticleLayout
+      kicker={article.kicker}
       title={article.title}
+      highlight={article.highlight}
       lead={article.lead}
       sections={article.sections}
       prose={article.prose}

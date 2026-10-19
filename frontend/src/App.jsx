@@ -31,7 +31,6 @@ import { consumeAuthCallback, decidePublicEntry, hasPendingAuthCallback, isPubli
 import AppTopbar from './components/AppTopbar';
 import CompanyLogo from './components/CompanyLogo';
 import CandidatureBoardCard from './components/CandidatureBoardCard';
-import { NotFoundPage } from './components/ErrorPages';
 import Button from './components/ui/Button.jsx';
 import Input from './components/ui/Input.jsx';
 import PasswordInput from './components/ui/PasswordInput.jsx';
@@ -68,6 +67,7 @@ import {
 
 const ProfileView = lazyWithChunkReload(() => import('./components/editor/ProfileViewSwitcher'));
 const SettingsView = lazyWithChunkReload(() => import('./components/SettingsView'));
+const NotFoundPage = lazyWithChunkReload(() => import('./components/NotFoundPage'));
 const LandingPage = lazyWithChunkReload(() => import('./components/LandingPage'));
 const LegalPages = lazyWithChunkReload(() => import('./components/LegalPages'));
 const AtsPage = lazyWithChunkReload(() => import('./components/AtsPage'));
@@ -3587,7 +3587,7 @@ export default function App() {
         </div>
       );
     }
-    return <NotFoundPage />;
+    return <Suspense fallback={null}><NotFoundPage /></Suspense>;
   }
 
   /* Connecté : redirection / ou /login vers /app (useEffect) ; pages publiques hors /app ; sinon 404 */
@@ -3601,7 +3601,7 @@ export default function App() {
   if (!authLoading && session && !pathname.startsWith('/app')) {
     const marketing = renderPublicMarketingPage(pathname, navigate);
     if (marketing) return marketing;
-    return <NotFoundPage />;
+    return <Suspense fallback={null}><NotFoundPage /></Suspense>;
   }
 
   const showOnboardingBoot = !!(session && pathname.startsWith('/app') && !onboardingChecked);

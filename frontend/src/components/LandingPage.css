@@ -314,7 +314,8 @@
 .mockup-msg--user {
   background: var(--ds-color-bg-inverse);
   color: var(--ds-color-text-inverse);
-  border-radius: var(--ds-radius-md) var(--ds-radius-md) var(--ds-radius-xs) var(--ds-radius-md);
+  /* Bulle encre du CRM : coins 12 / 12 / 2 (bas droit à 2 px). */
+  border-radius: 12px 12px 2px 12px;
   align-self: flex-end;
 }
 
@@ -720,6 +721,107 @@
   width: 100%;
 }
 
+/* ---------- FAQ : <details>, « + » orange qui pivote (même rendu que /faq) ---------- */
+.landing-faq {
+  max-width: calc(var(--ds-space-xxl) * 24);
+  margin: 0 auto;
+}
+
+.landing-faq-item {
+  border-bottom: 1px solid var(--ds-color-border-subtle);
+}
+
+.landing-faq-item:first-child {
+  border-top: 1px solid var(--ds-color-border-subtle);
+}
+
+.landing-faq-item summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ds-space-lg);
+  padding: var(--ds-space-xl) 0;
+  list-style: none;
+  cursor: pointer;
+}
+
+.landing-faq-item summary::-webkit-details-marker {
+  display: none;
+}
+
+.landing-faq-item summary:focus-visible {
+  outline: 2px solid var(--ds-color-border-focus);
+  outline-offset: 2px;
+}
+
+.landing-faq-item summary::after {
+  content: '+';
+  flex-shrink: 0;
+  font-family: var(--ds-font-family-display);
+  font-size: var(--ds-font-size-heading-md);
+  line-height: 1;
+  color: var(--ds-color-text-link);
+  transition: transform var(--ds-motion-duration-base) var(--ds-motion-easing-standard);
+}
+
+.landing-faq-item[open] summary::after {
+  transform: rotate(45deg);
+}
+
+.landing-faq-question {
+  margin: 0;
+  font-family: var(--ds-font-family-body);
+  font-size: 17px;
+  font-weight: var(--ds-font-weight-semibold);
+  line-height: var(--ds-font-line-height-feature);
+  color: var(--ds-color-text-default);
+}
+
+.landing-faq-answer {
+  padding: 0 0 var(--ds-space-xl);
+  max-width: 38em;
+}
+
+.landing-faq-answer p {
+  margin: 0 0 var(--ds-space-md);
+  font-size: var(--ds-font-size-body-md);
+  line-height: 1.65;
+  color: var(--ds-color-text-muted);
+}
+
+.landing-faq-answer p:last-child {
+  margin-bottom: 0;
+}
+
+.landing-faq-source {
+  color: var(--ds-color-text-link);
+  text-decoration: underline;
+  text-underline-offset: var(--ds-space-xs);
+}
+
+.landing-faq-source:hover {
+  color: var(--ds-color-action-link-fg-hover);
+}
+
+.landing-faq-more {
+  margin: var(--ds-space-xxl) 0 0;
+  text-align: center;
+}
+
+.landing-faq-link {
+  display: inline-block;
+  padding: var(--ds-space-xs) 0;
+  font-size: var(--ds-font-size-label-md);
+  font-weight: var(--ds-font-weight-semibold);
+  color: var(--ds-color-text-link);
+  text-decoration: underline;
+  text-underline-offset: var(--ds-space-xs);
+}
+
+.landing-faq-link:hover {
+  color: var(--ds-color-action-link-fg-hover);
+}
+
 /* ---------- CTA final (bande sombre) ---------- */
 .landing-cta-bottom {
   width: 100%;
@@ -807,7 +909,7 @@
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: var(--ds-space-sm);
+  gap: 0;
 }
 
 .landing-footer a {
@@ -815,9 +917,10 @@
   text-decoration: none;
 }
 
+/* Cibles tactiles >= 24 px (le padding remplace l'espacement entre items). */
 .landing-footer-list a {
   display: inline-block;
-  padding: var(--ds-space-xxs) 0;
+  padding: var(--ds-space-xs) 0;
 }
 
 .landing-footer a:hover {
@@ -851,5 +954,10 @@
 .landing-footer-legal {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--ds-space-xs) var(--ds-space-xl);
+  gap: 0 var(--ds-space-xl);
+}
+
+.landing-footer-legal a {
+  display: inline-block;
+  padding: var(--ds-space-xs) 0;
 }

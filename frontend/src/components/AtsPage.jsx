@@ -1,6 +1,7 @@
 import { ARTICLE_SOURCE_URLS as U } from '../content/articleSources.js';
 import ContentScrollToTop from './ContentScrollToTop';
-import { ContentHeader, ContentToc, ContentCta, ContentFooter } from './ContentChrome.jsx';
+import { landingText } from '../content/landingCopy.js';
+import { ContentHeader, ContentHeroTitle, ContentToc, ContentCta, ContentFooter } from './ContentChrome.jsx';
 
 function Out({ href, children }) {
   return (
@@ -60,7 +61,7 @@ function VisualAtsFlow() {
   );
 }
 
-const TOC_ITEMS = [{ id: 'ats-definition', label: "L'ATS, c'est quoi ?" }, { id: 'ats-role', label: "Ce que l'ATS fait vraiment (et ce qu'il ne fait pas)" }, { id: 'ats-parsing', label: "Pourquoi certains CV passent mieux que d'autres" }, { id: 'ats-pour-toi', label: "Ce que ça change pour toi" }, { id: 'ats-axel', label: "Comment AxeL Job t'aide ?" }];
+const TOC_ITEMS = [{ id: 'ats-definition', label: "L'ATS, c'est quoi\u00a0?" }, { id: 'ats-role', label: "Ce que l'ATS fait vraiment (et ce qu'il ne fait pas)" }, { id: 'ats-parsing', label: "Pourquoi certains CV passent mieux que d'autres" }, { id: 'ats-pour-toi', label: "Ce que ça change pour toi" }, { id: 'ats-axel', label: "Comment AxeL Job t'aide\u00a0?" }];
 
 export default function AtsPage() {
   return (
@@ -71,9 +72,9 @@ export default function AtsPage() {
 
       <section className="content-hero">
         <div className="content-hero-inner">
-          <h1>Qu&apos;est-ce qu&apos;un ATS ?</h1>
+          <ContentHeroTitle kicker={landingText.footerAts} title="Qu'est-ce qu'un ATS ?" highlight="ATS" />
           <p className="content-lead">
-            Tu envoies ta candidature. Quelques minutes plus tard, tu reçois un refus automatique. Pas de retour, pas d&apos;explication. La faute à l&apos;ATS ? Pas forcément. Voici ce que les données disent vraiment.
+            Tu envoies ta candidature. Quelques minutes plus tard, tu reçois un refus automatique. Pas de retour, pas d&apos;explication. La faute à l&apos;ATS&nbsp;? Pas forcément. Voici ce que les données disent vraiment.
           </p>
         </div>
       </section>
@@ -86,7 +87,7 @@ export default function AtsPage() {
             <IconFunnel />
           </div>
           <div className="content-section-body">
-            <h2 id="ats-definition">L&apos;ATS, c&apos;est quoi ?</h2>
+            <h2 id="ats-definition">L&apos;ATS, c&apos;est quoi&nbsp;?</h2>
             <p>
               Un ATS (Applicant Tracking System, ou logiciel de gestion des candidatures) est un outil utilisé par les entreprises pour traiter les candidatures à grande échelle. Il centralise les CV reçus, les organise, permet de les filtrer par mots-clés ou critères, et gère les communications avec les candidats.
             </p>
@@ -170,7 +171,7 @@ export default function AtsPage() {
             <IconSparkles />
           </div>
           <div className="content-section-body">
-            <h2 id="ats-axel">Comment AxeL Job t&apos;aide ?</h2>
+            <h2 id="ats-axel">Comment AxeL Job t&apos;aide&nbsp;?</h2>
             <p>
               AxeL Job utilise l&apos;IA pour adapter ton CV à chaque offre&nbsp;: reformulation du résumé, mise en avant des expériences pertinentes, intégration des mots-clés de l&apos;annonce de façon naturelle. Objectif&nbsp;: optimiser ton passage dans les ATS tout en gardant un CV honnête et lisible par les recruteurs.
             </p>

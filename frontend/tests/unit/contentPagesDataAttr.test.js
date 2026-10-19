@@ -63,7 +63,7 @@ test('AXE-360 : FAQ, login, 404 et CTA contenu en miroir, sans doublon par fichi
   const faqHtml = await readRel('public/faq.html');
   const authJsx = await readRel('src/components/AuthForm.jsx');
   const appJsx = await readRel('src/App.jsx');
-  const errorJsx = await readRel('src/components/ErrorPages.jsx');
+  const errorJsx = await readRel('src/components/NotFoundPage.jsx');
   const errorHtml = await readRel('public/404.html');
   const articlesJsx = await readRel('src/components/ArticlesPages.jsx');
   const atsJsx = await readRel('src/components/AtsPage.jsx');

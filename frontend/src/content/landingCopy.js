@@ -4,10 +4,12 @@
  * la même chose.
  */
 
+import { LANDING_FAQ_ITEMS, faqStrings } from './faqItems.js';
+
 export const STEPS = [
   {
     title: 'Importe ton profil',
-    desc: 'LinkedIn, import de CV ou saisie manuelle : ton profil en quelques clics.',
+    desc: 'LinkedIn, import de CV ou saisie manuelle\u00a0: ton profil en quelques clics.',
     icon: 'profile',
   },
   {
@@ -31,7 +33,7 @@ export const FEATURES = [
 export const BENEFITS = [
   {
     title: 'Score ATS optimisé',
-    desc: "Chaque CV est analysé et adapté pour maximiser son passage dans les filtres automatiques des recruteurs (voir Qu'est-ce que l'ATS ?).",
+    desc: "Chaque CV est analysé et adapté pour maximiser son passage dans les filtres automatiques des recruteurs (voir Qu'est-ce que l'ATS\u00a0?).",
     linkToAts: true,
     icon: 'target',
   },
@@ -42,7 +44,7 @@ export const BENEFITS = [
   },
   {
     title: 'Suivi centralisé',
-    desc: 'Toutes tes candidatures au même endroit : statuts, entretiens, relances et exports.',
+    desc: 'Toutes tes candidatures au même endroit\u00a0: statuts, entretiens, relances et exports.',
     icon: 'list',
   },
 ];
@@ -119,9 +121,12 @@ export const landingText = {
   featuresKicker: 'Tout au même endroit',
   featuresTitle: 'Fonctionnalités',
   whyKicker: 'Ce que tu y gagnes',
-  whyTitle: 'Pourquoi AxeL Job ?',
-  atsLink: "Qu'est-ce que l'ATS ?",
-  finalTitle: 'Prêt à décrocher le job de tes rêves ?',
+  whyTitle: 'Pourquoi AxeL Job\u00a0?',
+  atsLink: "Qu'est-ce que l'ATS\u00a0?",
+  faqKicker: 'Questions fréquentes',
+  faqTitle: 'CV, ATS et IA',
+  faqAll: 'Toutes les questions',
+  finalTitle: 'Prêt à décrocher le job de tes rêves\u00a0?',
   finalSubtitle: 'Crée ton compte gratuit et teste 3 adaptations de CV.',
   footerColGuides: 'Guides',
   footerColHelp: 'Aide',
@@ -174,6 +179,7 @@ export function sharedLandingStrings() {
     ...PRO_FEATURES,
     ...ARTICLE_NAV_LINKS.map((link) => link.label),
     ...HERO_REASSURE,
+    ...faqStrings(LANDING_FAQ_ITEMS),
     '01',
     '02',
     '03',

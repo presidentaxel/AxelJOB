@@ -11,9 +11,11 @@ import {
   landingCopyright,
   landingText,
 } from '../content/landingCopy.js';
+import { LANDING_FAQ_ITEMS } from '../content/faqItems.js';
 import { analyticsAttrs } from '../lib/analyticsAttrs.js';
 import { persistLoginCta } from '../../public/signupAttribution.js';
 import Button from './ui/Button.jsx';
+import FaqAnswer from './FaqAnswer.jsx';
 import PublicHeader from './PublicHeader.jsx';
 import './LandingPage.css';
 
@@ -272,6 +274,30 @@ export default function LandingPage({ onCtaClick, onProClick }) {
               ))}
             </ul>
           </div>
+        </div>
+      </section>
+
+      <section id="faq" className="landing-section landing-section--subtle" data-section="faq">
+        <div className="landing-container">
+          <div className="landing-section-head">
+            <p className="landing-eyebrow">{landingText.faqKicker}</p>
+            <h2 className="landing-section-title ds-heading-xl">{landingText.faqTitle}</h2>
+          </div>
+          <div className="landing-faq">
+            {LANDING_FAQ_ITEMS.map((item) => (
+              <details key={item.slug} className="landing-faq-item">
+                <summary>
+                  <h3 className="landing-faq-question">{item.q}</h3>
+                </summary>
+                <div className="landing-faq-answer">
+                  <FaqAnswer paragraphs={item.a} linkClassName="landing-faq-source" />
+                </div>
+              </details>
+            ))}
+          </div>
+          <p className="landing-faq-more">
+            <Link to="/faq" className="landing-faq-link" {...analyticsAttrs('home-faq-link-all', 'faq', 'tertiary', 'nav')}>{landingText.faqAll}</Link>
+          </p>
         </div>
       </section>
 

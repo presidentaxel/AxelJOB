@@ -1,11 +1,8 @@
 import { useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import Button from './ui/Button.jsx';
-import PublicHeader from './PublicHeader.jsx';
-import { analyticsAttrs } from '../lib/analyticsAttrs.js';
-import { persistLoginCta } from '../../public/signupAttribution.js';
-import { loginNavOptions } from '../lib/publicEntry.js';
 import { CHUNK_UPDATE_MESSAGE, userFacingHttpMessage } from '../lib/userFacingError.js';
+
+/** Page 404 (SPA) : voir NotFoundPage.jsx. */
 
 function setNoindexFollow() {
   if (typeof document === 'undefined') return;
@@ -16,40 +13,6 @@ function setNoindexFollow() {
     document.head.appendChild(el);
   }
   el.setAttribute('content', 'noindex, follow');
-}
-
-/** Page 404 - routes SPA inconnues */
-export function NotFoundPage() {
-  const navigate = useNavigate();
-  useEffect(() => {
-    document.title = 'Page introuvable (404) | AxeL Job';
-    setNoindexFollow();
-  }, []);
-  return (
-    <>
-      <PublicHeader />
-      <div className="login-screen" style={{ minHeight: 'calc(100vh - var(--ds-layout-nav-height))' }}>
-        <div className="login-screen-card" style={{ textAlign: 'center' }}>
-          <img src="/favicon.svg" alt="AxeL Job" className="login-screen-logo" />
-          <p style={{ margin: '0 0 0.5rem', fontSize: '0.875rem', fontWeight: 700, color: 'var(--ds-color-text-muted)', letterSpacing: '0.06em' }}>
-            Erreur 404
-          </p>
-          <h1>Page introuvable</h1>
-          <p className="login-screen-intro">
-            Cette adresse n&apos;existe pas ou a été déplacée. Vérifie l&apos;URL ou reviens à l&apos;accueil.
-          </p>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', justifyContent: 'center', marginTop: '1.25rem' }}>
-            <Button variant="primary" onClick={() => navigate('/')} {...analyticsAttrs('error-cta-home', 'error', 'primary', 'cta')}>
-              Accueil
-            </Button>
-            <Button variant="secondary" onClick={() => { persistLoginCta('error-cta-login'); navigate('/login', loginNavOptions()); }} {...analyticsAttrs('error-cta-login', 'error', 'secondary', 'cta')}>
-              Connexion
-            </Button>
-          </div>
-        </div>
-      </div>
-    </>
-  );
 }
 
 /** Page 500 - erreur React non gérée (Error Boundary) */

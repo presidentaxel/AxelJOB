@@ -42,7 +42,8 @@ function seoOf(src) {
     title: src.match(/<title>([\s\S]*?)<\/title>/)[1],
     description: src.match(/<meta name="description" content="([^"]*)"/)[1],
     canonical: src.match(/<link rel="canonical" href="([^"]*)"/)[1],
-    h1: src.match(/<h1>([\s\S]*?)<\/h1>/)[1],
+    // textContent du H1 : le mot mis en valeur (<em class="ds-highlight">) ne change pas le texte.
+    h1: src.match(/<h1>([\s\S]*?)<\/h1>/)[1].replace(/<[^>]+>/g, ''),
     ld: [...src.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)].map((m) =>
       crypto.createHash('sha256').update(m[1].trim()).digest('hex').slice(0, 16),
     ),
