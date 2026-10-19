@@ -12,6 +12,7 @@
   <link rel="stylesheet" href="/ds-tokens.css" />
   <link rel="stylesheet" href="/fonts/axel-fonts.css" />
   <link rel="stylesheet" href="/static-pages.css" />
+  <link rel="stylesheet" href="/public-header.css" />
   <link rel="stylesheet" href="/consent-banner.css" />
   <script src="/analytics-config.js"></script>
   <script src="/consent-gtm.js"></script>
@@ -19,33 +20,49 @@
 </head>
 <body>
   <div class="content-page">
-    <header class="content-header">
-      <div class="content-header-inner">
-        <a href="/" class="content-brand" data-attr="nav-link-back" data-track="nav" data-zone="header" data-level="tertiary"><img src="/favicon.svg" alt="" class="content-logo" width="36" height="36" /><span>AxeL Job</span></a>
-        <nav class="content-nav" aria-label="Navigation principale">
-          <div class="content-nav-links">
-            <a href="/ats" data-attr="nav-link-ats" data-track="nav" data-zone="header" data-level="tertiary">CV et ATS</a>
-            <a href="/faq" data-attr="nav-link-faq" data-track="nav" data-zone="header" data-level="tertiary">FAQ</a>
-            <a href="/modeles-cv" data-attr="nav-link-modeles" data-track="nav" data-zone="header" data-level="tertiary">Modèles CV</a>
-            <a href="/guide-cv" data-attr="nav-link-guide" data-track="nav" data-zone="header" data-level="tertiary">Guide CV</a>
+    <!-- PUBLIC-HEADER:START (généré par scripts/sync-public-header.mjs, source : src/content/publicHeader.js) -->
+    <header class="public-header" data-public-header="static">
+      <div class="public-header-inner">
+        <a href="/" class="public-header-brand" data-attr="nav-link-back" data-track="nav" data-zone="header" data-level="tertiary">
+          <img src="/favicon.svg" alt="" class="public-header-logo" width="36" height="36" />
+          <span class="public-header-brand-name">AxeL Job</span>
+        </a>
+        <nav class="public-header-nav" aria-label="Navigation principale">
+          <a href="/#tarifs" class="public-header-link" data-attr="nav-link-pricing" data-track="nav" data-zone="header" data-level="tertiary">Tarifs</a>
+          <div class="public-header-menu">
+            <button type="button" class="public-header-menu-toggle" aria-expanded="false" aria-controls="public-header-resources" data-attr="nav-menu-resources" data-track="nav" data-zone="header" data-level="tertiary"><span class="public-header-label" data-label="Ressources">Ressources</span><svg class="public-header-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
+            <ul id="public-header-resources" class="public-header-menu-list">
+              <li><a href="/ats" data-attr="nav-link-ats" data-track="nav" data-zone="header" data-level="tertiary">CV et ATS</a></li>
+              <li><a href="/faq" data-attr="nav-link-faq" data-track="nav" data-zone="header" data-level="tertiary">FAQ</a></li>
+              <li><a href="/modeles-cv" data-attr="nav-link-modeles" data-track="nav" data-zone="header" data-level="tertiary">Modèles CV</a></li>
+              <li><a href="/guide-cv" data-attr="nav-link-guide" data-track="nav" data-zone="header" data-level="tertiary">Guide CV</a></li>
+              <li><a href="/erreurs-cv" data-attr="nav-link-erreurs" data-track="nav" data-zone="header" data-level="tertiary">Erreurs à éviter</a></li>
+              <li><a href="/cv-par-metier" data-attr="nav-link-metier" data-track="nav" data-zone="header" data-level="tertiary">CV par métier</a></li>
+              <li><a href="/cv-adapte-chaque-offre" data-attr="nav-link-adapte" data-track="nav" data-zone="header" data-level="tertiary">CV adapté à chaque offre</a></li>
+            </ul>
           </div>
-          <div class="content-nav-actions">
-            <a href="/login" class="button button-text content-nav-login" data-attr="nav-link-login" data-track="nav" data-zone="header" data-level="tertiary">Se connecter</a>
-            <a href="/login" class="button button-primary" data-attr="nav-cta-signup" data-track="cta" data-zone="header" data-level="primary">Essayer<span class="content-cta-long"> gratuitement</span></a>
-          </div>
+          <a href="/login" class="public-header-login" data-attr="nav-link-login" data-track="nav" data-zone="header" data-level="tertiary">Se connecter</a>
+          <a href="/login" class="public-header-cta" data-attr="nav-cta-signup" data-track="cta" data-zone="header" data-level="primary">Essayer gratuitement</a>
         </nav>
-        <details class="content-burger">
-          <summary aria-label="Menu"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></summary>
-          <div class="content-burger-panel">
-            <a href="/ats" data-attr="nav-drawer-ats" data-track="nav" data-zone="header" data-level="tertiary">CV et ATS</a>
-            <a href="/faq" data-attr="nav-drawer-faq" data-track="nav" data-zone="header" data-level="tertiary">FAQ</a>
-            <a href="/modeles-cv" data-attr="nav-drawer-modeles" data-track="nav" data-zone="header" data-level="tertiary">Modèles CV</a>
-            <a href="/guide-cv" data-attr="nav-drawer-guide" data-track="nav" data-zone="header" data-level="tertiary">Guide CV</a>
-            <a href="/login" data-attr="nav-drawer-login" data-track="nav" data-zone="header" data-level="tertiary">Se connecter</a>
-          </div>
-        </details>
+        <button type="button" class="public-header-burger" aria-expanded="false" aria-controls="public-header-panel" aria-label="Ouvrir le menu" data-attr="nav-burger" data-track="nav" data-zone="header" data-level="tertiary"><svg class="public-header-burger-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path class="public-header-burger-open" d="M4 7h16M4 12h16M4 17h16"/><path class="public-header-burger-close" d="M18 6 6 18M6 6l12 12"/></svg></button>
       </div>
+      <nav id="public-header-panel" class="public-header-panel" aria-label="Navigation mobile" hidden>
+        <a href="/#tarifs" data-attr="nav-drawer-pricing" data-track="nav" data-zone="header" data-level="tertiary">Tarifs</a>
+        <p class="public-header-panel-title">Ressources</p>
+        <ul>
+          <li><a href="/ats" data-attr="nav-drawer-ats" data-track="nav" data-zone="header" data-level="tertiary">CV et ATS</a></li>
+          <li><a href="/faq" data-attr="nav-drawer-faq" data-track="nav" data-zone="header" data-level="tertiary">FAQ</a></li>
+          <li><a href="/modeles-cv" data-attr="nav-drawer-modeles" data-track="nav" data-zone="header" data-level="tertiary">Modèles CV</a></li>
+          <li><a href="/guide-cv" data-attr="nav-drawer-guide" data-track="nav" data-zone="header" data-level="tertiary">Guide CV</a></li>
+          <li><a href="/erreurs-cv" data-attr="nav-drawer-erreurs" data-track="nav" data-zone="header" data-level="tertiary">Erreurs à éviter</a></li>
+          <li><a href="/cv-par-metier" data-attr="nav-drawer-metier" data-track="nav" data-zone="header" data-level="tertiary">CV par métier</a></li>
+          <li><a href="/cv-adapte-chaque-offre" data-attr="nav-drawer-adapte" data-track="nav" data-zone="header" data-level="tertiary">CV adapté à chaque offre</a></li>
+        </ul>
+        <a href="/login" data-attr="nav-drawer-login" data-track="nav" data-zone="header" data-level="tertiary">Se connecter</a>
+        <a href="/login" class="public-header-panel-cta" data-attr="nav-cta-drawer" data-track="cta" data-zone="drawer" data-level="primary">Essayer gratuitement</a>
+      </nav>
     </header>
+    <!-- PUBLIC-HEADER:END -->
     <main class="error-static-main">
     <section class="content-hero">
       <div class="content-hero-inner">
@@ -99,5 +116,6 @@
     </div>
   </footer>
   </div>
+<script src="/public-header.js" defer></script>
 </body>
 </html>

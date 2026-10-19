@@ -66,18 +66,14 @@ test('Landing conserve type="button", goLogin et les data-attr CTA', async () =>
   const text = await readFile(path.join(SRC, 'components/LandingPage.jsx'), 'utf8');
   assert.match(text, /variant="primary"/);
   assert.match(text, /variant="secondary"/);
-  assert.match(text, /className="landing-cta-nav"/);
-  assert.match(text, /className="landing-mobile-cta"/);
   assert.match(text, /className="landing-cta-hero"/);
   assert.match(text, /className="pricing-cta"/);
-  assert.match(text, /goLogin\('nav-cta-signup'/);
-  assert.match(text, /goLogin\('nav-cta-start'/);
-  assert.match(text, /goLogin\('nav-cta-drawer'/);
   assert.match(text, /goLogin\('home-hero-cta-signup'/);
   assert.match(text, /goLogin\('home-pricing-cta-free'/);
   assert.match(text, /goLogin\('home-pricing-cta-pro'/);
   assert.match(text, /goLogin\('home-final-cta-signup'/);
-  assert.match(text, /analyticsAttrs\('nav-cta-signup', 'header', 'primary', 'cta'\)/);
+  // La barre de navigation (CTA « Essayer gratuitement » compris) vit dans PublicHeader.jsx, partagée avec les pages de contenu.
+  assert.match(text, /<PublicHeader \/>/);
   assert.match(text, /analyticsAttrs\('home-hero-cta-signup', 'hero', 'primary', 'cta'\)/);
   assert.doesNotMatch(text, /className="button button-primary/);
   assert.doesNotMatch(text, /className="button button-secondary/);

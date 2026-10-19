@@ -1,8 +1,7 @@
-import { useCallback, useEffect, useId, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useCallback, useEffect } from 'react';
+import { Link, useLocation } from 'react-router-dom';
 import { CONTACT_EMAIL } from '../constants';
 import {
-  ARTICLE_NAV_LINKS,
   BENEFITS,
   FEATURES,
   FREE_FEATURES,
@@ -15,6 +14,7 @@ import {
 import { analyticsAttrs } from '../lib/analyticsAttrs.js';
 import { persistLoginCta } from '../../public/signupAttribution.js';
 import Button from './ui/Button.jsx';
+import PublicHeader from './PublicHeader.jsx';
 import './LandingPage.css';
 
 const ICON_PATHS = {
@@ -77,40 +77,8 @@ function CheckIcon() {
   );
 }
 
-function Chevron() {
-  return (
-    <svg className="landing-menu-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
-  );
-}
-
-function BurgerIcon({ open }) {
-  return (
-    <svg className="landing-burger-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-      {open ? <path d="M18 6 6 18M6 6l12 12" /> : <path d="M4 7h16M4 12h16M4 17h16" />}
-    </svg>
-  );
-}
-
-/** Ids analytics des liens du menu « Ressources » (mêmes ids que le HTML statique). */
-const RESOURCE_IDS = {
-  '/ats': 'nav-link-ats',
-  '/faq': 'nav-link-faq',
-  '/modeles-cv': 'nav-link-modeles',
-  '/guide-cv': 'nav-link-guide',
-  '/erreurs-cv': 'nav-link-erreurs',
-  '/cv-par-metier': 'nav-link-metier',
-  '/cv-adapte-chaque-offre': 'nav-link-adapte',
-};
-
 export default function LandingPage({ onCtaClick, onProClick }) {
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [resourcesOpen, setResourcesOpen] = useState(false);
-  const panelId = useId();
-  const resourcesId = useId();
-  const burgerRef = useRef(null);
-  const resourcesRef = useRef(null);
-  const resourcesToggleRef = useRef(null);
-  const closeMenu = useCallback(() => setMenuOpen(false), []);
+  const { hash } = useLocation();
   const goLogin = useCallback(
     (dataAttr, then) => {
       persistLoginCta(dataAttr);
@@ -119,136 +87,15 @@ export default function LandingPage({ onCtaClick, onProClick }) {
     [],
   );
 
-  // Panneau mobile : Échap le ferme et rend le focus au burger.
+  // Arrivée depuis une autre page publique par /#tarifs : on rejoint l'ancre une fois la page montée.
   useEffect(() => {
-    if (!menuOpen) return undefined;
-    const onKey = (e) => {
-      if (e.key === 'Escape') {
-        setMenuOpen(false);
-        burgerRef.current?.focus();
-      }
-    };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [menuOpen]);
-
-  // Menu « Ressources » : Échap (focus rendu au bouton), clic extérieur, sortie du focus.
-  useEffect(() => {
-    if (!resourcesOpen) return undefined;
-    const onKey = (e) => {
-      if (e.key === 'Escape') {
-        setResourcesOpen(false);
-        resourcesToggleRef.current?.focus();
-      }
-    };
-    const onPointer = (e) => {
-      if (resourcesRef.current && !resourcesRef.current.contains(e.target)) setResourcesOpen(false);
-    };
-    document.addEventListener('keydown', onKey);
-    document.addEventListener('pointerdown', onPointer);
-    return () => {
-      document.removeEventListener('keydown', onKey);
-      document.removeEventListener('pointerdown', onPointer);
-    };
-  }, [resourcesOpen]);
-
-  useEffect(() => {
-    const mq = window.matchMedia('(min-width: 768px)');
-    const onChange = () => {
-      if (mq.matches) setMenuOpen(false);
-    };
-    mq.addEventListener('change', onChange);
-    return () => mq.removeEventListener('change', onChange);
-  }, []);
+    if (!hash) return;
+    document.getElementById(decodeURIComponent(hash.slice(1)))?.scrollIntoView();
+  }, [hash]);
 
   return (
     <div className="landing">
-      <header className="landing-header">
-        <div className="landing-container">
-          <div className="landing-header-inner">
-            <Link to="/" className="landing-brand-link" {...analyticsAttrs('nav-link-back', 'header', 'tertiary', 'nav')}>
-              <img src="/favicon.svg" alt="" className="landing-logo" width="36" height="36" />
-              <span className="landing-brand">{landingText.brand}</span>
-            </Link>
-            <nav className="landing-nav" aria-label="Navigation principale">
-              <a href="#tarifs" {...analyticsAttrs('nav-link-pricing', 'header', 'tertiary', 'nav')}>{landingText.navPricing}</a>
-              <div
-                ref={resourcesRef}
-                className={`landing-menu${resourcesOpen ? ' is-open' : ''}`}
-                onBlur={(e) => {
-                  if (!e.currentTarget.contains(e.relatedTarget)) setResourcesOpen(false);
-                }}
-              >
-                <button
-                  ref={resourcesToggleRef}
-                  type="button"
-                  className="landing-menu-toggle"
-                  aria-expanded={resourcesOpen}
-                  aria-controls={resourcesId}
-                  onClick={() => setResourcesOpen((o) => !o)}
-                  {...analyticsAttrs('nav-menu-resources', 'header', 'tertiary', 'nav')}
-                >
-                  {landingText.navResources}
-                  <Chevron />
-                </button>
-                <ul id={resourcesId} className="landing-menu-list">
-                  <li><Link to="/ats" onClick={() => setResourcesOpen(false)} {...analyticsAttrs('nav-link-ats', 'header', 'tertiary', 'nav')}>{landingText.footerAts}</Link></li>
-                  <li><Link to="/faq" onClick={() => setResourcesOpen(false)} {...analyticsAttrs('nav-link-faq', 'header', 'tertiary', 'nav')}>{landingText.footerFaq}</Link></li>
-                  <li><Link to="/modeles-cv" onClick={() => setResourcesOpen(false)} {...analyticsAttrs('nav-link-modeles', 'header', 'tertiary', 'nav')}>{landingText.navModelesShort}</Link></li>
-                  <li><Link to="/guide-cv" onClick={() => setResourcesOpen(false)} {...analyticsAttrs('nav-link-guide', 'header', 'tertiary', 'nav')}>{landingText.navGuide}</Link></li>
-                  <li><Link to="/erreurs-cv" onClick={() => setResourcesOpen(false)} {...analyticsAttrs('nav-link-erreurs', 'header', 'tertiary', 'nav')}>{landingText.footerErreurs}</Link></li>
-                  <li><Link to="/cv-par-metier" onClick={() => setResourcesOpen(false)} {...analyticsAttrs('nav-link-metier', 'header', 'tertiary', 'nav')}>{landingText.footerMetier}</Link></li>
-                  <li><Link to="/cv-adapte-chaque-offre" onClick={() => setResourcesOpen(false)} {...analyticsAttrs('nav-link-adapte', 'header', 'tertiary', 'nav')}>{landingText.footerAdapte}</Link></li>
-                </ul>
-              </div>
-              <Button type="button" variant="tertiary" onClick={() => goLogin('nav-link-login', onCtaClick)} {...analyticsAttrs('nav-link-login', 'header', 'tertiary', 'nav')}>
-                {landingText.ctaLogin}
-              </Button>
-              <Button type="button" variant="primary" className="landing-cta-nav" onClick={() => goLogin('nav-cta-signup', onCtaClick)} {...analyticsAttrs('nav-cta-signup', 'header', 'primary', 'cta')}>
-                {landingText.ctaTry}
-              </Button>
-            </nav>
-            <div className="landing-header-mobile-actions">
-              <Button type="button" variant="primary" className="landing-mobile-cta" onClick={() => goLogin('nav-cta-start', onCtaClick)} {...analyticsAttrs('nav-cta-start', 'header', 'primary', 'cta')}>
-                {landingText.ctaStart}
-              </Button>
-              <button
-                ref={burgerRef}
-                type="button"
-                className="landing-burger"
-                onClick={() => setMenuOpen((o) => !o)}
-                aria-expanded={menuOpen}
-                aria-controls={panelId}
-                aria-label={menuOpen ? 'Fermer le menu' : 'Ouvrir le menu'}
-                {...analyticsAttrs('nav-burger', 'header', 'tertiary', 'nav')}
-              >
-                <BurgerIcon open={menuOpen} />
-              </button>
-            </div>
-          </div>
-        </div>
-        {menuOpen && (
-          <nav id={panelId} className="landing-mobile-panel" aria-label="Navigation mobile">
-            <a href="#comment" onClick={closeMenu}>{landingText.navHow}</a>
-            <a href="#tarifs" onClick={closeMenu}>{landingText.navPricing}</a>
-            <a href="#features" onClick={closeMenu}>{landingText.navFeatures}</a>
-            {ARTICLE_NAV_LINKS.map(({ to, label }) => (
-              <Link key={to} to={to} onClick={closeMenu} {...analyticsAttrs(`${RESOURCE_IDS[to]}-mobile`, 'header', 'tertiary', 'nav')}>{label}</Link>
-            ))}
-            <a
-              href="/login"
-              onClick={(e) => {
-                e.preventDefault();
-                closeMenu();
-                goLogin('nav-cta-drawer', onCtaClick);
-              }}
-              {...analyticsAttrs('nav-cta-drawer', 'drawer', 'primary', 'cta')}
-            >
-              {landingText.ctaLogin}
-            </a>
-          </nav>
-        )}
-      </header>
+      <PublicHeader />
 
       <main id="main-content">
       <section className="landing-hero" data-section="hero">

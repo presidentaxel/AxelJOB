@@ -106,16 +106,22 @@ test('public/ds-tokens.css est la copie exacte du CSS généré depuis tokens.js
 });
 
 function block(src, tag) {
-  const m = src.match(new RegExp(`<${tag} class="content-${tag}">[\\s\\S]*?</${tag}>`));
+  const cls = tag === 'header' ? 'public-header' : `content-${tag}`;
+  const m = src.match(new RegExp(`<${tag} class="${cls}"[^>]*>[\\s\\S]*?</${tag}>`));
   assert.ok(m, `${tag} introuvable`);
   return m[0].split('\n').map((l) => l.trim()).join('\n');
 }
 
+/** La barre porte aria-current / is-current selon la page : on les neutralise pour comparer le reste. */
+function neutral(headerBlock) {
+  return headerBlock.replace(/ aria-current="page"/g, '').replace(/ is-current/g, '');
+}
+
 test('en-tête et pied de page identiques sur toutes les pages SEO, légales et d’erreur', () => {
-  const header = block(html('ats'), 'header');
+  const header = neutral(block(html('ats'), 'header'));
   const footer = block(html('ats'), 'footer');
   for (const page of CHROME_PAGES) {
-    assert.equal(block(html(page), 'header'), header, `${page}: header`);
+    assert.equal(neutral(block(html(page), 'header')), header, `${page}: header`);
     assert.equal(block(html(page), 'footer'), footer, `${page}: footer`);
   }
 });
@@ -129,11 +135,17 @@ test('en-tête et pied de page statiques reprennent les libellés et URLs de lan
     ['/faq', landingText.footerFaq],
     ['/modeles-cv', landingText.navModelesShort],
     ['/guide-cv', landingText.navGuide],
+    ['/erreurs-cv', landingText.footerErreurs],
+    ['/cv-par-metier', landingText.footerMetier],
+    ['/cv-adapte-chaque-offre', landingText.footerAdapte],
+    ['/login', landingText.ctaLogin],
+    ['/login', landingText.ctaTry],
+    ['/#tarifs', landingText.navPricing],
   ]) {
-    assert.ok(header.includes(`href="${href}"`) && header.includes(`>${label}</a>`), `header ${href}`);
+    assert.ok(header.includes(`href="${href}"`) && header.includes(`>${label}</a>`), `header ${href} ${label}`);
   }
-  assert.ok(header.includes(`>${landingText.ctaLogin}</a>`));
-  assert.ok(header.includes('class="button button-primary"') && header.includes('href="/login"'));
+  assert.ok(header.includes(`>${landingText.navResources}</span>`));
+  assert.ok(header.includes('class="public-header-cta"') && header.includes('href="/login"'));
   for (const [href, label] of [
     ['/ats', landingText.footerAts],
     ['/faq', landingText.footerFaq],

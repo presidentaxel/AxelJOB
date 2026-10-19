@@ -2,8 +2,9 @@
  * Génère le CSS critique de la landing à partir des vrais fichiers CSS :
  *   - styles/ds-tokens.generated.css (seules les variables --ds-* utilisées) ;
  *   - styles/app/buttons.css, styles/ds-typography.css ;
+ *   - components/PublicHeader.css (barre de navigation unique, voir scripts/sync-public-header.mjs) ;
  *   - components/LandingPage.css ;
- *   - quelques règles propres au HTML statique.
+ *   - le reset minimal du shell (SHELL_BASE).
  *
  * Résultat écrit dans index.html (deuxième balise <style>, entre les marqueurs
  * LANDING-CRITICAL-CSS) et dans public/landing-static.css (non minifié par ligne).
@@ -25,7 +26,7 @@ export const END = '/* LANDING-CRITICAL-CSS:END */';
 
 /** Fond de page, reset et variables courtes du shell (tout vient des tokens). */
 const SHELL_BASE = `
-html { background: var(--ds-color-bg-default); }
+html { background: var(--ds-color-bg-default); scrollbar-width: thin; }
 *, *::before, *::after { box-sizing: border-box; }
 body {
   margin: 0;
@@ -35,12 +36,6 @@ body {
   color: var(--text);
 }
 img { max-width: 100%; }
-`;
-
-/** Règles propres au HTML statique : menus details/summary, mobile sans burger React. */
-const STATIC_ONLY = `
-.static-crawlable .landing-menu-toggle { font-size: var(--ds-font-size-body-md); }
-.static-crawlable summary { cursor: pointer; }
 `;
 
 const ROOT_ALIASES = `
@@ -67,13 +62,14 @@ function declarations(generated) {
 }
 
 export async function buildCriticalCss() {
-  const [generated, buttons, typography, landing] = await Promise.all([
+  const [generated, buttons, typography, header, landing] = await Promise.all([
     readFile(join(SRC, 'styles/ds-tokens.generated.css'), 'utf8'),
     readFile(join(SRC, 'styles/app/buttons.css'), 'utf8'),
     readFile(join(SRC, 'styles/ds-typography.css'), 'utf8'),
+    readFile(join(SRC, 'components/PublicHeader.css'), 'utf8'),
     readFile(join(SRC, 'components/LandingPage.css'), 'utf8'),
   ]);
-  const body = [SHELL_BASE, buttons, typography, landing, STATIC_ONLY].join('\n');
+  const body = [SHELL_BASE, buttons, typography, header, landing].join('\n');
   const all = declarations(generated);
   const used = new Set();
   for (const m of body.matchAll(/var\((--ds-[a-z0-9-]+)/g)) used.add(m[1]);

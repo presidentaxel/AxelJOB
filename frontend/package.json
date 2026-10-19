@@ -12,6 +12,7 @@
     "tokens": "node scripts/build-tokens.mjs",
     "tokens:check": "node scripts/check-token-drift.mjs",
     "landing:critical": "node scripts/sync-landing-critical-css.mjs",
+    "public-header:sync": "node scripts/sync-public-header.mjs",
     "build:brand-assets": "node scripts/generate-brand-assets.mjs",
     "build:favicon-webp": "node scripts/favicon-webp.mjs",
     "lint": "eslint .",

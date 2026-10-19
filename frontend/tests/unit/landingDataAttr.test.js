@@ -8,15 +8,6 @@ const FRONTEND_ROOT = fileURLToPath(new URL('../..', import.meta.url));
 
 /** IDs home-* + nav-* posés en miroir React / HTML (AXE-359). */
 const SHARED_IDS = [
-  'nav-link-ats',
-  'nav-link-faq',
-  'nav-link-modeles',
-  'nav-link-guide',
-  'nav-link-login',
-  'nav-link-pricing',
-  'nav-menu-resources',
-  'nav-cta-signup',
-  'nav-cta-start',
   'home-hero-title',
   'home-hero-cta-signup',
   'home-pricing-card-free',
@@ -28,8 +19,29 @@ const SHARED_IDS = [
   'home-final-cta-signup',
 ];
 
-/** Burger + CTA drawer : markup React only (HTML statique sans menu JS). */
-const REACT_ONLY_IDS = ['nav-burger', 'nav-cta-drawer'];
+/**
+ * Barre de navigation : ids définis dans src/content/publicHeader.js, rendus à l'identique par
+ * PublicHeader.jsx (React) et par le HTML statique généré (voir aussi publicHeader.test.js).
+ */
+const NAV_IDS = [
+  'nav-link-back',
+  'nav-link-pricing',
+  'nav-menu-resources',
+  'nav-link-ats',
+  'nav-link-faq',
+  'nav-link-modeles',
+  'nav-link-guide',
+  'nav-link-erreurs',
+  'nav-link-metier',
+  'nav-link-adapte',
+  'nav-link-login',
+  'nav-cta-signup',
+  'nav-burger',
+  'nav-drawer-pricing',
+  'nav-drawer-ats',
+  'nav-drawer-login',
+  'nav-cta-drawer',
+];
 
 const SECTIONS = ['hero', 'how', 'pricing', 'features', 'why', 'final'];
 
@@ -65,14 +77,13 @@ test('landing React et HTML statique portent les data-attr AXE-359 en miroir', a
     assert.ok(jsxIds.includes(id), `manque React: ${id}`);
     assert.ok(htmlIds.includes(id), `manque HTML: ${id}`);
   }
-  for (const id of REACT_ONLY_IDS) {
-    assert.ok(jsxIds.includes(id), `manque React: ${id}`);
-    assert.equal(htmlIds.includes(id), false, `ID React-only présent dans HTML: ${id}`);
+  const headerData = await readFile(path.join(FRONTEND_ROOT, 'src/content/publicHeader.js'), 'utf8');
+  for (const id of NAV_IDS) {
+    assert.ok(headerData.includes(`'${id}'`), `manque dans publicHeader.js: ${id}`);
+    assert.ok(htmlIds.includes(id), `manque HTML: ${id}`);
   }
-
+  assert.match(jsx, /<PublicHeader \/>/);
   assert.equal(jsxIds.includes('nav-logo'), false);
-  assert.ok(jsxIds.includes('nav-link-back'));
-  assert.ok(htmlIds.includes('nav-link-back'));
 
   const footerIds = [
     'footer-link-ats',

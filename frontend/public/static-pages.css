@@ -1,7 +1,7 @@
 /*
  * Pages de contenu AxeL Job (AXE-470) : /ats, /faq, /modeles-cv, /guide-cv, /erreurs-cv,
  * /cv-par-metier, /cv-adapte-chaque-offre, pages légales, 404/500.
- * Cible visuelle : docs/crm-design-reference.md (nav fixe 60px, page-head centré,
+ * Cible visuelle : docs/crm-design-reference.md (nav collante 60px, page-head centré,
  * sections crème/blanc alternées, FAQ en details, bande sombre, footer en grille).
  *
  * UNE seule feuille pour deux rendus :
@@ -20,8 +20,10 @@
   --content-section-pad: var(--ds-space-section-mobile);
 }
 
-/* Réglages globaux réservés aux pages HTML statiques (<html class="static-page">) :
+/* Réglages globaux réservés aux pages HTML statiques (<html class="static-page">) ;
+   html inclus pour la barre de défilement fine, comme dans la SPA (sinon la barre se décale d'une page à l'autre) :
    la SPA importe aussi cette feuille et ne doit pas voir html/body modifiés. */
+html.static-page,
 .static-page * {
   box-sizing: border-box;
   scrollbar-width: thin;
@@ -136,7 +138,6 @@ html.static-page {
   width: 100%;
   display: flex;
   flex-direction: column;
-  padding-top: var(--ds-layout-nav-height);
   background: var(--ds-color-bg-subtle);
   color: var(--ds-color-text-default);
 }
@@ -147,37 +148,11 @@ html.static-page {
 }
 
 /* ------------------------------------------------------------------ */
-/* Navigation fixe 60px : logo, liens, Se connecter, CTA, burger       */
+/* Marque du pied de page                                              */
+/* La barre de navigation (identique sur toutes les pages publiques)   */
+/* est dans public-header.css, généré depuis src/components/            */
+/* PublicHeader.css : ne pas la redéfinir ici.                         */
 /* ------------------------------------------------------------------ */
-.content-header {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  z-index: var(--ds-z-sticky);
-  height: var(--ds-layout-nav-height);
-  background: var(--ds-color-bg-subtle);
-  border-bottom: 1px solid var(--ds-color-border-subtle);
-}
-
-@supports (background: color-mix(in srgb, red 50%, transparent)) {
-  .content-header {
-    background: color-mix(in srgb, var(--ds-color-bg-subtle) 92%, transparent);
-    -webkit-backdrop-filter: blur(12px);
-    backdrop-filter: blur(12px);
-  }
-}
-
-.content-header-inner {
-  display: flex;
-  align-items: center;
-  gap: var(--ds-space-xl);
-  height: 100%;
-  max-width: var(--ds-layout-container-public);
-  margin: 0 auto;
-  padding: 0 var(--content-gutter);
-}
-
 .content-brand {
   display: inline-flex;
   align-items: center;
@@ -197,94 +172,6 @@ html.static-page {
   height: 36px;
   border-radius: var(--ds-radius-sm);
   object-fit: contain;
-}
-
-.content-nav {
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-  gap: var(--ds-space-xl);
-}
-
-.content-nav-links {
-  display: flex;
-  align-items: center;
-  gap: var(--ds-space-xl);
-}
-
-.content-nav-links a,
-.content-burger-panel a:not(.button) {
-  color: var(--ds-color-text-muted);
-  text-decoration: none;
-  font-size: 15px;
-}
-
-.content-nav-links a:hover,
-.content-burger-panel a:not(.button):hover {
-  color: var(--ds-color-text-default);
-}
-
-.content-nav-links a[aria-current='page'],
-.content-burger-panel a[aria-current='page'] {
-  color: var(--ds-color-text-default);
-  font-weight: var(--ds-font-weight-medium);
-}
-
-.content-nav-actions {
-  display: flex;
-  align-items: center;
-  gap: var(--ds-space-sm);
-}
-
-/* Burger : <details> sans JavaScript, visible sous 900px. */
-.content-burger {
-  display: none;
-  position: relative;
-}
-
-.content-burger summary {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 40px;
-  list-style: none;
-  cursor: pointer;
-  color: var(--ds-color-text-default);
-  border: 1px solid var(--ds-color-border-default);
-  border-radius: var(--ds-radius-md);
-}
-
-.content-burger summary::-webkit-details-marker { display: none; }
-
-.content-burger summary:focus-visible {
-  outline: 2px solid var(--ds-color-border-focus);
-  outline-offset: 2px;
-}
-
-.content-burger-panel {
-  position: fixed;
-  top: var(--ds-layout-nav-height);
-  left: 0;
-  right: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--ds-space-lg);
-  padding: var(--ds-space-xl) var(--content-gutter);
-  background: var(--ds-color-bg-subtle);
-  border-bottom: 1px solid var(--ds-color-border-subtle);
-}
-
-.content-burger-panel .button { align-self: stretch; }
-
-@media (max-width: 899px) {
-  .content-nav-links,
-  .content-nav .content-nav-login { display: none; }
-  .content-burger { display: block; }
-}
-
-@media (max-width: 479px) {
-  .content-cta-long { display: none; }
 }
 
 /* Lien « retour » des pages sans en-tête complet (home, login statiques). */

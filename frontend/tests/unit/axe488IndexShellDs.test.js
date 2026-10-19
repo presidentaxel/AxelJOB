@@ -18,7 +18,7 @@ test('les CTA du shell index.html sont des ds-button', async () => {
   const html = await readFile(INDEX, 'utf8');
   assert.doesNotMatch(html, /class="[^"]*\bbutton button-primary\b/);
   assert.doesNotMatch(html, /class="[^"]*\bbutton button-secondary\b/);
-  assert.match(html, /class="[^"]*\bds-button ds-button--primary ds-button--md\b/);
+  assert.match(html, /class="[^"]*\bds-button ds-button--primary ds-button--(?:md|lg)\b/);
   assert.match(html, /class="[^"]*\bds-button ds-button--secondary ds-button--(?:md|lg)\b/);
   assert.doesNotMatch(html, AUBERGINE);
 });

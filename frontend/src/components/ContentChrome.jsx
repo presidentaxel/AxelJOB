@@ -1,5 +1,5 @@
 /**
- * Éléments communs des pages de contenu (AXE-470) : nav, sommaire, CTA de fin de page, pied de page.
+ * Éléments communs des pages de contenu (AXE-470) : barre de navigation, sommaire, CTA de fin de page, pied de page.
  * Défini une fois, utilisé par AtsPage, FaqPage, ArticlesPages et LegalPages.
  * Le HTML statique de public/*.html reproduit ce balisage à l'identique (voir tests/unit/axe470SeoPages.test.js).
  */
@@ -10,6 +10,7 @@ import { analyticsAttrs } from '../lib/analyticsAttrs.js';
 import { persistLoginCta } from '../../public/signupAttribution.js';
 import { loginNavOptions } from '../lib/publicEntry.js';
 import Button from './ui/Button.jsx';
+import PublicHeader from './PublicHeader.jsx';
 import './ContentPages.css';
 
 const GUIDE_LINKS = [
@@ -28,13 +29,7 @@ const LEGAL_LINKS = [
   { to: '/cgu', id: 'footer-link-cgu', label: landingText.legalTerms },
 ];
 
-const HEADER_LINKS = [
-  { to: '/ats', id: 'nav-link-ats', label: landingText.footerAts },
-  { to: '/faq', id: 'nav-link-faq', label: landingText.footerFaq },
-  { to: '/modeles-cv', id: 'nav-link-modeles', label: landingText.navModelesShort },
-  { to: '/guide-cv', id: 'nav-link-guide', label: landingText.navGuide },
-];
-
+/** Marque du pied de page (la barre de navigation a la sienne dans PublicHeader). */
 function Brand({ id, zone }) {
   return (
     <Link to="/" className="content-brand" {...analyticsAttrs(id, zone, 'tertiary', 'nav')}>
@@ -44,58 +39,9 @@ function Brand({ id, zone }) {
   );
 }
 
-/** Nav fixe : logo, liens de section, Se connecter, CTA vers /login, burger sous 900px. */
+/** Barre de navigation unique des pages publiques (voir PublicHeader.jsx). */
 export function ContentHeader() {
-  const links = (prefix) =>
-    HEADER_LINKS.map((link) => (
-      <Link key={link.to} to={link.to} {...analyticsAttrs(link.id.replace('nav-link-', prefix), 'header', 'tertiary', 'nav')}>
-        {link.label}
-      </Link>
-    ));
-  return (
-    <header className="content-header">
-      <div className="content-header-inner">
-        <Brand id="nav-link-back" zone="header" />
-        <nav className="content-nav" aria-label="Navigation principale">
-          <div className="content-nav-links">{links('nav-link-')}</div>
-          <div className="content-nav-actions">
-            <Button
-              as={Link}
-              to="/login" state={loginNavOptions().state}
-              variant="tertiary"
-              className="content-nav-login"
-              onClick={() => persistLoginCta('nav-link-login')}
-              {...analyticsAttrs('nav-link-login', 'header', 'tertiary', 'nav')}
-            >
-              {landingText.ctaLogin}
-            </Button>
-            <Button
-              as={Link}
-              to="/login" state={loginNavOptions().state}
-              variant="primary"
-              onClick={() => persistLoginCta('nav-cta-signup')}
-              {...analyticsAttrs('nav-cta-signup', 'header', 'primary', 'cta')}
-            >
-              Essayer<span className="content-cta-long"> gratuitement</span>
-            </Button>
-          </div>
-        </nav>
-        <details className="content-burger">
-          <summary aria-label="Menu">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-              <path d="M4 7h16M4 12h16M4 17h16" />
-            </svg>
-          </summary>
-          <div className="content-burger-panel">
-            {links('nav-drawer-')}
-            <Link to="/login" state={loginNavOptions().state} onClick={() => persistLoginCta('nav-drawer-login')} {...analyticsAttrs('nav-drawer-login', 'header', 'tertiary', 'nav')}>
-              {landingText.ctaLogin}
-            </Link>
-          </div>
-        </details>
-      </div>
-    </header>
-  );
+  return <PublicHeader />;
 }
 
 /** Sommaire d'ancres (pages de 4 sections ou plus). items : [{ id, label }]. */
