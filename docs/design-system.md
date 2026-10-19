@@ -41,8 +41,8 @@ Valeurs relevées sur le site du CRM (octobre 2026), à faire valider par l’é
 | `neutral.400` / `.350` | `#b9bcc2` / `#8d929a` | texte courant / discret sur bande sombre |
 | `neutral.850` / `.800` | `#2a3240` / `#1a2331` | trait et carte relevée sur bande sombre |
 | `orange.500` | `#fe5126` | **orange de marque** : accents, puces, aplats décoratifs, texte ≥ 24 px |
-| `orange.600` | `#cf3b0b` | **orange d’action** : fond de CTA, focus (blanc dessus 4,9:1) |
-| `orange.700` | `#b0330a` | texte et liens orange, hover des CTA |
+| `orange.600` | `#c23709` | **orange d’action** : fond de CTA, focus (blanc dessus 5,5:1) |
+| `orange.700` | `#a62f08` | texte et liens orange, hover des CTA |
 | `orange.50` | `#ffe8df` | teinte orange pâle (pastille d’icône, fond accent) |
 | `amber.500` / `sun.200` | `#fb9c24` / `#fde7c4` | secondaire chaud / surlignage d’un mot de titre |
 

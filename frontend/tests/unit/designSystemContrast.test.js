@@ -80,3 +80,12 @@ test('l’orange de marque n’est jamais un fond de bouton avec texte blanc', (
   assert.notEqual(color('action.primary.bg').toLowerCase(), brand.toLowerCase());
   assert.ok(ratio('#ffffff', brand) < 4.5, 'garde-fou : si la marque passe AA, retirer cette règle');
 });
+
+test("l'orange d'action (orange.600) reste lisible en texte sur les fonds clairs et teintés", () => {
+  const orange = color('orange.600');
+  for (const bg of ['bg.default', 'bg.subtle', 'bg.accent', 'accent.highlight']) {
+    const r = ratio(orange, color(bg));
+    assert.ok(r >= 4.5, `orange.600 sur ${bg} = ${r.toFixed(2)}:1`);
+  }
+});
+
