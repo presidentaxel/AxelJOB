@@ -4,6 +4,21 @@
  */
 
 /* ---------- Mise en page 2 colonnes (formulaire crème | panneau encre) ---------- */
+.login-screen--split {
+  display: block;
+  padding: 0;
+  background: var(--ds-color-bg-subtle);
+}
+
+.login-screen-card.auth-layout-card {
+  max-width: calc(var(--ds-space-xxl) * 13 + var(--ds-space-md));
+  text-align: left;
+}
+
+.login-screen--split .login-screen-back {
+  z-index: 1;
+}
+
 .auth-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
@@ -53,20 +68,6 @@
   width: calc(var(--ds-size-button-lg) * 2.5);
   height: auto;
   transform: rotate(-6deg);
-}
-
-.auth-aside-mascot .auth-mascot-body {
-  fill: var(--ds-color-bg-subtle);
-}
-
-.auth-aside-mascot .auth-mascot-dark {
-  fill: var(--ds-color-bg-inverse-raised);
-  stroke: var(--ds-color-text-inverse-muted);
-  stroke-width: 2;
-}
-
-.auth-aside-mascot .auth-mascot-accent {
-  fill: var(--ds-color-accent-brand);
 }
 
 .auth-aside-title {

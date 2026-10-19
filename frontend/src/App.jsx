@@ -25,7 +25,7 @@ import { supabase } from './lib/supabase';
 import { supabaseConfigMessage } from './lib/userFacingError.js';
 import { fetchAuthSessionWithTimeout } from './lib/supabaseAuthSession';
 import { analyticsAttrs } from './lib/analyticsAttrs.js';
-import AuthForm from './components/AuthForm';
+import AuthForm, { AuthLayout } from './components/AuthForm';
 import { authModeFromPath } from './lib/authPaths.js';
 import { consumeAuthCallback, decidePublicEntry, hasPendingAuthCallback, isPublicEntryPath, loginNavOptions } from './lib/publicEntry.js';
 import AppTopbar from './components/AppTopbar';
@@ -3551,21 +3551,23 @@ export default function App() {
     if (authMode) {
       const authTitle = authMode === 'signup' ? 'Créer un compte' : authMode === 'reset' ? 'Mot de passe oublié' : 'Connexion';
       return (
-        <div className="login-screen" data-section="login">
+        <div className="login-screen login-screen--split" data-section="login">
           <button type="button" className="login-screen-back" onClick={() => navigate('/')} aria-label="Retour à l'accueil" {...analyticsAttrs('nav-link-back', 'header', 'tertiary', 'nav')}>
             &larr; Retour à l&apos;accueil
           </button>
-          <div className="login-screen-card">
-            <img src="/favicon.svg" alt="AxeL Job" className="login-screen-logo" />
-            <h1>{authTitle}</h1>
-            <p className="login-screen-intro">Adapte ton CV à chaque offre en quelques secondes.</p>
-            {loginOtpExpired && (
-              <div className="auth-error" style={{ marginBottom: '1rem' }}>
-                Le lien de connexion a expiré ou n&apos;est plus valide. Demande un nouveau lien ci-dessous.
-              </div>
-            )}
-            <AuthForm onSuccess={() => setAuthLoading(false)} />
-          </div>
+          <AuthLayout>
+            <div className="login-screen-card auth-layout-card">
+              <img src="/favicon.svg" alt="AxeL Job" className="login-screen-logo" />
+              <h1>{authTitle}</h1>
+              <p className="login-screen-intro">Adapte ton CV à chaque offre en quelques secondes.</p>
+              {loginOtpExpired && (
+                <div className="auth-error" style={{ marginBottom: '1rem' }}>
+                  Le lien de connexion a expiré ou n&apos;est plus valide. Demande un nouveau lien ci-dessous.
+                </div>
+              )}
+              <AuthForm onSuccess={() => setAuthLoading(false)} />
+            </div>
+          </AuthLayout>
         </div>
       );
     }
