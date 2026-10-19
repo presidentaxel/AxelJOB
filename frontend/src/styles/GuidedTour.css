@@ -44,8 +44,8 @@
 .guided-tour-step-count {
   font-size: 11px;
   font-weight: 600;
-  color: #4a154b;
-  background: #f9f0ff;
+  color: var(--ds-color-text-link);
+  background: var(--ds-color-bg-accent);
   padding: 2px 8px;
   border-radius: 10px;
 }
@@ -104,10 +104,10 @@
 }
 
 .guided-tour-btn--next {
-  background: #4a154b;
+  background: var(--ds-color-action-primary-bg);
   color: #fff;
 }
 
 .guided-tour-btn--next:hover {
-  background: #611f69;
+  background: var(--ds-color-action-primary-bg-hover);
 }

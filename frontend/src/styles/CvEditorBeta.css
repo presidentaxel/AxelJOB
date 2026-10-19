@@ -400,8 +400,8 @@
 
 .editor-template-selector-select:focus-visible {
   outline: none;
-  border-color: #4a154b;
-  box-shadow: 0 0 0 3px rgba(74, 21, 75, 0.18);
+  border-color: var(--ds-color-border-input-focus);
+  box-shadow: 0 0 0 3px var(--ds-color-accent-highlight);
 }
 
 .editor-template-selector-ats {
@@ -1007,7 +1007,7 @@
 .ats-badge-panel-retry-link {
   border: none;
   background: none;
-  color: #611f69;
+  color: var(--ds-color-text-link);
   font-weight: 600;
   cursor: pointer;
   text-decoration: underline;

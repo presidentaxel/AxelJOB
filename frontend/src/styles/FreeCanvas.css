@@ -263,7 +263,7 @@
 
 .free-canvas-snap-guide--center.free-canvas-snap-guide--v,
 .free-canvas-snap-guide--center.free-canvas-snap-guide--h {
-  border-color: #4a154b;
+  border-color: var(--ds-color-border-input-focus);
   opacity: 1;
 }
 
