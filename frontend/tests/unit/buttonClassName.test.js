@@ -98,12 +98,12 @@ test('les tokens sémantiques se résolvent sans hex dans la référence', async
   const jsonText = await readFile(TOKENS_PATH, 'utf8');
   const tree = loadTokenTree(jsonText);
   const primary = resolveValue(tree, '{color.action.primary.bg}');
-  assert.equal(primary, '#d63d0c');
+  assert.equal(primary, '#cf3b0b');
   const hover = resolveValue(tree, '{color.action.primary.bg-hover}');
   assert.equal(hover, '#b0330a');
   const entries = flattenResolved(tree);
   const semanticAction = entries.find((e) => e.cssName === '--ds-color-action-primary-bg');
-  assert.equal(semanticAction.value, '#d63d0c');
+  assert.equal(semanticAction.value, '#cf3b0b');
   const primitiveLeak = entries.filter(
     (e) => e.path[0] === 'color' && PRIMITIVE_COLOR_ROOTS.has(e.path[1]),
   );

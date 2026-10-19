@@ -6,26 +6,6 @@
  */
 .cv-editor-beta {
   /* Tokens Axel - voir docs/design-system.md */
-  --color-primary: #17171c;
-  --color-ink: #212121;
-  --color-deep-green: #003c33;
-  --color-dark-navy: #071829;
-  --color-canvas: #ffffff;
-  --color-soft-stone: #eeece7;
-  --color-pale-green: #edfce9;
-  --color-pale-blue: #f1f5ff;
-  --color-hairline: #d9d9dd;
-  --color-border-light: #e5e7eb;
-  --color-card-border: #f2f2f2;
-  --color-muted: #93939f;
-  --color-slate: #75758a;
-  --color-body-muted: #616161;
-  --color-action-blue: #1863dc;
-  --color-focus-blue: #4c6ee6;
-  --color-coral: #ff7759;
-  --color-form-focus: #9b60aa;
-  --color-error: #b30000;
-  --color-on-dark: #ffffff;
   --editor-font-family: var(--app-font-family);
   --cv-editor-beta-topbar-h: 52px;
   font-family: var(--editor-font-family);

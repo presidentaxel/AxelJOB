@@ -38,6 +38,6 @@ test('le CSS critique des CTA ne cite que des hex déjà dans tokens.json', asyn
   for (const [, hex] of decls) {
     assert.match(tokens, new RegExp(hex, 'i'), `${hex} absent de tokens.json`);
   }
-  assert.match(html, /--ds-color-action-primary-bg:#d63d0c/);
+  assert.match(html, /--ds-color-action-primary-bg:#cf3b0b/);
   assert.match(html, /\.ds-button--primary\{background:var\(--ds-color-action-primary-bg\)/);
 });
