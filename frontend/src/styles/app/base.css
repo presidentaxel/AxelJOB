@@ -17,7 +17,7 @@
   --accent-hover: var(--color-primary-press);
   --accent-light: var(--color-canvas-lavender);
   --accent-subtle: var(--color-canvas-cream);
-  --success: var(--color-deep-green);
+  --success: var(--ds-color-feedback-success);
   --success-light: var(--color-pale-green);
   --danger: var(--color-error);
   --danger-light: var(--ds-color-feedback-error-subtle);

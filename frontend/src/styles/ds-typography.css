@@ -11,17 +11,17 @@
 }
 
 .ds-display-xl {
-  font-size: var(--ds-font-size-display-xl);
+  font-size: clamp(2.75rem, 6.4vw, var(--ds-font-size-display-xl));
   letter-spacing: var(--ds-font-letter-spacing-display-xl);
 }
 
 .ds-display-lg {
-  font-size: var(--ds-font-size-display-lg);
+  font-size: clamp(2.625rem, 6vw, var(--ds-font-size-display-lg));
   letter-spacing: var(--ds-font-letter-spacing-display-lg);
 }
 
 .ds-display-md {
-  font-size: var(--ds-font-size-display-md);
+  font-size: clamp(2.125rem, 4.6vw, var(--ds-font-size-display-md));
   letter-spacing: var(--ds-font-letter-spacing-display-md);
 }
 
@@ -40,12 +40,12 @@
 }
 
 .ds-heading-xl {
-  font-size: var(--ds-font-size-heading-xl);
+  font-size: clamp(1.75rem, 3.6vw, var(--ds-font-size-heading-xl));
   letter-spacing: var(--ds-font-letter-spacing-heading-xl);
 }
 
 .ds-heading-lg {
-  font-size: var(--ds-font-size-heading-lg);
+  font-size: clamp(1.5rem, 3vw, var(--ds-font-size-heading-lg));
   letter-spacing: var(--ds-font-letter-spacing-heading-lg);
 }
 
@@ -59,6 +59,12 @@
   font-size: var(--ds-font-size-heading-sm);
   line-height: var(--ds-font-line-height-feature);
   letter-spacing: var(--ds-font-letter-spacing-none);
+}
+
+.ds-body-sm {
+  font-family: var(--ds-font-family-body);
+  font-size: var(--ds-font-size-body-sm);
+  line-height: var(--ds-font-line-height-body);
 }
 
 /* Mot mis en valeur dans un titre : italique + surlignage chaud (référence CRM). */
