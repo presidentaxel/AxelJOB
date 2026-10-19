@@ -8,10 +8,9 @@
   <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
   <title>Page introuvable (404) | AxeL Job</title>
   <meta name="robots" content="noindex, follow" />
-  <meta name="theme-color" content="#5b4cff" />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,200..800;1,200..800&display=swap" rel="stylesheet" />
+  <meta name="theme-color" content="#faf6ef" />
+  <link rel="stylesheet" href="/ds-tokens.css" />
+  <link rel="stylesheet" href="/fonts/axel-fonts.css" />
   <link rel="stylesheet" href="/static-pages.css" />
   <link rel="stylesheet" href="/consent-banner.css" />
   <script src="/analytics-config.js"></script>
@@ -22,9 +21,32 @@
   <div class="content-page">
     <header class="content-header">
       <div class="content-header-inner">
-        <a href="/" class="content-back" data-attr="nav-link-back" data-track="nav" data-zone="header" data-level="tertiary">← Accueil</a>
+        <a href="/" class="content-brand" data-attr="nav-link-back" data-track="nav" data-zone="header" data-level="tertiary"><img src="/favicon.svg" alt="" class="content-logo" width="36" height="36" /><span>AxeL Job</span></a>
+        <nav class="content-nav" aria-label="Navigation principale">
+          <div class="content-nav-links">
+            <a href="/ats" data-attr="nav-link-ats" data-track="nav" data-zone="header" data-level="tertiary">CV et ATS</a>
+            <a href="/faq" data-attr="nav-link-faq" data-track="nav" data-zone="header" data-level="tertiary">FAQ</a>
+            <a href="/modeles-cv" data-attr="nav-link-modeles" data-track="nav" data-zone="header" data-level="tertiary">Modèles CV</a>
+            <a href="/guide-cv" data-attr="nav-link-guide" data-track="nav" data-zone="header" data-level="tertiary">Guide CV</a>
+          </div>
+          <div class="content-nav-actions">
+            <a href="/login" class="button button-text content-nav-login" data-attr="nav-link-login" data-track="nav" data-zone="header" data-level="tertiary">Se connecter</a>
+            <a href="/login" class="button button-primary" data-attr="nav-cta-signup" data-track="cta" data-zone="header" data-level="primary">Essayer<span class="content-cta-long"> gratuitement</span></a>
+          </div>
+        </nav>
+        <details class="content-burger">
+          <summary aria-label="Menu"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></summary>
+          <div class="content-burger-panel">
+            <a href="/ats" data-attr="nav-drawer-ats" data-track="nav" data-zone="header" data-level="tertiary">CV et ATS</a>
+            <a href="/faq" data-attr="nav-drawer-faq" data-track="nav" data-zone="header" data-level="tertiary">FAQ</a>
+            <a href="/modeles-cv" data-attr="nav-drawer-modeles" data-track="nav" data-zone="header" data-level="tertiary">Modèles CV</a>
+            <a href="/guide-cv" data-attr="nav-drawer-guide" data-track="nav" data-zone="header" data-level="tertiary">Guide CV</a>
+            <a href="/login" data-attr="nav-drawer-login" data-track="nav" data-zone="header" data-level="tertiary">Se connecter</a>
+          </div>
+        </details>
       </div>
     </header>
+    <main class="error-static-main">
     <section class="content-hero">
       <div class="content-hero-inner">
         <p class="error-static-code">Erreur 404</p>
@@ -36,6 +58,46 @@
         </div>
       </div>
     </section>
+    </main>
+  <footer class="content-footer">
+    <div class="content-footer-inner">
+      <div class="content-footer-brand">
+        <a href="/" class="content-brand" data-attr="footer-link-home" data-track="nav" data-zone="footer" data-level="tertiary"><img src="/favicon.svg" alt="" class="content-logo" width="36" height="36" /><span>AxeL Job</span></a>
+      </div>
+      <nav class="content-footer-col" aria-label="Guides">
+        <p class="content-footer-title">Guides</p>
+        <ul>
+          <li><a href="/ats" data-attr="footer-link-ats" data-track="nav" data-zone="footer" data-level="tertiary">CV et ATS</a></li>
+          <li><a href="/faq" data-attr="footer-link-faq" data-track="nav" data-zone="footer" data-level="tertiary">FAQ</a></li>
+          <li><a href="/modeles-cv" data-attr="footer-link-modeles" data-track="nav" data-zone="footer" data-level="tertiary">Modèles de CV</a></li>
+          <li><a href="/guide-cv" data-attr="footer-link-guide" data-track="nav" data-zone="footer" data-level="tertiary">Guide CV</a></li>
+        </ul>
+      </nav>
+      <nav class="content-footer-col" aria-label="Ressources">
+        <p class="content-footer-title">Ressources</p>
+        <ul>
+          <li><a href="/erreurs-cv" data-attr="footer-link-erreurs" data-track="nav" data-zone="footer" data-level="tertiary">Erreurs à éviter</a></li>
+          <li><a href="/cv-par-metier" data-attr="footer-link-metier" data-track="nav" data-zone="footer" data-level="tertiary">CV par métier</a></li>
+          <li><a href="/cv-adapte-chaque-offre" data-attr="footer-link-adapte" data-track="nav" data-zone="footer" data-level="tertiary">CV adapté à chaque offre</a></li>
+        </ul>
+      </nav>
+      <nav class="content-footer-col" aria-label="Aide">
+        <p class="content-footer-title">Aide</p>
+        <ul>
+          <li><a href="mailto:contact@axelproject.fr?subject=Support%20AxeL%20Job" data-attr="footer-link-support" data-track="nav" data-zone="footer" data-level="tertiary">Support</a></li>
+          <li><a href="/login" data-attr="footer-link-login" data-track="nav" data-zone="footer" data-level="tertiary">Se connecter</a></li>
+        </ul>
+      </nav>
+    </div>
+    <div class="content-footer-bar">
+      <p class="content-footer-copy">© 2026 AxeL Job - Ton CV sur-mesure pour chaque annonce. Une réalisation <a href="https://axelproject.fr" rel="noopener noreferrer" data-attr="footer-link-axelproject" data-track="nav" data-zone="footer" data-level="tertiary">Axel Project</a>.</p>
+      <nav class="content-footer-legal" aria-label="Pages légales">
+        <a href="/mentions-legales" data-attr="footer-link-mentions" data-track="nav" data-zone="footer" data-level="tertiary">Mentions légales</a>
+        <a href="/confidentialite" data-attr="footer-link-confidentialite" data-track="nav" data-zone="footer" data-level="tertiary">Confidentialité</a>
+        <a href="/cgu" data-attr="footer-link-cgu" data-track="nav" data-zone="footer" data-level="tertiary">CGU</a>
+      </nav>
+    </div>
+  </footer>
   </div>
 </body>
 </html>

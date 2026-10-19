@@ -1,5 +1,5 @@
 /**
- * Éléments communs des pages de contenu (AXE-470) : en-tête, sommaire, CTA de fin de page, pied de page.
+ * Éléments communs des pages de contenu (AXE-470) : nav, sommaire, CTA de fin de page, pied de page.
  * Défini une fois, utilisé par AtsPage, FaqPage, ArticlesPages et LegalPages.
  * Le HTML statique de public/*.html reproduit ce balisage à l'identique (voir tests/unit/axe470SeoPages.test.js).
  */
@@ -37,35 +37,37 @@ const HEADER_LINKS = [
 function Brand({ id, zone }) {
   return (
     <Link to="/" className="content-brand" {...analyticsAttrs(id, zone, 'tertiary', 'nav')}>
-      <img src="/favicon.svg" alt="" className="content-logo" width="32" height="32" />
+      <img src="/favicon.svg" alt="" className="content-logo" width="36" height="36" />
       <span>{landingText.brand}</span>
     </Link>
   );
 }
 
-/** Logo, liens de section, Se connecter, CTA vers /login. */
+/** Nav fixe : logo, liens de section, Se connecter, CTA vers /login, burger sous 900px. */
 export function ContentHeader() {
+  const links = (prefix) =>
+    HEADER_LINKS.map((link) => (
+      <Link key={link.to} to={link.to} {...analyticsAttrs(link.id.replace('nav-link-', prefix), 'header', 'tertiary', 'nav')}>
+        {link.label}
+      </Link>
+    ));
   return (
     <header className="content-header">
       <div className="content-header-inner">
         <Brand id="nav-link-back" zone="header" />
         <nav className="content-nav" aria-label="Navigation principale">
-          <div className="content-nav-links">
-            {HEADER_LINKS.map((link) => (
-              <Link key={link.to} to={link.to} {...analyticsAttrs(link.id, 'header', 'tertiary', 'nav')}>
-                {link.label}
-              </Link>
-            ))}
-          </div>
+          <div className="content-nav-links">{links('nav-link-')}</div>
           <div className="content-nav-actions">
-            <Link
+            <Button
+              as={Link}
               to="/login"
+              variant="tertiary"
               className="content-nav-login"
               onClick={() => persistLoginCta('nav-link-login')}
               {...analyticsAttrs('nav-link-login', 'header', 'tertiary', 'nav')}
             >
               {landingText.ctaLogin}
-            </Link>
+            </Button>
             <Button
               as={Link}
               to="/login"
@@ -73,10 +75,23 @@ export function ContentHeader() {
               onClick={() => persistLoginCta('nav-cta-signup')}
               {...analyticsAttrs('nav-cta-signup', 'header', 'primary', 'cta')}
             >
-              Essayer gratuitement
+              Essayer<span className="content-cta-long"> gratuitement</span>
             </Button>
           </div>
         </nav>
+        <details className="content-burger">
+          <summary aria-label="Menu">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+              <path d="M4 7h16M4 12h16M4 17h16" />
+            </svg>
+          </summary>
+          <div className="content-burger-panel">
+            {links('nav-drawer-')}
+            <Link to="/login" onClick={() => persistLoginCta('nav-drawer-login')} {...analyticsAttrs('nav-drawer-login', 'header', 'tertiary', 'nav')}>
+              {landingText.ctaLogin}
+            </Link>
+          </div>
+        </details>
       </div>
     </header>
   );
@@ -102,7 +117,12 @@ export function ContentToc({ items }) {
 }
 
 /** Bande encre + bouton orange vers /login. */
-export function ContentCta({ signupId, title = 'Un CV adapté à chaque offre, en un clic', text = 'Essaie AxeL Job gratuitement. 3 adaptations offertes, sans carte bancaire.', label = 'Essayer gratuitement' }) {
+export function ContentCta({
+  signupId,
+  title = 'Un CV adapté à chaque offre, en un clic',
+  text = 'Essaie AxeL Job gratuitement. 3 adaptations offertes, sans carte bancaire.',
+  label = 'Essayer gratuitement',
+}) {
   return (
     <section className="content-cta" data-section="content-cta">
       <div className="content-cta-inner">
@@ -123,7 +143,22 @@ export function ContentCta({ signupId, title = 'Un CV adapté à chaque offre, e
   );
 }
 
-/** Pied de page en colonnes (même structure que la landing). */
+function FooterColumn({ title, links }) {
+  return (
+    <nav className="content-footer-col" aria-label={title}>
+      <p className="content-footer-title">{title}</p>
+      <ul>
+        {links.map((link) => (
+          <li key={link.to}>
+            <Link to={link.to} {...analyticsAttrs(link.id, 'footer', 'tertiary', 'nav')}>{link.label}</Link>
+          </li>
+        ))}
+      </ul>
+    </nav>
+  );
+}
+
+/** Pied de page : grille 1,4fr + 3 colonnes, barre basse (copyright + légal). */
 export function ContentFooter() {
   return (
     <footer className="content-footer">
@@ -131,26 +166,8 @@ export function ContentFooter() {
         <div className="content-footer-brand">
           <Brand id="footer-link-home" zone="footer" />
         </div>
-        <nav className="content-footer-col" aria-label="Guides">
-          <p className="content-footer-title">Guides</p>
-          <ul>
-            {GUIDE_LINKS.map((link) => (
-              <li key={link.to}>
-                <Link to={link.to} {...analyticsAttrs(link.id, 'footer', 'tertiary', 'nav')}>{link.label}</Link>
-              </li>
-            ))}
-          </ul>
-        </nav>
-        <nav className="content-footer-col" aria-label="Pages légales">
-          <p className="content-footer-title">Légal</p>
-          <ul>
-            {LEGAL_LINKS.map((link) => (
-              <li key={link.to}>
-                <Link to={link.to} {...analyticsAttrs(link.id, 'footer', 'tertiary', 'nav')}>{link.label}</Link>
-              </li>
-            ))}
-          </ul>
-        </nav>
+        <FooterColumn title="Guides" links={GUIDE_LINKS.slice(0, 4)} />
+        <FooterColumn title="Ressources" links={GUIDE_LINKS.slice(4)} />
         <nav className="content-footer-col" aria-label="Aide">
           <p className="content-footer-title">Aide</p>
           <ul>
@@ -163,10 +180,17 @@ export function ContentFooter() {
           </ul>
         </nav>
       </div>
-      <p className="content-footer-copy">
-        {landingCopyright(new Date().getFullYear())}{' '}
-        <a href="https://axelproject.fr" rel="noopener noreferrer" {...analyticsAttrs('footer-link-axelproject', 'footer', 'tertiary', 'nav')}>{landingText.footerBrand}</a>.
-      </p>
+      <div className="content-footer-bar">
+        <p className="content-footer-copy">
+          {landingCopyright(new Date().getFullYear())}{' '}
+          <a href="https://axelproject.fr" rel="noopener noreferrer" {...analyticsAttrs('footer-link-axelproject', 'footer', 'tertiary', 'nav')}>{landingText.footerBrand}</a>.
+        </p>
+        <nav className="content-footer-legal" aria-label="Pages légales">
+          {LEGAL_LINKS.map((link) => (
+            <Link key={link.to} to={link.to} {...analyticsAttrs(link.id, 'footer', 'tertiary', 'nav')}>{link.label}</Link>
+          ))}
+        </nav>
+      </div>
     </footer>
   );
 }

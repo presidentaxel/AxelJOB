@@ -105,7 +105,7 @@ test('AXE-360 : FAQ, login, 404 et CTA contenu en miroir, sans doublon par fichi
   assert.ok(errorHtml.includes('data-attr="error-cta-home"'));
   assert.ok(errorHtml.includes('data-attr="error-cta-login"'));
 
-  assert.ok(atsJsx.includes("'ats-cta-signup'"));
+  assert.ok(atsJsx.includes("ats-cta-signup"));
   assert.ok(atsHtml.includes('data-attr="ats-cta-signup"'));
 
   for (const [htmlFile, , signupId] of ARTICLE_PAIRS) {

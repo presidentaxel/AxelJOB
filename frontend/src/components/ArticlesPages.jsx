@@ -1,10 +1,7 @@
-import { Link } from 'react-router-dom';
 import { ARTICLE_SOURCE_URLS as U } from '../content/articleSources.js';
-import { analyticsAttrs } from '../lib/analyticsAttrs.js';
-import { persistLoginCta } from '../../public/signupAttribution.js';
+import { contentSlug } from '../lib/contentSlug.js';
 import ContentScrollToTop from './ContentScrollToTop';
-import Button from './ui/Button.jsx';
-import './ContentPages.css';
+import { ContentHeader, ContentToc, ContentCta, ContentFooter } from './ContentChrome.jsx';
 
 function Out({ href, children }) {
   return (
@@ -67,18 +64,14 @@ const ICONS = {
   chart: IconChart,
 };
 
-function ArticleLayout({ title, lead, sections, onBack, prose, signupId }) {
+function ArticleLayout({ title, lead, sections, prose, signupId }) {
   const proseClass = prose ? ' content-prose' : '';
+  const tocItems = sections.map((sec) => ({ id: contentSlug(sec.heading), label: sec.heading }));
   return (
     <div className="content-page">
-      <header className="content-header">
-        <div className="content-header-inner">
-          <Link to="/" className="content-back" onClick={(e) => { e.preventDefault(); onBack?.(); }} {...analyticsAttrs('nav-link-back', 'header', 'tertiary', 'nav')}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m15 18-6-6 6-6" /></svg>
-            Retour à l&apos;accueil
-          </Link>
-        </div>
-      </header>
+      <ContentHeader />
+
+      <main>
 
       <section className="content-hero">
         <div className="content-hero-inner">
@@ -87,16 +80,18 @@ function ArticleLayout({ title, lead, sections, onBack, prose, signupId }) {
         </div>
       </section>
 
+      <ContentToc items={tocItems} />
+
       {sections.map((sec, i) => {
         const Icon = ICONS[sec.icon] || IconDocument;
         return (
-          <section key={i} className="content-section">
+          <section key={i} className={`content-section${sec.card ? ' content-section--card' : ''}`}>
             <div className={`content-section-inner${proseClass}`}>
               <div className="content-section-icon">
                 <Icon />
               </div>
               <div className="content-section-body">
-                <h2>{sec.heading}</h2>
+                <h2 id={contentSlug(sec.heading)}>{sec.heading}</h2>
                 {sec.body}
               </div>
             </div>
@@ -104,30 +99,11 @@ function ArticleLayout({ title, lead, sections, onBack, prose, signupId }) {
         );
       })}
 
-      <section className="content-cta" data-section="content-cta">
-        <div className="content-cta-inner">
-          <h2>Un CV adapté à chaque offre, en un clic</h2>
-          <p>Essaie AxeL Job gratuitement. 3 adaptations offertes, sans carte bancaire.</p>
-          <Button as={Link} to="/login" variant="primary" onClick={() => persistLoginCta(signupId)} {...analyticsAttrs(signupId, 'content', 'primary', 'cta')}>
-            Essayer gratuitement
-          </Button>
-        </div>
-      </section>
+      </main>
 
-      <footer className="content-footer">
-        <nav className="content-footer-nav">
-          <Link to="/ats" {...analyticsAttrs('footer-link-ats', 'footer', 'tertiary', 'nav')}>CV et ATS</Link>
-          <Link to="/faq" {...analyticsAttrs('footer-link-faq', 'footer', 'tertiary', 'nav')}>FAQ</Link>
-          <Link to="/modeles-cv" {...analyticsAttrs('footer-link-modeles', 'footer', 'tertiary', 'nav')}>Modèles de CV</Link>
-          <Link to="/guide-cv" {...analyticsAttrs('footer-link-guide', 'footer', 'tertiary', 'nav')}>Guide CV</Link>
-          <Link to="/erreurs-cv" {...analyticsAttrs('footer-link-erreurs', 'footer', 'tertiary', 'nav')}>Erreurs à éviter</Link>
-          <Link to="/cv-par-metier" {...analyticsAttrs('footer-link-metier', 'footer', 'tertiary', 'nav')}>CV par métier</Link>
-          <Link to="/cv-adapte-chaque-offre" {...analyticsAttrs('footer-link-adapte', 'footer', 'tertiary', 'nav')}>CV adapté à chaque offre</Link>
-          <Link to="/mentions-legales" {...analyticsAttrs('footer-link-mentions', 'footer', 'tertiary', 'nav')}>Mentions légales</Link>
-          <Link to="/confidentialite" {...analyticsAttrs('footer-link-confidentialite', 'footer', 'tertiary', 'nav')}>Confidentialité</Link>
-          <Link to="/cgu" {...analyticsAttrs('footer-link-cgu', 'footer', 'tertiary', 'nav')}>CGU</Link>
-        </nav>
-      </footer>
+      <ContentCta signupId={signupId} />
+
+      <ContentFooter />
       <ContentScrollToTop />
     </div>
   );
@@ -158,15 +134,15 @@ const ARTICLES = {
         heading: 'Les 3 formats qui existent',
         body: (
           <>
-            <p>
+            <p className="content-card">
               <strong>Le chronologique inversé</strong> (le plus courant)&nbsp;: les expériences sont listées de la plus récente à la plus ancienne. C&apos;est le format le plus reconnu par les recruteurs, notamment pour les postes qui valorisent un historique professionnel clair. À utiliser par défaut si tu as un parcours cohérent.
             </p>
-            <p>
+            <p className="content-card">
               <strong>Le fonctionnel</strong>&nbsp;: organise le contenu par compétences plutôt que par chronologie. Utile pour les reconversions ou les périodes d&apos;inactivité. Problème&nbsp;: selon{' '}
               <Out href={U.RESUME_GENIUS_STATS}>Resume Genius</Out>
               , les recruteurs rejettent plus souvent ce format car il liste les compétences sans inclure l&apos;historique de postes, ce qui soulève des questions sur la trajectoire professionnelle.
             </p>
-            <p>
+            <p className="content-card">
               <strong>Le combiné</strong>&nbsp;: mélange les deux. Adapté aux profils expérimentés avec des compétences transversales fortes.
             </p>
           </>
@@ -297,7 +273,7 @@ const ARTICLES = {
         heading: 'Les 7 erreurs à corriger',
         body: (
           <>
-            <div className="content-error-block">
+            <div className="content-error-block content-card">
               <h3>Erreur n°1 : Les fautes d&apos;orthographe</h3>
               <p>
                 C&apos;est la plus éliminatoire. Selon{' '}
@@ -308,7 +284,7 @@ const ARTICLES = {
               </p>
               <div className="content-solution"><strong>Solution :</strong> relis à voix haute, utilise un correcteur, fais relire par quelqu&apos;un.</div>
             </div>
-            <div className="content-error-block">
+            <div className="content-error-block content-card">
               <h3>Erreur n°2 : Envoyer le même CV partout</h3>
               <p>
                 Selon{' '}
@@ -316,7 +292,7 @@ const ARTICLES = {
                 , 63&nbsp;% des recruteurs veulent explicitement recevoir un CV personnalisé pour chaque offre, et plus de 55&nbsp;% citent l&apos;absence de personnalisation comme l&apos;une des erreurs les plus fréquentes et les plus dommageables des candidats.
               </p>
             </div>
-            <div className="content-error-block">
+            <div className="content-error-block content-card">
               <h3>Erreur n°3 : Une adresse email non professionnelle</h3>
               <p>
                 Selon{' '}
@@ -324,7 +300,7 @@ const ARTICLES = {
                 , 35&nbsp;% des recruteurs rejettent un CV avec une adresse email non professionnelle. Utilise une adresse au format prenom.nom@domaine.com.
               </p>
             </div>
-            <div className="content-error-block">
+            <div className="content-error-block content-card">
               <h3>Erreur n°4 : Un format illisible par l&apos;ATS</h3>
               <p>
                 Colonnes, tableaux, graphiques, barres de compétences en image&nbsp;: tout ce que tu ne peux pas copier-coller en texte brut, l&apos;ATS ne peut pas le lire non plus. L&apos;analyse{' '}
@@ -332,7 +308,7 @@ const ARTICLES = {
                 {' '}montre que 23&nbsp;% des rejections sont liées à des erreurs de parsing - avant même que tes compétences soient évaluées. Et 25&nbsp;% des ATS ignorent les contenus placés en en-tête ou pied de page.
               </p>
             </div>
-            <div className="content-error-block">
+            <div className="content-error-block content-card">
               <h3>Erreur n°5 : Ne pas contextualiser ses compétences</h3>
               <p>
                 Selon{' '}
@@ -340,14 +316,14 @@ const ARTICLES = {
                 , les CV qui listent 20 compétences ou plus de façon isolée ont un taux de rejet de 67&nbsp;%, contre 34&nbsp;% pour ceux qui intègrent ces compétences dans des descriptions d&apos;expérience. Les ATS modernes analysent le contexte, pas seulement la présence d&apos;un mot. Exemple&nbsp;:  «&nbsp;Python, SQL, Tableau&nbsp;» →  «&nbsp;Développé un modèle Python analysant 50&nbsp;000 données clients, réduisant le temps de reporting de 40&nbsp;%&nbsp;».
               </p>
             </div>
-            <div className="content-error-block">
+            <div className="content-error-block content-card">
               <h3>Erreur n°6 : Un CV trop long ou trop court</h3>
               <p>
                 <Out href={U.RESUME_GENIUS_STATS}>Resume Genius</Out>
                 {' '}documente que 54&nbsp;% des recruteurs préfèrent deux pages, et que 70&nbsp;% sont plus enclins à considérer un CV de deux pages plutôt qu&apos;une. À l&apos;inverse, un CV d&apos;une seule page pour un profil de 10 ans d&apos;expérience envoie un signal de sous-qualification.
               </p>
             </div>
-            <div className="content-error-block">
+            <div className="content-error-block content-card">
               <h3>Erreur n°7 : Un résumé vague ou absent</h3>
               <p>
                 «&nbsp;Professionnel passionné et polyvalent&nbsp;» ne dit rien de toi.{' '}
@@ -376,6 +352,7 @@ const ARTICLES = {
     sections: [
       {
         icon: 'briefcase',
+        card: true,
         heading: 'Tech & développement',
         body: (
           <>
@@ -398,6 +375,7 @@ const ARTICLES = {
       },
       {
         icon: 'briefcase',
+        card: true,
         heading: 'Marketing',
         body: (
           <>
@@ -419,6 +397,7 @@ const ARTICLES = {
       },
       {
         icon: 'briefcase',
+        card: true,
         heading: 'Finance & gestion',
         body: (
           <>
@@ -551,7 +530,7 @@ const ARTICLE_SIGNUP_IDS = {
   'cv-adapte-chaque-offre': 'adapte-cta-signup',
 };
 
-export default function ArticlesPages({ slug, onBack }) {
+export default function ArticlesPages({ slug }) {
   const article = ARTICLES[slug];
   if (!article) return null;
 
@@ -560,7 +539,6 @@ export default function ArticlesPages({ slug, onBack }) {
       title={article.title}
       lead={article.lead}
       sections={article.sections}
-      onBack={onBack}
       prose={article.prose}
       signupId={ARTICLE_SIGNUP_IDS[slug]}
     />

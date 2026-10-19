@@ -6,13 +6,10 @@
   <link rel="icon" type="image/png" sizes="48x48" href="/favicon-48.png" />
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,200..800;1,200..800&display=swap" rel="stylesheet" />
   <title>CV par secteur : les mots-clés qui font la différence en tech, marketing et finance | AxeL Job</title>
   <meta name="description" content="Tech, marketing, finance : quels mots-clés et quelle logique de CV pour les ATS et les recruteurs. Contextualiser les compétences, éviter le générique." />
   <link rel="canonical" href="https://job.axelproject.fr/cv-par-metier" />
-  <meta name="theme-color" content="#5b4cff" />
+  <meta name="theme-color" content="#faf6ef" />
   <link rel="sitemap" type="application/xml" title="Plan du site AxeL Job" href="/sitemap.xml" />
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="AxeL Job" />
@@ -27,6 +24,8 @@
   <meta name="twitter:description" content="Mots-clés et logique CV par secteur : tech, marketing, finance." />
   <meta name="twitter:image" content="https://job.axelproject.fr/axel_og_image.png" />
   <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
+  <link rel="stylesheet" href="/ds-tokens.css" />
+  <link rel="stylesheet" href="/fonts/axel-fonts.css" />
   <link rel="stylesheet" href="/static-pages.css" />
   <link rel="stylesheet" href="/consent-banner.css" />
   <script src="/analytics-config.js"></script>
@@ -39,20 +38,54 @@
       <div class="content-page">
         <header class="content-header">
           <div class="content-header-inner">
-            <a href="/" class="content-back" data-attr="nav-link-back" data-track="nav" data-zone="header" data-level="tertiary">← Retour à l'accueil</a>
+            <a href="/" class="content-brand" data-attr="nav-link-back" data-track="nav" data-zone="header" data-level="tertiary"><img src="/favicon.svg" alt="" class="content-logo" width="36" height="36" /><span>AxeL Job</span></a>
+            <nav class="content-nav" aria-label="Navigation principale">
+              <div class="content-nav-links">
+                <a href="/ats" data-attr="nav-link-ats" data-track="nav" data-zone="header" data-level="tertiary">CV et ATS</a>
+                <a href="/faq" data-attr="nav-link-faq" data-track="nav" data-zone="header" data-level="tertiary">FAQ</a>
+                <a href="/modeles-cv" data-attr="nav-link-modeles" data-track="nav" data-zone="header" data-level="tertiary">Modèles CV</a>
+                <a href="/guide-cv" data-attr="nav-link-guide" data-track="nav" data-zone="header" data-level="tertiary">Guide CV</a>
+              </div>
+              <div class="content-nav-actions">
+                <a href="/login" class="button button-text content-nav-login" data-attr="nav-link-login" data-track="nav" data-zone="header" data-level="tertiary">Se connecter</a>
+                <a href="/login" class="button button-primary" data-attr="nav-cta-signup" data-track="cta" data-zone="header" data-level="primary">Essayer<span class="content-cta-long"> gratuitement</span></a>
+              </div>
+            </nav>
+            <details class="content-burger">
+              <summary aria-label="Menu"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></summary>
+              <div class="content-burger-panel">
+                <a href="/ats" data-attr="nav-drawer-ats" data-track="nav" data-zone="header" data-level="tertiary">CV et ATS</a>
+                <a href="/faq" data-attr="nav-drawer-faq" data-track="nav" data-zone="header" data-level="tertiary">FAQ</a>
+                <a href="/modeles-cv" data-attr="nav-drawer-modeles" data-track="nav" data-zone="header" data-level="tertiary">Modèles CV</a>
+                <a href="/guide-cv" data-attr="nav-drawer-guide" data-track="nav" data-zone="header" data-level="tertiary">Guide CV</a>
+                <a href="/login" data-attr="nav-drawer-login" data-track="nav" data-zone="header" data-level="tertiary">Se connecter</a>
+              </div>
+            </details>
           </div>
         </header>
+        <main>
         <section class="content-hero">
           <div class="content-hero-inner">
             <h1>CV par secteur : tech, marketing, finance</h1>
             <p class="content-lead">Un bon CV ne se rédige pas de la même façon selon le secteur. Ce ne sont pas seulement des mots différents - c'est une logique différente de ce que les recruteurs cherchent en premier.</p>
           </div>
         </section>
-        <section class="content-section">
+        <div class="content-toc-wrap">
+          <nav class="content-toc" aria-label="Sommaire">
+            <p class="content-toc-title">Sommaire</p>
+            <ol>
+              <li><a href="#tech-developpement">Tech &amp; développement</a></li>
+              <li><a href="#marketing">Marketing</a></li>
+              <li><a href="#finance-gestion">Finance &amp; gestion</a></li>
+              <li><a href="#le-principe-commun-aux-trois-secteurs">Le principe commun aux trois secteurs</a></li>
+            </ol>
+          </nav>
+        </div>
+        <section class="content-section content-section--card">
           <div class="content-section-inner content-prose">
             <div class="content-section-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="20" height="14" x="2" y="7" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg></div>
             <div class="content-section-body">
-              <h2>Tech &amp; développement</h2>
+              <h2 id="tech-developpement">Tech &amp; développement</h2>
               <p>En tech, les recruteurs et ATS cherchent des compétences techniques précises et vérifiables. Pour un poste en informatique, les mots-clés typiques incluent des langages (Python, Java, SQL), des systèmes (Linux, AWS, Azure), et des pratiques (CI/CD, Agile, DevOps).</p>
               <p>La règle d'or en tech&nbsp;: ne liste jamais un outil en isolation. L'étude <a href="https://www.edligo.net/job-search-tips/i-analyzed-1000-rejected-resumes-heres-what-ats-actually-sees-and-its-not-what-you-think/" class="content-source" target="_blank" rel="noopener noreferrer">EDLIGO</a> montre que les ATS modernes analysent le contexte autour des mots-clés, pas uniquement leur présence. Au lieu de «&nbsp;Python, Java, SQL&nbsp;», écris&nbsp;: «&nbsp;Développé des applications d'analyse de données en Python et SQL, réduisant le temps de reporting de 40&nbsp;%.&nbsp;»</p>
               <p><strong>Mots-clés à ne pas oublier&nbsp;:</strong></p>
@@ -64,11 +97,11 @@
             </div>
           </div>
         </section>
-        <section class="content-section">
+        <section class="content-section content-section--card">
           <div class="content-section-inner content-prose">
             <div class="content-section-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="20" height="14" x="2" y="7" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg></div>
             <div class="content-section-body">
-              <h2>Marketing</h2>
+              <h2 id="marketing">Marketing</h2>
               <p>En marketing, le profil est dual&nbsp;: les CV doivent équilibrer maîtrise des plateformes techniques et capacités créatives. Les mots-clés pertinents&nbsp;: «&nbsp;customer acquisition cost (CAC)&nbsp;», «&nbsp;conversion rate optimization (CRO)&nbsp;», «&nbsp;marketing automation&nbsp;». Les outils comptent&nbsp;: HubSpot, Google Analytics, Salesforce, Semrush, Meta Ads.</p>
               <p><strong>Ce que les recruteurs regardent en premier&nbsp;:</strong></p>
               <ul>
@@ -80,11 +113,11 @@
             </div>
           </div>
         </section>
-        <section class="content-section">
+        <section class="content-section content-section--card">
           <div class="content-section-inner content-prose">
             <div class="content-section-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="20" height="14" x="2" y="7" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg></div>
             <div class="content-section-body">
-              <h2>Finance &amp; gestion</h2>
+              <h2 id="finance-gestion">Finance &amp; gestion</h2>
               <p>En finance, les CV doivent mettre l'accent sur l'impact quantifiable et la maîtrise des obligations réglementaires. Les recruteurs cherchent&nbsp;: «&nbsp;modélisation financière&nbsp;», «&nbsp;gestion du risque&nbsp;», «&nbsp;regulatory compliance&nbsp;», et des certifications comme CFA ou CPA. Les outils pertinents&nbsp;: SAP, QuickBooks, NetSuite, Excel avancé, Bloomberg.</p>
               <p><strong>Formulation efficace&nbsp;:</strong> «&nbsp;Créé des modèles financiers ayant amélioré la précision des prévisions budgétaires de 25&nbsp;%.&nbsp;»</p>
             </div>
@@ -94,12 +127,13 @@
           <div class="content-section-inner content-prose">
             <div class="content-section-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></div>
             <div class="content-section-body">
-              <h2>Le principe commun aux trois secteurs</h2>
+              <h2 id="le-principe-commun-aux-trois-secteurs">Le principe commun aux trois secteurs</h2>
               <p>Selon <a href="https://resumegenius.com/blog/resume-help/resume-statistics" class="content-source" target="_blank" rel="noopener noreferrer">Resume Genius</a>, les termes génériques comme «&nbsp;orienté résultats&nbsp;» ou «&nbsp;analytique&nbsp;», sans preuve concrète associée, affaiblissent systématiquement un CV. Associe toujours un attribut à un résultat vérifiable.</p>
               <p>AxeL Job t'aide à adapter ton CV à chaque offre, quel que soit ton secteur - en intégrant les mots-clés de l'annonce dans un contenu honnête et structuré.</p>
             </div>
           </div>
         </section>
+        </main>
         <section class="content-cta" data-section="content-cta">
           <div class="content-cta-inner">
             <h2>Un CV adapté à chaque offre, en un clic</h2>
@@ -108,18 +142,43 @@
           </div>
         </section>
         <footer class="content-footer">
-          <nav class="content-footer-nav">
-            <a href="/ats" data-attr="footer-link-ats" data-track="nav" data-zone="footer" data-level="tertiary">CV et ATS</a>
-            <a href="/faq" data-attr="footer-link-faq" data-track="nav" data-zone="footer" data-level="tertiary">FAQ</a>
-            <a href="/modeles-cv" data-attr="footer-link-modeles" data-track="nav" data-zone="footer" data-level="tertiary">Modèles de CV</a>
-            <a href="/guide-cv" data-attr="footer-link-guide" data-track="nav" data-zone="footer" data-level="tertiary">Guide CV</a>
-            <a href="/erreurs-cv" data-attr="footer-link-erreurs" data-track="nav" data-zone="footer" data-level="tertiary">Erreurs à éviter</a>
-            <a href="/cv-par-metier" data-attr="footer-link-metier" data-track="nav" data-zone="footer" data-level="tertiary">CV par métier</a>
-            <a href="/cv-adapte-chaque-offre" data-attr="footer-link-adapte" data-track="nav" data-zone="footer" data-level="tertiary">CV adapté à chaque offre</a>
-            <a href="/mentions-legales" data-attr="footer-link-mentions" data-track="nav" data-zone="footer" data-level="tertiary">Mentions légales</a>
-            <a href="/confidentialite" data-attr="footer-link-confidentialite" data-track="nav" data-zone="footer" data-level="tertiary">Confidentialité</a>
-            <a href="/cgu" data-attr="footer-link-cgu" data-track="nav" data-zone="footer" data-level="tertiary">CGU</a>
-          </nav>
+          <div class="content-footer-inner">
+            <div class="content-footer-brand">
+              <a href="/" class="content-brand" data-attr="footer-link-home" data-track="nav" data-zone="footer" data-level="tertiary"><img src="/favicon.svg" alt="" class="content-logo" width="36" height="36" /><span>AxeL Job</span></a>
+            </div>
+            <nav class="content-footer-col" aria-label="Guides">
+              <p class="content-footer-title">Guides</p>
+              <ul>
+                <li><a href="/ats" data-attr="footer-link-ats" data-track="nav" data-zone="footer" data-level="tertiary">CV et ATS</a></li>
+                <li><a href="/faq" data-attr="footer-link-faq" data-track="nav" data-zone="footer" data-level="tertiary">FAQ</a></li>
+                <li><a href="/modeles-cv" data-attr="footer-link-modeles" data-track="nav" data-zone="footer" data-level="tertiary">Modèles de CV</a></li>
+                <li><a href="/guide-cv" data-attr="footer-link-guide" data-track="nav" data-zone="footer" data-level="tertiary">Guide CV</a></li>
+              </ul>
+            </nav>
+            <nav class="content-footer-col" aria-label="Ressources">
+              <p class="content-footer-title">Ressources</p>
+              <ul>
+                <li><a href="/erreurs-cv" data-attr="footer-link-erreurs" data-track="nav" data-zone="footer" data-level="tertiary">Erreurs à éviter</a></li>
+                <li><a href="/cv-par-metier" data-attr="footer-link-metier" data-track="nav" data-zone="footer" data-level="tertiary">CV par métier</a></li>
+                <li><a href="/cv-adapte-chaque-offre" data-attr="footer-link-adapte" data-track="nav" data-zone="footer" data-level="tertiary">CV adapté à chaque offre</a></li>
+              </ul>
+            </nav>
+            <nav class="content-footer-col" aria-label="Aide">
+              <p class="content-footer-title">Aide</p>
+              <ul>
+                <li><a href="mailto:contact@axelproject.fr?subject=Support%20AxeL%20Job" data-attr="footer-link-support" data-track="nav" data-zone="footer" data-level="tertiary">Support</a></li>
+                <li><a href="/login" data-attr="footer-link-login" data-track="nav" data-zone="footer" data-level="tertiary">Se connecter</a></li>
+              </ul>
+            </nav>
+          </div>
+          <div class="content-footer-bar">
+            <p class="content-footer-copy">© 2026 AxeL Job - Ton CV sur-mesure pour chaque annonce. Une réalisation <a href="https://axelproject.fr" rel="noopener noreferrer" data-attr="footer-link-axelproject" data-track="nav" data-zone="footer" data-level="tertiary">Axel Project</a>.</p>
+            <nav class="content-footer-legal" aria-label="Pages légales">
+              <a href="/mentions-legales" data-attr="footer-link-mentions" data-track="nav" data-zone="footer" data-level="tertiary">Mentions légales</a>
+              <a href="/confidentialite" data-attr="footer-link-confidentialite" data-track="nav" data-zone="footer" data-level="tertiary">Confidentialité</a>
+              <a href="/cgu" data-attr="footer-link-cgu" data-track="nav" data-zone="footer" data-level="tertiary">CGU</a>
+            </nav>
+          </div>
         </footer>
       </div>
     </div>

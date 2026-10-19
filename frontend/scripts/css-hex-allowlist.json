@@ -1,11 +1,8 @@
 {
   "note": "AXE-355: retirer chaque fichier dès qu’il n’a plus de hex (ni fallback var(--token, #hex)). L’allowlist doit finir vide. ds-tokens.generated.css n’appartient PAS à cette liste : exception permanente dans lint-css-hex.mjs.",
   "files": [
-    "components/ContentPages.css",
-    "components/ContentScrollToTop.css",
     "components/CvEditablePreview.css",
     "components/LandingPage.css",
-    "components/LegalPages.css",
     "index.css",
     "styles/AuthForm.css",
     "styles/BetaModeToggle.css",
