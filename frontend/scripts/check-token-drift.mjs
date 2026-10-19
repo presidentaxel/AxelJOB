@@ -1,7 +1,8 @@
 /**
- * Échoue si tokens.json et ds-tokens.generated.css divergent.
+ * Échoue si tokens.json et l'un des CSS générés divergent
+ * (ds-tokens.generated.css pour React, public/ds-tokens.css pour les pages statiques).
  *
- * npm run tokens && git diff --exit-code -- frontend/src/styles/ds-tokens.generated.css
+ * npm run tokens && git diff --exit-code -- <fichiers générés>
  *
  * Usage: node scripts/check-token-drift.mjs
  */
@@ -12,7 +13,10 @@ import { fileURLToPath } from 'node:url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const FRONTEND_ROOT = join(__dirname, '..');
 const REPO_ROOT = join(FRONTEND_ROOT, '..');
-const GENERATED_REL = 'frontend/src/styles/ds-tokens.generated.css';
+export const GENERATED_RELS = [
+  'frontend/src/styles/ds-tokens.generated.css',
+  'frontend/public/ds-tokens.css',
+];
 
 function run(command, args, cwd) {
   const result = spawnSync(command, args, {
@@ -29,7 +33,7 @@ function run(command, args, cwd) {
 export function checkTokenDrift({
   frontendRoot = FRONTEND_ROOT,
   repoRoot = REPO_ROOT,
-  generatedRel = GENERATED_REL,
+  generatedRels = GENERATED_RELS,
 } = {}) {
   const tokens = run('node', ['scripts/build-tokens.mjs'], frontendRoot);
   if (tokens.status !== 0) {
@@ -39,7 +43,7 @@ export function checkTokenDrift({
     };
   }
 
-  const diff = run('git', ['diff', '--exit-code', '--', generatedRel], repoRoot);
+  const diff = run('git', ['diff', '--exit-code', '--', ...generatedRels], repoRoot);
   if (diff.status === 0) {
     return { ok: true, message: 'token drift: OK' };
   }
@@ -47,8 +51,8 @@ export function checkTokenDrift({
     return {
       ok: false,
       message:
-        `${generatedRel} a divergé de tokens.json.\n` +
-        `Régénérer : npm --prefix frontend run tokens, puis committer le fichier.\n` +
+        `${generatedRels.join(' / ')} a divergé de tokens.json.\n` +
+        `Régénérer : npm --prefix frontend run tokens, puis committer les fichiers.\n` +
         (diff.stdout || diff.stderr || ''),
     };
   }
