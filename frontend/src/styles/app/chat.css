@@ -483,8 +483,8 @@ button.ats-score-trigger {
 }
 
 .cv-chat-msg--user .cv-chat-msg-content {
-  background: var(--accent);
-  color: #fff;
+  background: var(--ds-color-bg-inverse);
+  color: var(--ds-color-text-inverse);
   border-radius: var(--radius-sm) var(--radius-sm) 4px var(--radius-sm);
 }
 

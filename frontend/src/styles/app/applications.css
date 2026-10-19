@@ -408,8 +408,8 @@
 .company-logo-fallback {
   flex-shrink: 0;
   border-radius: 8px;
-  background: var(--accent);
-  color: #fff;
+  background: var(--ds-color-bg-inverse);
+  color: var(--ds-color-text-inverse);
   display: flex;
   align-items: center;
   justify-content: center;
