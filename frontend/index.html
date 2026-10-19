@@ -9,18 +9,14 @@
     <link rel="preload" href="/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="preload" href="/fonts/fraunces-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="stylesheet" href="/fonts/axel-fonts.css" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&display=optional" rel="stylesheet" media="print" onload="this.media='all'" />
-    <noscript><link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&display=optional" rel="stylesheet" /></noscript>
     <title>AxeL Job - CV adapté à chaque offre en 1 clic | IA & score ATS</title>
-    <meta name="description" content="Adaptez votre CV à chaque annonce avec l'IA. Améliorez votre score ATS, suivez vos candidatures et décrochez plus d'entretiens. Essai gratuit." />
+    <meta name="description" content="Adapte ton CV à chaque annonce avec l'IA. Améliore ton score ATS, suis tes candidatures et décroche plus d'entretiens. Essai gratuit." />
     <meta property="og:title" content="AxeL Job - CV adapté à chaque offre en 1 clic | IA & ATS" />
-    <meta property="og:description" content="Adaptez votre CV à chaque annonce avec l'IA. Score ATS, suivi des candidatures, export PDF. Essai gratuit." />
+    <meta property="og:description" content="Adapte ton CV à chaque annonce avec l'IA. Score ATS, suivi des candidatures, export PDF. Essai gratuit." />
     <meta property="og:type" content="website" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="AxeL Job - CV adapté à chaque offre en 1 clic" />
-    <meta name="twitter:description" content="Adaptez votre CV à chaque annonce avec l'IA. Score ATS, plus d'entretiens. Essai gratuit." />
+    <meta name="twitter:description" content="Adapte ton CV à chaque annonce avec l'IA. Score ATS, plus d'entretiens. Essai gratuit." />
     <meta name="twitter:image" content="https://job.axelproject.fr/axel_og_image.png" />
     <link rel="canonical" href="https://job.axelproject.fr" />
     <link rel="sitemap" type="application/xml" title="Plan du site AxeL Job" href="/sitemap.xml" />
@@ -90,66 +86,14 @@
       ]
     }
     </script>
-    <!-- Critical CSS for LCP (hero + header) - évite les requêtes bloquantes -->
+    <!-- CSS critique de la landing : généré depuis src/components/LandingPage.css par `npm run landing:critical`
+         (copie lisible dans public/landing-static.css). Ne pas modifier à la main. -->
     <style>
-:root{--bg:#fff;--bg-page:#f4ede4;--border:#e6e6e6;--text:#1d1d1d;--text-secondary:#696969;--muted:#696969;--accent:var(--ds-color-action-primary-bg);--accent-hover:var(--ds-color-action-primary-bg-hover);--accent-deep:var(--ds-color-action-primary-bg-active);--accent-light:var(--ds-color-bg-accent);--accent-subtle:rgba(18,26,37,.06);--on-primary:#fff;--on-aubergine-mute:var(--ds-color-text-subtle);--shadow:rgba(0,0,0,.1) 0 5px 20px 0;--shadow-lg:rgba(0,0,0,.1) 0 0 32px 0;--radius:16px;--radius-sm:4px;--radius-pill:90px;--ds-color-action-primary-bg:#cf3b0b;--ds-color-action-primary-bg-hover:#b0330a;--ds-color-action-primary-fg:#fff;--ds-color-action-secondary-bg:transparent;--ds-color-action-secondary-bg-hover:#f2eadc;--ds-color-action-secondary-fg:#121a25;--ds-color-action-secondary-border:#121a25;--ds-color-action-inverse-bg:#faf6ef;--ds-color-action-inverse-fg:#121a25;--ds-color-action-inverse-bg-hover:#f2eadc;--ds-radius-action:8px;--ds-size-button-md:40px;--ds-color-action-primary-bg-active:#8f2a08;--ds-color-bg-accent:#ffe8df;--ds-color-text-default:#121a25;--ds-color-text-subtle:#675f55;--ds-color-text-link:#b0330a}
-html{background:var(--bg)}
-*{box-sizing:border-box;scrollbar-width:thin;scrollbar-color:var(--border) transparent}
-*::-webkit-scrollbar{width:4px;height:4px}
-*::-webkit-scrollbar-track{background:transparent}
-*::-webkit-scrollbar-thumb{background:var(--border);border-radius:9999px}
-*::-webkit-scrollbar-thumb:hover{background:var(--muted)}
-body{margin:0;font-family:Inter,system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
-.ds-button{font-family:Inter,system-ui,-apple-system,sans-serif;display:inline-flex;align-items:center;justify-content:center;gap:.5rem;min-height:var(--ds-size-button-md);padding:.875rem 1.75rem;font-size:1rem;font-weight:500;border:1px solid transparent;border-radius:var(--ds-radius-action);cursor:pointer;letter-spacing:.012em;line-height:1.38;white-space:nowrap;text-decoration:none}
-a.ds-button{text-decoration:none}
-.ds-button--primary{background:var(--ds-color-action-primary-bg);color:var(--ds-color-action-primary-fg)}
-.ds-button--primary:hover{background:var(--ds-color-action-primary-bg-hover)}
-.ds-button--secondary{background:var(--ds-color-action-secondary-bg);color:var(--ds-color-action-secondary-fg);border-color:var(--ds-color-action-secondary-border)}
-.ds-button--secondary:hover{background:var(--ds-color-action-secondary-bg-hover)}
-.landing{min-height:100vh;width:100%;background:var(--bg);color:var(--text)}
-.landing-container{width:100%;max-width:1120px;margin:0 auto;padding-left:1.5rem;padding-right:1.5rem}
-@media (min-width:1024px){.landing-container{padding-left:2rem;padding-right:2rem}}
-.landing-header{position:sticky;top:0;z-index:50;width:100%;background:rgba(255,255,255,.92);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-bottom:1px solid var(--border)}
-.landing-header-inner{display:flex;align-items:center;gap:.75rem;min-height:3.25rem}
-.landing-logo{width:32px;height:32px;border-radius:8px;object-fit:contain}
-.landing-brand{font-weight:700;font-size:1.1rem;color:var(--ds-color-action-primary-bg);letter-spacing:-.03em}
-.landing-nav{margin-left:auto;display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-end;gap:1rem 1.25rem}
-.landing-nav a{color:#1d1d1d;text-decoration:none;font-size:.875rem;font-weight:500;transition:color .15s}
-.landing-nav a:hover{color:var(--ds-color-action-primary-bg)}
-.landing-nav a.ds-button,.landing-nav a.ds-button:hover{background:var(--ds-color-action-primary-bg);color:var(--ds-color-action-primary-fg)}
-.landing-cta-nav{padding:.45rem 1rem;font-size:.875rem}
-@media (max-width:767px){.landing-nav{display:none}}
-.landing-mobile-cta.ds-button{display:none;margin-left:auto;padding:.4rem .9rem;font-size:.8rem;min-height:var(--ds-size-touch-min,44px)}
-@media (max-width:767px){.landing-mobile-cta.ds-button{display:inline-flex}}
-.landing-hero{width:100%;padding:5rem 0 4rem;background:radial-gradient(ellipse 70% 60% at 15% 40%,rgba(249,223,212,.55) 0%,transparent 70%),radial-gradient(ellipse 55% 50% at 80% 20%,rgba(76,110,230,.22) 0%,transparent 65%),radial-gradient(ellipse 45% 55% at 60% 80%,rgba(198,222,210,.35) 0%,transparent 60%),#f4ede4}
-.landing-hero-inner{display:grid;grid-template-columns:1fr 1fr;gap:3rem;align-items:center}
-@media (max-width:900px){.landing-hero-inner{grid-template-columns:1fr;gap:2.5rem}.landing-hero{padding:3rem 0 2.5rem}}
-.landing-hero-title{margin:0 0 1rem;font-size:clamp(2rem,4vw,3.25rem);font-weight:700;line-height:1.12;letter-spacing:-.032em;color:#1d1d1d}
-.landing-hero-subtitle{margin:0 0 1.75rem;font-size:1.125rem;line-height:1.55;color:#696969}
-.landing-cta-hero{padding:.875rem 1.75rem;font-size:1rem;font-weight:500;border-radius:var(--ds-radius-action)}
-.landing-cta-nav:hover{background:var(--ds-color-action-primary-bg-hover) !important}
-.landing-hero-ctas{display:flex;flex-direction:column;align-items:flex-start;gap:.5rem}
-.landing-hero-hint{font-size:.8rem;color:#696969}
-.landing-hero-visual{background:#fff;border:none;border-radius:12px;min-height:280px;display:flex;align-items:center;justify-content:center;box-shadow:rgba(0,0,0,.1) 0 0 32px 0;overflow:hidden}
-.landing-hero-mockup{width:100%;border-radius:12px;overflow:hidden}
-.mockup-toolbar{background:#18181b;padding:.55rem .85rem;display:flex;align-items:center;gap:.35rem}
-.mockup-dot{width:9px;height:9px;border-radius:50%;background:#3f3f46}
-.mockup-dot:first-child{background:#ef4444}.mockup-dot:nth-child(2){background:#eab308}.mockup-dot:nth-child(3){background:#22c55e}
-.mockup-title{margin-left:.6rem;color:#a1a1aa;font-size:.7rem;font-weight:500}
-.mockup-body{display:grid;grid-template-columns:1fr 1fr;background:#f4ede4;min-height:200px}
-.mockup-chat{padding:.85rem;display:flex;flex-direction:column;gap:.5rem;border-right:1px solid var(--border)}
-.mockup-msg{padding:.5rem .75rem;border-radius:8px;font-size:.7rem;line-height:1.5;max-width:92%}
-.mockup-msg--user{background:var(--ds-color-action-primary-bg);color:#fff;align-self:flex-end}
-.mockup-msg--ai{background:#fff;color:#1d1d1d;border:1px solid var(--border);align-self:flex-start}
-.mockup-ai-icon{margin-right:.2rem}
-.mockup-preview{padding:1rem .85rem;display:flex;flex-direction:column;gap:.4rem}
-.mockup-cv-header{height:14px;width:55%;background:var(--ds-color-action-primary-bg);border-radius:3px;opacity:.6;margin-bottom:.25rem}
-.mockup-cv-line{height:6px;width:100%;background:var(--border);border-radius:2px}
-.mockup-cv-line--short{width:60%}.mockup-cv-line--highlight{background:#86efac}
-@media (max-width:600px){.mockup-body{grid-template-columns:1fr}.mockup-chat{border-right:none;border-bottom:1px solid var(--border)}}
-.landing-section{width:100%;padding:4.5rem 0}.landing-section:nth-child(even){background:#f4ede4}.landing-section-title{margin:0 0 2.5rem;font-size:clamp(1.375rem,2.5vw,2rem);font-weight:700;text-align:center;color:#1d1d1d;letter-spacing:-.025em}.landing-steps{display:grid;grid-template-columns:repeat(3,1fr);gap:1.25rem}@media (max-width:767px){.landing-steps{grid-template-columns:1fr}}.landing-step{background:#fff;border:1px solid var(--border);border-radius:16px;padding:2rem 1.5rem;transition:box-shadow .2s,transform .2s}.landing-step:hover{box-shadow:rgba(0,0,0,.1) 0 0 32px 0;transform:translateY(-2px)}.landing-step-icon{width:48px;height:48px;border-radius:12px;background:var(--ds-color-bg-accent);color:var(--ds-color-action-primary-bg);display:flex;align-items:center;justify-content:center;margin-bottom:1rem}.landing-step-num{font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--ds-color-action-primary-bg);margin-bottom:.35rem;display:block}.landing-step-title{margin:0 0 .4rem;font-size:1rem;font-weight:600;color:#1d1d1d}.landing-step-desc{margin:0;font-size:.875rem;line-height:1.55;color:#696969}.landing-features-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1.25rem}@media (max-width:767px){.landing-features-grid{grid-template-columns:1fr}}.landing-feature-card{background:#f4ede4;border:1px solid var(--border);border-radius:16px;padding:2rem;transition:box-shadow .2s}.landing-feature-card:hover{box-shadow:rgba(0,0,0,.08) 0 8px 24px 0}.landing-feature-title{margin:0 0 .4rem;font-size:1rem;font-weight:600;color:#1d1d1d}.landing-feature-desc{margin:0;font-size:.875rem;line-height:1.55;color:#696969}.landing-ats-link{display:inline-block;margin-top:.5rem;font-size:.85rem;color:var(--ds-color-text-link);text-decoration:none;font-weight:500}.landing-ats-link:hover{text-decoration:underline}.landing-section-subtitle{text-align:center;color:#696969;font-size:1rem;margin:-1.5rem 0 2.5rem}.landing-pricing{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;max-width:720px;margin:0 auto}@media (max-width:600px){.landing-pricing{grid-template-columns:1fr;max-width:400px}}.pricing-card{position:relative;background:#fff;border:1.5px solid var(--border);border-radius:16px;padding:2rem 1.5rem;display:flex;flex-direction:column;transition:all .2s}.pricing-card--pro{background:var(--ds-color-action-primary-bg);border-color:var(--ds-color-action-primary-bg);box-shadow:rgba(23,23,28,.25) 0 8px 28px 0}.pricing-card--pro .pricing-plan-name,.pricing-card--pro .pricing-amount,.pricing-card--pro .pricing-period,.pricing-card--pro .pricing-features li{color:#fff}.pricing-card--pro .pricing-features li svg{color:var(--ds-color-text-subtle)}.pricing-card--pro .ds-button--primary{background:var(--ds-color-action-inverse-bg);color:var(--ds-color-action-inverse-fg)}.pricing-card--pro .ds-button--primary:hover{background:var(--ds-color-action-inverse-bg-hover)}.pricing-badge{position:absolute;top:-.65rem;left:50%;transform:translateX(-50%);background:var(--ds-color-bg-accent);color:var(--ds-color-action-primary-bg);font-size:.7rem;font-weight:700;padding:.2rem .85rem;border-radius:100px;letter-spacing:.06em;text-transform:uppercase}.pricing-card-header{margin-bottom:1.5rem}.pricing-plan-name{margin:0 0 .5rem;font-size:1.1rem;font-weight:700;color:#1d1d1d}.pricing-price{display:flex;align-items:baseline;gap:.25rem}.pricing-amount{font-size:2.5rem;font-weight:800;color:#1d1d1d;letter-spacing:-.03em;line-height:1}.pricing-period{font-size:.9rem;color:#696969;font-weight:500}.pricing-features{list-style:none;padding:0;margin:0 0 1.5rem;display:flex;flex-direction:column;gap:.6rem;flex:1}.pricing-features li{display:flex;align-items:center;gap:.5rem;font-size:.875rem;color:#1d1d1d}.pricing-features li svg{flex-shrink:0;color:var(--ds-color-action-primary-bg)}.pricing-cta{width:100%;padding:.65rem 1rem;font-size:.9rem}.landing-cta-bottom{width:100%;text-align:center;padding:5rem 1.5rem;background:var(--ds-color-action-primary-bg);border-top:none}.landing-cta-bottom h2{margin:0 0 .5rem;font-size:clamp(1.5rem,3vw,2.5rem);font-weight:700;color:#fff;letter-spacing:-.025em}.landing-cta-bottom p{margin:0 0 1.75rem;color:var(--ds-color-text-subtle);font-size:1.05rem}.landing-cta-bottom .ds-button--primary{background:var(--ds-color-action-inverse-bg);color:var(--ds-color-action-inverse-fg)}.landing-cta-bottom .ds-button--primary:hover{background:var(--ds-color-action-inverse-bg-hover)}.landing-footer{width:100%;padding:1.5rem 0;font-size:.8rem;color:var(--ds-color-text-subtle);border-top:none;background:var(--ds-color-action-primary-bg)}.landing-footer-inner{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.75rem}.landing-footer-inner p{margin:0}.landing-footer-links{display:flex;flex-wrap:wrap;gap:1.25rem;align-items:center}.landing-footer-sep{color:var(--ds-color-text-subtle);user-select:none}.landing-footer-links a{color:var(--ds-color-text-subtle);text-decoration:none;font-size:.8rem;transition:color .15s}.landing-footer-links a:hover{color:#fff;text-decoration:underline}@media (max-width:600px){.landing-footer-inner{flex-direction:column;text-align:center}}
+/* LANDING-CRITICAL-CSS:START (généré par scripts/sync-landing-critical-css.mjs) */
+:root{--ds-color-bg-default:#ffffff;--ds-color-bg-subtle:#faf6ef;--ds-color-bg-inverse:#121a25;--ds-color-bg-accent:#ffe8df;--ds-color-bg-inverse-raised:#1a2331;--ds-color-text-default:#121a25;--ds-color-text-muted:#3d4450;--ds-color-text-subtle:#675f55;--ds-color-text-inverse:#ffffff;--ds-color-text-inverse-muted:#b9bcc2;--ds-color-text-link:#b0330a;--ds-color-border-default:#d9ccb6;--ds-color-border-subtle:#e6dccb;--ds-color-border-focus:#cf3b0b;--ds-color-border-inverse:#2a3240;--ds-color-action-primary-bg:#cf3b0b;--ds-color-action-primary-bg-hover:#b0330a;--ds-color-action-primary-bg-active:#8f2a08;--ds-color-action-primary-bg-disabled:#e6dccb;--ds-color-action-primary-fg:#ffffff;--ds-color-action-primary-fg-disabled:#675f55;--ds-color-action-secondary-bg:transparent;--ds-color-action-secondary-bg-hover:#f2eadc;--ds-color-action-secondary-bg-active:#e6dccb;--ds-color-action-secondary-fg:#121a25;--ds-color-action-secondary-border:#121a25;--ds-color-action-tertiary-bg:transparent;--ds-color-action-tertiary-bg-hover:#f2eadc;--ds-color-action-tertiary-fg:#1a2331;--ds-color-action-tertiary-fg-muted:#675f55;--ds-color-action-ghost-bg:transparent;--ds-color-action-ghost-fg:#675f55;--ds-color-action-ghost-fg-hover:#1a2331;--ds-color-action-link-fg:#b0330a;--ds-color-action-link-fg-hover:#121a25;--ds-color-action-danger-bg:#b30000;--ds-color-action-danger-bg-hover:#8a0000;--ds-color-action-danger-fg:#ffffff;--ds-color-action-success-bg:#003c33;--ds-color-action-success-bg-hover:#005246;--ds-color-action-success-fg:#ffffff;--ds-color-action-inverse-bg:#faf6ef;--ds-color-action-inverse-bg-hover:#f2eadc;--ds-color-action-inverse-overlay-hover:rgb(255 255 255 / 0.12);--ds-color-action-inverse-fg:#121a25;--ds-color-accent-brand:#fe5126;--ds-color-accent-highlight:#fde7c4;--ds-font-family-display:"Fraunces Variable", Fraunces, Georgia, "Times New Roman", serif;--ds-font-family-body:"Inter Variable", Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;--ds-font-family-mono:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;--ds-font-size-display-xl:80px;--ds-font-size-display-lg:72px;--ds-font-size-display-md:56px;--ds-font-size-heading-xl:44px;--ds-font-size-heading-lg:34px;--ds-font-size-heading-md:26px;--ds-font-size-heading-sm:20px;--ds-font-size-body-lg:19px;--ds-font-size-body-md:16px;--ds-font-size-label-md:14px;--ds-font-size-label-sm:13px;--ds-font-size-body-sm:15px;--ds-font-weight-regular:400;--ds-font-weight-medium:500;--ds-font-weight-semibold:600;--ds-font-line-height-display:1.02;--ds-font-line-height-heading:1.12;--ds-font-line-height-feature:1.3;--ds-font-line-height-body-lg:1.55;--ds-font-line-height-body:1.55;--ds-font-line-height-button:1.2;--ds-font-letter-spacing-display-xl:-1.6px;--ds-font-letter-spacing-display-lg:-1.44px;--ds-font-letter-spacing-display-md:-1.12px;--ds-font-letter-spacing-heading-xl:-0.88px;--ds-font-letter-spacing-heading-lg:-0.34px;--ds-font-letter-spacing-none:0;--ds-font-letter-spacing-mono:0.28px;--ds-space-xxs:2px;--ds-space-xs:6px;--ds-space-sm:8px;--ds-space-md:12px;--ds-space-lg:16px;--ds-space-xl:24px;--ds-space-xxl:32px;--ds-space-section:104px;--ds-space-section-mobile:72px;--ds-radius-xs:6px;--ds-radius-sm:8px;--ds-radius-md:10px;--ds-radius-lg:14px;--ds-radius-action:8px;--ds-radius-full:9999px;--ds-size-button-sm:32px;--ds-size-button-md:40px;--ds-size-button-lg:48px;--ds-size-touch-min:44px;--ds-z-dropdown:100;--ds-z-sticky:200;--ds-motion-duration-fast:120ms;--ds-motion-easing-standard:cubic-bezier(0.2, 0, 0, 1);--ds-layout-container-public:1120px;--ds-layout-gutter-md:24px;--ds-layout-nav-height:60px;--ds-shadow-window:0 1px 0 #e6dccb, 0 24px 48px -24px rgb(18 26 37 / 0.18);--ds-shadow-popover:0 8px 24px -12px rgb(18 26 37 / 0.25);--bg:var(--ds-color-bg-default);--bg-page:var(--ds-color-bg-subtle);--text:var(--ds-color-text-default);--text-secondary:var(--ds-color-text-muted);}
+html{background:var(--ds-color-bg-default)}*,*::before,*::after{box-sizing:border-box}body{margin:0;min-height:100vh;font-family:var(--ds-font-family-body);background:var(--bg);color:var(--text)}img{max-width:100%}.ds-button,.btn{box-sizing:border-box;font-family:var(--ds-font-family-body);display:inline-flex;align-items:center;justify-content:center;gap:var(--ds-space-sm);min-height:var(--ds-size-button-md);padding:var(--ds-space-md) var(--ds-space-xl);font-size:var(--ds-font-size-label-md);font-weight:var(--ds-font-weight-medium);line-height:var(--ds-font-line-height-button);letter-spacing:var(--ds-font-letter-spacing-none);border:1px solid transparent;border-radius:var(--ds-radius-action);cursor:pointer;white-space:nowrap;text-decoration:none;transition:background var(--ds-motion-duration-fast) var(--ds-motion-easing-standard),border-color var(--ds-motion-duration-fast) var(--ds-motion-easing-standard),color var(--ds-motion-duration-fast) var(--ds-motion-easing-standard)}a.ds-button,a.btn{text-decoration:none}.ds-button:focus-visible,.btn:focus-visible{outline:2px solid var(--ds-color-border-focus);outline-offset:2px;box-shadow:none}.ds-button:disabled,.btn:disabled{cursor:not-allowed}.ds-button[aria-busy='true']{cursor:wait;pointer-events:none;opacity:0.7}.ds-button--sm{min-height:var(--ds-size-button-sm);padding:var(--ds-space-xs) var(--ds-space-md);font-size:var(--ds-font-size-label-sm)}.ds-button--lg{min-height:var(--ds-size-button-lg);padding:var(--ds-space-md) var(--ds-space-xxl);font-size:var(--ds-font-size-body-md)}.ds-button--full-width{width:100%}.ds-button--icon-only{width:var(--ds-size-button-md);min-width:var(--ds-size-button-md);padding:0}.ds-button--icon-only.ds-button--sm{width:var(--ds-size-button-sm);min-width:var(--ds-size-button-sm)}.ds-button--icon-only.ds-button--lg{width:var(--ds-size-button-lg);min-width:var(--ds-size-button-lg)}@media (max-width:767px){.ds-button--sm:not(.ds-button--ghost):not(.ds-button--link),.ds-button--md:not(.ds-button--ghost):not(.ds-button--link),.btn:not(.btn-ghost):not(.btn-link):not(.btn-lg){min-height:var(--ds-size-touch-min)}.ds-button--icon-only.ds-button--sm,.ds-button--icon-only.ds-button--md{width:var(--ds-size-touch-min);min-width:var(--ds-size-touch-min)}}.ds-button--primary{background:var(--ds-color-action-primary-bg);color:var(--ds-color-action-primary-fg)}.ds-button--primary:hover:not(:disabled){background:var(--ds-color-action-primary-bg-hover)}.ds-button--primary:active:not(:disabled){background:var(--ds-color-action-primary-bg-active)}.ds-button--primary:disabled{background:var(--ds-color-action-primary-bg-disabled);color:var(--ds-color-action-primary-fg-disabled);opacity:1}.ds-button--primary.ds-button--inverse{background:var(--ds-color-action-inverse-bg);color:var(--ds-color-action-inverse-fg)}.ds-button--primary.ds-button--inverse:hover:not(:disabled){background:var(--ds-color-action-inverse-bg-hover)}.ds-button--primary.ds-button--inverse:active:not(:disabled){background:var(--ds-color-bg-accent)}.ds-button--secondary{background:var(--ds-color-action-secondary-bg);color:var(--ds-color-action-secondary-fg);border-color:var(--ds-color-action-secondary-border)}.ds-button--secondary:hover:not(:disabled){background:var(--ds-color-action-secondary-bg-hover)}.ds-button--secondary:active:not(:disabled){background:var(--ds-color-action-secondary-bg-active)}.ds-button--secondary:disabled{opacity:0.45}.ds-button--secondary.ds-button--inverse{background:transparent;color:var(--ds-color-text-inverse);border-color:var(--ds-color-text-inverse)}.ds-button--secondary.ds-button--inverse:hover:not(:disabled){background:var(--ds-color-action-inverse-overlay-hover)}.ds-button--tertiary{background:var(--ds-color-action-tertiary-bg);color:var(--ds-color-action-tertiary-fg-muted);border-radius:var(--ds-radius-xs);font-weight:var(--ds-font-weight-regular)}.ds-button--tertiary:hover:not(:disabled){color:var(--ds-color-action-tertiary-fg);background:var(--ds-color-action-tertiary-bg-hover)}.ds-button--tertiary:disabled{opacity:0.45}.ds-button--ghost{background:var(--ds-color-action-ghost-bg);color:var(--ds-color-action-ghost-fg);border-radius:var(--ds-radius-sm);font-weight:var(--ds-font-weight-regular);min-height:auto;padding:var(--ds-space-xs) var(--ds-space-md)}.ds-button--ghost:hover:not(:disabled){color:var(--ds-color-action-ghost-fg-hover)}.ds-button--ghost:disabled{opacity:0.45}.ds-button--link{background:transparent;color:var(--ds-color-action-link-fg);border-radius:var(--ds-radius-xs);min-height:auto;padding:var(--ds-space-xxs) 0;text-decoration:underline;text-underline-offset:2px}.ds-button--link:hover:not(:disabled){color:var(--ds-color-action-link-fg-hover)}.ds-button--link:disabled{opacity:0.45}.ds-button--danger{background:var(--ds-color-action-danger-bg);color:var(--ds-color-action-danger-fg)}.ds-button--danger:hover:not(:disabled){background:var(--ds-color-action-danger-bg-hover)}.ds-button--danger:disabled{opacity:0.45}.ds-button--success{background:var(--ds-color-action-success-bg);color:var(--ds-color-action-success-fg)}.ds-button--success:hover:not(:disabled){background:var(--ds-color-action-success-bg-hover)}.ds-display-xl,.ds-display-lg,.ds-display-md{font-family:var(--ds-font-family-display);font-weight:var(--ds-font-weight-medium);line-height:var(--ds-font-line-height-display)}.ds-display-xl{font-size:clamp(2.75rem,6.4vw,var(--ds-font-size-display-xl));letter-spacing:var(--ds-font-letter-spacing-display-xl)}.ds-display-lg{font-size:clamp(2.625rem,6vw,var(--ds-font-size-display-lg));letter-spacing:var(--ds-font-letter-spacing-display-lg)}.ds-display-md{font-size:clamp(2.125rem,4.6vw,var(--ds-font-size-display-md));letter-spacing:var(--ds-font-letter-spacing-display-md)}.ds-heading-xl,.ds-heading-lg{font-family:var(--ds-font-family-display);font-weight:var(--ds-font-weight-medium);line-height:var(--ds-font-line-height-heading)}.ds-heading-md,.ds-heading-sm{font-family:var(--ds-font-family-body);font-weight:var(--ds-font-weight-semibold);line-height:var(--ds-font-line-height-heading)}.ds-heading-xl{font-size:clamp(1.75rem,3.6vw,var(--ds-font-size-heading-xl));letter-spacing:var(--ds-font-letter-spacing-heading-xl)}.ds-heading-lg{font-size:clamp(1.5rem,3vw,var(--ds-font-size-heading-lg));letter-spacing:var(--ds-font-letter-spacing-heading-lg)}.ds-heading-md{font-size:var(--ds-font-size-heading-md);line-height:var(--ds-font-line-height-feature);letter-spacing:var(--ds-font-letter-spacing-none)}.ds-heading-sm{font-size:var(--ds-font-size-heading-sm);line-height:var(--ds-font-line-height-feature);letter-spacing:var(--ds-font-letter-spacing-none)}.ds-body-sm{font-family:var(--ds-font-family-body);font-size:var(--ds-font-size-body-sm);line-height:var(--ds-font-line-height-body)}.ds-highlight{font-style:italic;padding:0 0.08em;background-image:linear-gradient(transparent 62%,var(--ds-color-accent-highlight) 62%)}.ds-body-lg,.ds-body-md{font-family:var(--ds-font-family-body);font-weight:var(--ds-font-weight-regular);letter-spacing:var(--ds-font-letter-spacing-none)}.ds-body-lg{font-size:var(--ds-font-size-body-lg);line-height:var(--ds-font-line-height-body-lg)}.ds-body-md{font-size:var(--ds-font-size-body-md);line-height:var(--ds-font-line-height-body)}.ds-label-md,.ds-label-sm{font-family:var(--ds-font-family-body);font-weight:var(--ds-font-weight-regular);line-height:var(--ds-font-line-height-body-lg);letter-spacing:var(--ds-font-letter-spacing-none)}.ds-label-md{font-size:var(--ds-font-size-label-md)}.ds-label-sm{font-size:var(--ds-font-size-label-sm)}.ds-mono-sm{font-family:var(--ds-font-family-mono);font-size:var(--ds-font-size-label-md);font-weight:var(--ds-font-weight-regular);line-height:var(--ds-font-line-height-body-lg);letter-spacing:var(--ds-font-letter-spacing-mono);text-transform:uppercase}.landing{min-height:100vh;width:100%;background:var(--ds-color-bg-default);color:var(--ds-color-text-default);font-family:var(--ds-font-family-body);font-size:var(--ds-font-size-body-md);line-height:var(--ds-font-line-height-body)}.landing a:focus-visible,.landing button:focus-visible,.landing summary:focus-visible{outline:2px solid var(--ds-color-border-focus);outline-offset:2px}.landing-section--inverse a:focus-visible,.landing-section--inverse .ds-button:focus-visible,.landing-cta-bottom a:focus-visible,.landing-cta-bottom .ds-button:focus-visible{outline-color:var(--ds-color-accent-brand)}.landing-container{width:100%;max-width:var(--ds-layout-container-public);margin:0 auto;padding-left:var(--ds-layout-gutter-md);padding-right:var(--ds-layout-gutter-md);min-width:0}.landing-header{position:sticky;top:0;z-index:var(--ds-z-sticky);width:100%;background:var(--ds-color-bg-subtle);background:color-mix(in srgb,var(--ds-color-bg-subtle) 92%,transparent);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);border-bottom:1px solid var(--ds-color-border-subtle)}.landing-header-inner{display:flex;align-items:center;gap:var(--ds-space-md);height:var(--ds-layout-nav-height);min-width:0}.landing-brand-link{display:inline-flex;align-items:center;gap:var(--ds-space-md);min-width:0;color:inherit;text-decoration:none;border-radius:var(--ds-radius-sm)}.landing-logo{width:calc(var(--ds-size-button-md) - var(--ds-space-sm) / 2);height:calc(var(--ds-size-button-md) - var(--ds-space-sm) / 2);border-radius:var(--ds-radius-sm);object-fit:contain;flex-shrink:0}.landing-brand{font-family:var(--ds-font-family-display);font-weight:var(--ds-font-weight-semibold);font-size:var(--ds-font-size-heading-md);line-height:var(--ds-font-line-height-button);color:var(--ds-color-text-default);letter-spacing:var(--ds-font-letter-spacing-none);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.landing-nav{margin-left:auto;display:flex;align-items:center;justify-content:flex-end;gap:var(--ds-space-xs)}.landing-nav>a:not(.ds-button),.landing-menu-toggle{color:var(--ds-color-text-muted);text-decoration:none;font-family:var(--ds-font-family-body);font-size:var(--ds-font-size-body-md);font-weight:var(--ds-font-weight-regular);line-height:var(--ds-font-line-height-button);padding:var(--ds-space-sm) var(--ds-space-md);border-radius:var(--ds-radius-sm);transition:color var(--ds-motion-duration-fast) var(--ds-motion-easing-standard)}.landing-nav>a:not(.ds-button):hover,.landing-menu-toggle:hover,.landing-menu[open]>.landing-menu-toggle,.landing-menu.is-open>.landing-menu-toggle{color:var(--ds-color-text-default);font-weight:var(--ds-font-weight-medium)}.landing-nav .ds-button{margin-left:var(--ds-space-xs)}.landing-menu{position:relative}.landing-menu-toggle{display:inline-flex;align-items:center;gap:var(--ds-space-xs);margin:0;border:none;background:none;cursor:pointer;list-style:none}.landing-menu-toggle::-webkit-details-marker{display:none}.landing-menu-chevron{flex-shrink:0;transition:transform var(--ds-motion-duration-fast) var(--ds-motion-easing-standard)}.landing-menu[open] .landing-menu-chevron,.landing-menu.is-open .landing-menu-chevron{transform:rotate(180deg)}.landing-menu-list{display:none;position:absolute;top:100%;right:0;z-index:var(--ds-z-dropdown);min-width:calc(var(--ds-space-xxl) * 8);margin:var(--ds-space-xs) 0 0;padding:var(--ds-space-sm);list-style:none;background:var(--ds-color-bg-default);border:1px solid var(--ds-color-border-subtle);border-radius:var(--ds-radius-md);box-shadow:var(--ds-shadow-popover)}.landing-menu[open]>.landing-menu-list,.landing-menu.is-open>.landing-menu-list{display:block}.landing-menu-list a{display:block;padding:var(--ds-space-sm) var(--ds-space-md);color:var(--ds-color-text-default);font-size:var(--ds-font-size-label-md);font-weight:var(--ds-font-weight-medium);text-decoration:none;border-radius:var(--ds-radius-sm)}.landing-menu-list a:hover,.landing-menu-list a:focus-visible{background:var(--ds-color-bg-subtle);color:var(--ds-color-text-link)}.landing-header-mobile-actions{display:none;align-items:center;gap:var(--ds-space-sm);margin-left:auto;flex-shrink:0}.landing-burger{display:inline-flex;align-items:center;justify-content:center;width:var(--ds-size-button-md);height:var(--ds-size-button-md);padding:0;border:1px solid var(--ds-color-border-default);border-radius:var(--ds-radius-md);background:var(--ds-color-bg-default);color:var(--ds-color-text-default);cursor:pointer;list-style:none;-webkit-tap-highlight-color:transparent}.landing-burger::-webkit-details-marker{display:none}.landing-burger-icon{flex-shrink:0;display:block;color:inherit}.landing-mobile-panel{position:absolute;top:100%;left:0;right:0;z-index:var(--ds-z-dropdown);display:flex;flex-direction:column;padding:var(--ds-space-md) var(--ds-layout-gutter-md) var(--ds-space-xl);background:var(--ds-color-bg-subtle);border-bottom:1px solid var(--ds-color-border-subtle);max-height:calc(100vh - var(--ds-layout-nav-height));overflow-y:auto}.landing-mobile-panel a{display:flex;align-items:center;min-height:var(--ds-size-touch-min);color:var(--ds-color-text-default);text-decoration:none;font-size:var(--ds-font-size-body-md);font-weight:var(--ds-font-weight-medium);border-bottom:1px solid var(--ds-color-border-subtle)}.landing-mobile-panel a:hover{color:var(--ds-color-text-link)}.landing-burger-menu:not([open])>.landing-mobile-panel{display:none}@media (max-width:767px){.landing-nav{display:none}.landing-header-mobile-actions{display:flex}}.landing-section{width:100%;padding:var(--ds-space-section-mobile) 0;background:var(--ds-color-bg-default);border-top:1px solid var(--ds-color-border-subtle)}@media (min-width:768px){.landing-section{padding:var(--ds-space-section) 0}}.landing-section--subtle{background:var(--ds-color-bg-subtle)}.landing-section--inverse{background:var(--ds-color-bg-inverse);color:var(--ds-color-text-inverse);border-top-color:var(--ds-color-bg-inverse)}.landing-section-head{max-width:calc(var(--ds-space-xxl) * 18);margin:0 auto calc(var(--ds-space-xxl) * 2);text-align:center}.landing-eyebrow{margin:0 0 var(--ds-space-lg);color:var(--ds-color-text-link);font-size:var(--ds-font-size-label-sm);font-weight:var(--ds-font-weight-semibold);line-height:var(--ds-font-line-height-button);letter-spacing:0.08em;text-transform:uppercase}.landing-section--inverse .landing-eyebrow{color:var(--ds-color-accent-brand)}.landing-kicker{display:inline-flex;align-items:center;gap:var(--ds-space-sm);margin:0 0 var(--ds-space-xl);padding:var(--ds-space-xs) var(--ds-space-md);border:1px solid var(--ds-color-border-subtle);border-radius:var(--ds-radius-xs);background:var(--ds-color-bg-default);color:var(--ds-color-text-default);font-size:var(--ds-font-size-label-md);font-weight:var(--ds-font-weight-medium);line-height:var(--ds-font-line-height-button)}.landing-kicker::before{content:'';width:var(--ds-space-sm);height:var(--ds-space-sm);border-radius:var(--ds-radius-full);background:var(--ds-color-accent-brand);flex-shrink:0}.landing .landing-section-title{margin:0 auto;max-width:16em;color:inherit;font-size:clamp(2.125rem,1.2rem + 3.2vw,var(--ds-font-size-display-md));line-height:var(--ds-font-line-height-heading);letter-spacing:var(--ds-font-letter-spacing-heading-xl);text-wrap:balance}.landing-section-subtitle{margin:var(--ds-space-lg) auto 0;max-width:36em;color:var(--ds-color-text-muted);font-size:var(--ds-font-size-heading-sm);line-height:var(--ds-font-line-height-body-lg)}.landing-section--inverse .landing-section-subtitle{color:var(--ds-color-text-inverse-muted)}.landing .ds-button--tertiary.landing-btn-text:hover{color:var(--ds-color-text-link)}.landing-cta-hero{padding-left:calc(var(--ds-space-xl) - var(--ds-space-xxs));padding-right:calc(var(--ds-space-xl) - var(--ds-space-xxs))}.landing-hero{width:100%;padding:var(--ds-space-xxl) 0 var(--ds-space-section-mobile);background:var(--ds-color-bg-subtle)}@media (min-width:768px){.landing-hero{padding:calc(var(--ds-space-section) * 0.7) 0 var(--ds-space-section)}}.landing-hero-inner{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,0.95fr);gap:calc(var(--ds-space-xxl) * 1.75);align-items:center}@media (max-width:900px){.landing-hero-inner{grid-template-columns:minmax(0,1fr);gap:calc(var(--ds-space-xxl) + var(--ds-space-lg))}}.landing .landing-hero-title{margin:0 0 calc(var(--ds-space-xl) - var(--ds-space-xxs));color:var(--ds-color-text-default);font-size:clamp(2.75rem,1.2rem + 6.4vw,var(--ds-font-size-display-xl));line-height:var(--ds-font-line-height-display);text-wrap:balance}.landing-hero-subtitle{margin:0 0 var(--ds-space-xxl);max-width:32em;color:var(--ds-color-text-muted);font-size:var(--ds-font-size-body-lg);line-height:var(--ds-font-line-height-body-lg)}.landing-hero-ctas{display:flex;flex-wrap:wrap;align-items:center;gap:var(--ds-space-md);margin-bottom:var(--ds-space-xl)}.landing-reassure{display:flex;flex-wrap:wrap;gap:var(--ds-space-sm) var(--ds-space-xl);margin:0;padding:0;list-style:none;font-size:var(--ds-font-size-label-md);color:var(--ds-color-text-subtle)}.landing-reassure li{display:inline-flex;align-items:center;gap:var(--ds-space-xs)}.landing-reassure svg{flex-shrink:0;color:var(--ds-color-accent-brand)}.landing-hero-visual{background:var(--ds-color-bg-default);border:1px solid var(--ds-color-border-subtle);border-radius:var(--ds-radius-lg);box-shadow:var(--ds-shadow-window);overflow:hidden}.landing-hero-mockup{width:100%}.mockup-toolbar{display:flex;align-items:center;gap:var(--ds-space-sm);padding:var(--ds-space-md) var(--ds-space-lg);background:var(--ds-color-bg-subtle);border-bottom:1px solid var(--ds-color-border-subtle)}.mockup-dot{width:10px;height:10px;border-radius:var(--ds-radius-full);background:var(--ds-color-border-default)}.mockup-title{margin-left:var(--ds-space-sm);color:var(--ds-color-text-subtle);font-size:var(--ds-font-size-label-sm);font-weight:var(--ds-font-weight-medium)}.mockup-body{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr);background:var(--ds-color-bg-default)}.mockup-chat{padding:var(--ds-space-lg);display:flex;flex-direction:column;gap:var(--ds-space-sm);background:var(--ds-color-bg-subtle);border-right:1px solid var(--ds-color-border-subtle)}.mockup-msg{padding:var(--ds-space-sm) var(--ds-space-md);font-size:var(--ds-font-size-label-sm);line-height:var(--ds-font-line-height-body);max-width:92%}.mockup-msg--user{background:var(--ds-color-bg-inverse);color:var(--ds-color-text-inverse);border-radius:var(--ds-radius-md) var(--ds-radius-md) var(--ds-radius-xs) var(--ds-radius-md);align-self:flex-end}.mockup-msg--ai{background:var(--ds-color-bg-default);color:var(--ds-color-text-default);border:1px solid var(--ds-color-border-subtle);border-radius:var(--ds-radius-md) var(--ds-radius-md) var(--ds-radius-md) var(--ds-radius-xs);align-self:flex-start}.mockup-ai-icon{margin-right:var(--ds-space-xxs);color:var(--ds-color-text-link)}.mockup-preview{padding:var(--ds-space-lg);display:flex;flex-direction:column;gap:var(--ds-space-md)}.mockup-score{display:grid;grid-template-columns:1fr auto;align-items:baseline;gap:var(--ds-space-xs) var(--ds-space-md)}.mockup-score-label{color:var(--ds-color-text-muted);font-size:var(--ds-font-size-label-sm);font-weight:var(--ds-font-weight-semibold);letter-spacing:0.08em;text-transform:uppercase}.mockup-score-value{font-family:var(--ds-font-family-display);font-size:var(--ds-font-size-heading-md);font-weight:var(--ds-font-weight-medium);line-height:var(--ds-font-line-height-button)}.mockup-score-bar{grid-column:1 / -1;height:6px;border-radius:var(--ds-radius-full);background:var(--ds-color-border-subtle);overflow:hidden}.mockup-score-bar::after{content:'';display:block;width:92%;height:100%;border-radius:var(--ds-radius-full);background:var(--ds-color-accent-brand)}.mockup-paper{display:flex;flex-direction:column;gap:var(--ds-space-xs);padding:var(--ds-space-md);background:var(--ds-color-bg-default);border:1px solid var(--ds-color-border-subtle);border-left:3px solid var(--ds-color-accent-brand);border-radius:var(--ds-radius-sm)}.mockup-cv-header{height:14px;width:55%;background:var(--ds-color-text-default);border-radius:var(--ds-radius-xs)}.mockup-cv-sub{height:8px;width:35%;margin-bottom:var(--ds-space-xs);background:var(--ds-color-border-default);border-radius:var(--ds-radius-xs)}.mockup-cv-line{height:6px;width:100%;background:var(--ds-color-border-subtle);border-radius:var(--ds-radius-xs)}.mockup-cv-line--short{width:60%}.mockup-cv-line--highlight{background:var(--ds-color-accent-highlight)}@media (max-width:600px){.mockup-body{grid-template-columns:minmax(0,1fr)}.mockup-chat{border-right:none;border-bottom:1px solid var(--ds-color-border-subtle)}}.landing-steps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));margin:0;padding:0;list-style:none;border-top:1px solid var(--ds-color-text-default)}.landing-step{padding:var(--ds-space-xxl) var(--ds-space-xxl) 0 var(--ds-space-xxl)}.landing-step + .landing-step{border-left:1px solid var(--ds-color-border-subtle)}.landing-step:first-child{padding-left:0}.landing-step-num{display:block;margin-bottom:var(--ds-space-lg);font-family:var(--ds-font-family-display);font-size:calc(var(--ds-font-size-heading-lg) + var(--ds-space-md));font-weight:var(--ds-font-weight-medium);line-height:var(--ds-font-line-height-display);color:var(--ds-color-text-link)}.landing .landing-step-title{margin:0 0 var(--ds-space-sm);color:var(--ds-color-text-default)}.landing-step-desc{margin:0;font-size:var(--ds-font-size-body-md);line-height:var(--ds-font-line-height-body);color:var(--ds-color-text-muted)}@media (max-width:767px){.landing-steps{grid-template-columns:minmax(0,1fr)}.landing-step,.landing-step:first-child{padding:var(--ds-space-xl) 0}.landing-step + .landing-step{border-left:none;border-top:1px solid var(--ds-color-border-subtle)}}.landing-features-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border-top:1px solid var(--ds-color-border-subtle);border-left:1px solid var(--ds-color-border-subtle)}.landing-feature-card{padding:calc(var(--ds-space-xl) + var(--ds-space-xs) - var(--ds-space-xxs));border-right:1px solid var(--ds-color-border-subtle);border-bottom:1px solid var(--ds-color-border-subtle);background:var(--ds-color-bg-default)}.landing-card-icon{width:var(--ds-size-button-md);height:var(--ds-size-button-md);border-radius:var(--ds-radius-md);background:var(--ds-color-bg-accent);color:var(--ds-color-text-link);display:flex;align-items:center;justify-content:center;margin-bottom:var(--ds-space-lg)}.landing .landing-feature-title{margin:0 0 var(--ds-space-sm);color:var(--ds-color-text-default);font-size:calc(var(--ds-font-size-heading-sm) - var(--ds-space-xxs))}.landing-feature-desc{margin:0;font-size:var(--ds-font-size-body-md);line-height:var(--ds-font-line-height-body);color:var(--ds-color-text-muted)}@media (max-width:900px){.landing-features-grid{grid-template-columns:minmax(0,1fr)}}.landing-ats-link{display:inline-block;margin-top:var(--ds-space-md);font-size:var(--ds-font-size-label-md);color:var(--ds-color-text-link);font-weight:var(--ds-font-weight-semibold);text-decoration:underline;text-underline-offset:var(--ds-space-xs)}.landing-ats-link:hover{color:var(--ds-color-action-link-fg-hover)}.landing-audience{display:grid;grid-template-columns:minmax(0,0.9fr) minmax(0,1.1fr);gap:calc(var(--ds-space-xxl) * 2);align-items:start}.landing-audience .landing-section-head{margin:0;text-align:left}.landing-audience .landing-section-title{margin:0}.landing-audience-list{margin:0;padding:0;list-style:none;border-top:1px solid var(--ds-color-text-default)}.landing-audience-list li{padding:var(--ds-space-xl) 0;border-bottom:1px solid var(--ds-color-border-subtle)}.landing .landing-audience-title{margin:0 0 var(--ds-space-sm);font-family:var(--ds-font-family-display);font-size:calc(var(--ds-font-size-heading-md) + var(--ds-space-xxs));font-weight:var(--ds-font-weight-medium);line-height:var(--ds-font-line-height-heading);color:var(--ds-color-text-default)}@media (max-width:900px){.landing-audience{grid-template-columns:minmax(0,1fr);gap:var(--ds-space-xxl)}}.landing-pricing{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);gap:var(--ds-space-xl);align-items:stretch;max-width:calc(var(--ds-space-xxl) * 26);margin:0 auto}@media (max-width:700px){.landing-pricing{grid-template-columns:minmax(0,1fr);max-width:calc(var(--ds-space-xxl) * 13);row-gap:calc(var(--ds-space-xxl) + var(--ds-space-md))}}.pricing-card{position:relative;display:flex;flex-direction:column;background:var(--ds-color-bg-inverse-raised);border:1px solid var(--ds-color-border-inverse);border-radius:var(--ds-radius-lg);padding:calc(var(--ds-space-xl) + var(--ds-space-xs) - var(--ds-space-xxs)) var(--ds-space-xl);color:var(--ds-color-text-inverse)}.pricing-card--pro{background:var(--ds-color-bg-default);border:1px solid var(--ds-color-accent-brand);border-top:4px solid var(--ds-color-accent-brand);color:var(--ds-color-text-default);padding:calc(var(--ds-space-xxl) + var(--ds-space-sm)) var(--ds-space-xxl) var(--ds-space-xxl)}.pricing-badge{position:absolute;top:calc(var(--ds-space-md) * -1 - var(--ds-space-xxs));left:var(--ds-space-xl);background:var(--ds-color-accent-brand);color:var(--ds-color-text-default);font-size:var(--ds-font-size-label-sm);font-weight:var(--ds-font-weight-semibold);line-height:var(--ds-font-line-height-button);padding:var(--ds-space-xs) var(--ds-space-md);border-radius:var(--ds-radius-full);letter-spacing:0.08em;text-transform:uppercase;white-space:nowrap}.pricing-card-header{margin-bottom:var(--ds-space-xl)}.landing .pricing-plan-name{margin:0 0 var(--ds-space-sm);color:inherit;font-family:var(--ds-font-family-body);font-size:var(--ds-font-size-label-md);font-weight:var(--ds-font-weight-semibold);letter-spacing:0.08em;text-transform:uppercase}.pricing-price{display:flex;align-items:baseline;flex-wrap:wrap;gap:var(--ds-space-xs)}.pricing-amount{font-family:var(--ds-font-family-display);font-weight:var(--ds-font-weight-medium);font-size:calc(var(--ds-font-size-heading-xl) + var(--ds-space-xs));letter-spacing:var(--ds-font-letter-spacing-heading-xl);line-height:var(--ds-font-line-height-display)}.pricing-card--pro .pricing-amount{font-size:var(--ds-font-size-display-md)}.pricing-period{font-size:var(--ds-font-size-label-md);color:var(--ds-color-text-inverse-muted)}.pricing-card--pro .pricing-period{color:var(--ds-color-text-muted)}.pricing-features{list-style:none;padding:var(--ds-space-xl) 0 0;margin:0 0 var(--ds-space-xxl);border-top:1px solid var(--ds-color-border-inverse);display:flex;flex-direction:column;gap:var(--ds-space-md);flex:1}.pricing-card--pro .pricing-features{border-top-color:var(--ds-color-border-subtle)}.pricing-features li{display:flex;align-items:flex-start;gap:var(--ds-space-sm);font-size:var(--ds-font-size-body-md);line-height:var(--ds-font-line-height-feature)}.pricing-features li svg{flex-shrink:0;margin-top:var(--ds-space-xxs);color:var(--ds-color-accent-brand)}.pricing-cta{width:100%}.landing-cta-bottom{width:100%;text-align:center;padding:var(--ds-space-section-mobile) 0;background:var(--ds-color-bg-inverse);color:var(--ds-color-text-inverse)}@media (min-width:768px){.landing-cta-bottom{padding:var(--ds-space-section) 0}}.landing .landing-cta-bottom h2{margin:0 auto var(--ds-space-lg);max-width:16em;color:inherit;font-size:clamp(2.125rem,1.2rem + 3.2vw,var(--ds-font-size-display-md));line-height:var(--ds-font-line-height-heading);letter-spacing:var(--ds-font-letter-spacing-heading-xl);text-wrap:balance}.landing-cta-bottom p{margin:0 auto var(--ds-space-xxl);max-width:36em;color:var(--ds-color-text-inverse-muted);font-size:var(--ds-font-size-heading-sm)}.landing-cta-actions{display:flex;flex-wrap:wrap;justify-content:center;gap:var(--ds-space-md)}.landing-footer{width:100%;padding:calc(var(--ds-space-xxl) * 2) 0 var(--ds-space-xl);background:var(--ds-color-bg-subtle);color:var(--ds-color-text-muted);border-top:1px solid var(--ds-color-border-subtle);font-size:var(--ds-font-size-label-md)}.landing-footer-cols{display:grid;grid-template-columns:minmax(0,1.4fr) repeat(3,minmax(0,1fr));gap:var(--ds-space-xxl)}@media (max-width:900px){.landing-footer-cols{grid-template-columns:repeat(2,minmax(0,1fr))}.landing-footer-brand{grid-column:1 / -1}}@media (max-width:480px){.landing-footer-cols{grid-template-columns:minmax(0,1fr)}}.landing-footer-brand{align-self:start}.landing-footer-heading{margin:0 0 var(--ds-space-md);color:var(--ds-color-text-default);font-size:var(--ds-font-size-label-md);font-weight:var(--ds-font-weight-semibold)}.landing-footer-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:var(--ds-space-sm)}.landing-footer a{color:var(--ds-color-text-muted);text-decoration:none}.landing-footer-list a{display:inline-block;padding:var(--ds-space-xxs) 0}.landing-footer a:hover{color:var(--ds-color-text-link);text-decoration:underline;text-underline-offset:var(--ds-space-xs)}.landing-footer-bottom{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:var(--ds-space-md) var(--ds-space-xl);margin-top:calc(var(--ds-space-xxl) * 1.5);padding-top:var(--ds-space-xl);border-top:1px solid var(--ds-color-border-subtle)}.landing-footer-bottom p{margin:0;color:var(--ds-color-text-subtle);font-size:var(--ds-font-size-label-md)}.landing-footer-bottom p a{text-decoration:underline;text-underline-offset:var(--ds-space-xs)}.landing-footer-legal{display:flex;flex-wrap:wrap;gap:var(--ds-space-xs) var(--ds-space-xl)}.static-crawlable .landing-menu-toggle{font-size:var(--ds-font-size-body-md)}.static-crawlable summary{cursor:pointer}
+/* LANDING-CRITICAL-CSS:END */
     </style>
-    <!-- Mise en page landing entière en critical CSS (évite CLS quand une feuille externe arrivait en différé). landing-static.css reste la référence pour aligner les changements. -->
     <style>.js-enabled #root .static-crawlable{display:none!important}</style>
     <link rel="stylesheet" href="/consent-banner.css" />
     <script src="/analytics-config.js"></script>
@@ -168,7 +112,7 @@ a.ds-button{text-decoration:none}
           s.textContent = '#root .static-crawlable{display:none!important}';
           document.documentElement.appendChild(s);
           var root = document.getElementById('root');
-          if (root) root.innerHTML = '<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;font-family:\'Plus Jakarta Sans\',sans-serif;color:#64748b;">Chargement…</div>';
+          if (root) root.innerHTML = '<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;font-family:\'Inter Variable\',Inter,system-ui,sans-serif;color:#667085;">Chargement…</div>';
           var cssName = typeof window.__APP_CSS__ === 'string' ? window.__APP_CSS__ : '';
           var cssReady = cssName && cssName.indexOf('__APP') === -1;
           var isViteDev = window.location.port === '5173'
@@ -189,16 +133,48 @@ a.ds-button{text-decoration:none}
         <header class="landing-header">
           <div class="landing-container">
             <div class="landing-header-inner">
-              <img src="/favicon.svg" alt="AxeL Job" class="landing-logo" />
-              <span class="landing-brand">AxeL Job</span>
+              <a href="/" class="landing-brand-link" data-attr="nav-link-back" data-track="nav" data-zone="header" data-level="tertiary">
+                <img src="/favicon.svg" alt="" class="landing-logo" width="36" height="36" />
+                <span class="landing-brand">AxeL Job</span>
+              </a>
               <nav class="landing-nav" aria-label="Navigation principale">
-                <a href="/ats" data-attr="nav-link-ats" data-track="nav" data-zone="header" data-level="tertiary">Qu'est-ce que l'ATS ?</a>
-                <a href="/faq" data-attr="nav-link-faq" data-track="nav" data-zone="header" data-level="tertiary">FAQ</a>
-                <a href="/modeles-cv" data-attr="nav-link-modeles" data-track="nav" data-zone="header" data-level="tertiary">Modèles CV</a>
-                <a href="/guide-cv" data-attr="nav-link-guide" data-track="nav" data-zone="header" data-level="tertiary">Guide CV</a>
-                <a href="/login" class="ds-button ds-button--primary ds-button--md landing-cta-nav" data-attr="nav-cta-signup" data-track="cta" data-zone="header" data-level="primary">Se connecter</a>
+                <a href="#tarifs" data-attr="nav-link-pricing" data-track="nav" data-zone="header" data-level="tertiary">Tarifs</a>
+                <details class="landing-menu">
+                  <summary class="landing-menu-toggle" data-attr="nav-menu-resources" data-track="nav" data-zone="header" data-level="tertiary">Ressources<svg class="landing-menu-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></summary>
+                  <ul class="landing-menu-list">
+                    <li><a href="/ats" data-attr="nav-link-ats" data-track="nav" data-zone="header" data-level="tertiary">CV et ATS</a></li>
+                    <li><a href="/faq" data-attr="nav-link-faq" data-track="nav" data-zone="header" data-level="tertiary">FAQ</a></li>
+                    <li><a href="/modeles-cv" data-attr="nav-link-modeles" data-track="nav" data-zone="header" data-level="tertiary">Modèles CV</a></li>
+                    <li><a href="/guide-cv" data-attr="nav-link-guide" data-track="nav" data-zone="header" data-level="tertiary">Guide CV</a></li>
+                    <li><a href="/erreurs-cv" data-attr="nav-link-erreurs" data-track="nav" data-zone="header" data-level="tertiary">Erreurs à éviter</a></li>
+                    <li><a href="/cv-par-metier" data-attr="nav-link-metier" data-track="nav" data-zone="header" data-level="tertiary">CV par métier</a></li>
+                    <li><a href="/cv-adapte-chaque-offre" data-attr="nav-link-adapte" data-track="nav" data-zone="header" data-level="tertiary">CV adapté à chaque offre</a></li>
+                  </ul>
+                </details>
+                <a href="/login" class="ds-button ds-button--tertiary ds-button--md" data-attr="nav-link-login" data-track="nav" data-zone="header" data-level="tertiary">Se connecter</a>
+                <a href="/login" class="ds-button ds-button--primary ds-button--md landing-cta-nav" data-attr="nav-cta-signup" data-track="cta" data-zone="header" data-level="primary">Essayer gratuitement</a>
               </nav>
-              <a href="/login" class="landing-mobile-cta ds-button ds-button--primary ds-button--md" data-attr="nav-cta-start" data-track="cta" data-zone="header" data-level="primary">Commencer</a>
+              <div class="landing-header-mobile-actions">
+                <a href="/login" class="landing-mobile-cta ds-button ds-button--primary ds-button--md" data-attr="nav-cta-start" data-track="cta" data-zone="header" data-level="primary">Commencer</a>
+                <details class="landing-burger-menu">
+                  <summary class="landing-burger" aria-label="Menu">
+                    <svg class="landing-burger-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+                  </summary>
+                  <nav class="landing-mobile-panel" aria-label="Navigation mobile">
+              <a href="#comment">Comment ça marche</a>
+              <a href="#tarifs">Tarifs</a>
+              <a href="#features">Fonctionnalités</a>
+              <a href="/ats" data-attr="nav-link-ats-mobile" data-track="nav" data-zone="header" data-level="tertiary">CV et ATS</a>
+              <a href="/faq" data-attr="nav-link-faq-mobile" data-track="nav" data-zone="header" data-level="tertiary">FAQ</a>
+              <a href="/modeles-cv" data-attr="nav-link-modeles-mobile" data-track="nav" data-zone="header" data-level="tertiary">Modèles CV</a>
+              <a href="/guide-cv" data-attr="nav-link-guide-mobile" data-track="nav" data-zone="header" data-level="tertiary">Guide CV</a>
+              <a href="/erreurs-cv" data-attr="nav-link-erreurs-mobile" data-track="nav" data-zone="header" data-level="tertiary">Erreurs à éviter</a>
+              <a href="/cv-par-metier" data-attr="nav-link-metier-mobile" data-track="nav" data-zone="header" data-level="tertiary">CV par métier</a>
+              <a href="/cv-adapte-chaque-offre" data-attr="nav-link-adapte-mobile" data-track="nav" data-zone="header" data-level="tertiary">CV adapté à chaque offre</a>
+              <a href="/login">Se connecter</a>
+                  </nav>
+                </details>
+              </div>
             </div>
           </div>
         </header>
@@ -207,14 +183,20 @@ a.ds-button{text-decoration:none}
             <div class="landing-container">
               <div class="landing-hero-inner">
                 <div class="landing-hero-content">
-                  <h1 class="landing-hero-title" data-attr="home-hero-title" data-zone="hero" data-level="tertiary">Passe les filtres automatiques. Décroche des entretiens en 1 clic.</h1>
+                  <p class="landing-kicker">CV adapté par l'IA</p>
+                  <h1 class="landing-hero-title ds-display-xl" data-attr="home-hero-title" data-zone="hero" data-level="tertiary">Passe les filtres automatiques. Décroche des <em class="ds-highlight">entretiens</em> en 1 clic.</h1>
                   <p class="landing-hero-subtitle">L'IA analyse l'offre d'emploi et adapte instantanément ton CV pour passer les filtres (ATS) et taper dans l'œil des recruteurs.</p>
                   <div class="landing-hero-ctas">
-                    <a href="/login" class="ds-button ds-button--primary ds-button--md landing-cta-hero" data-attr="home-hero-cta-signup" data-track="cta" data-zone="hero" data-level="primary">Essayer gratuitement</a>
-                    <span class="landing-hero-hint">3 adaptations offertes</span>
+                    <a href="/login" class="ds-button ds-button--primary ds-button--lg landing-cta-hero" data-attr="home-hero-cta-signup" data-track="cta" data-zone="hero" data-level="primary">Essayer gratuitement</a>
+                    <a href="#comment" class="ds-button ds-button--secondary ds-button--lg" data-attr="home-hero-cta-how" data-track="nav" data-zone="hero" data-level="secondary">Voir comment ça marche</a>
                   </div>
+                  <ul class="landing-reassure">
+                    <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>3 adaptations offertes</li>
+                    <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>Sans carte bancaire</li>
+                    <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>Export PDF prêt à envoyer</li>
+                  </ul>
                 </div>
-                <div class="landing-hero-visual">
+                <div class="landing-hero-visual" aria-hidden="true">
                   <div class="landing-hero-mockup">
                     <div class="mockup-toolbar">
                       <span class="mockup-dot"></span><span class="mockup-dot"></span><span class="mockup-dot"></span>
@@ -229,13 +211,21 @@ a.ds-button{text-decoration:none}
                         </div>
                       </div>
                       <div class="mockup-preview">
-                        <div class="mockup-cv-header"></div>
-                        <div class="mockup-cv-line mockup-cv-line--highlight"></div>
-                        <div class="mockup-cv-line"></div>
-                        <div class="mockup-cv-line mockup-cv-line--short"></div>
-                        <div class="mockup-cv-line mockup-cv-line--highlight"></div>
-                        <div class="mockup-cv-line"></div>
-                        <div class="mockup-cv-line mockup-cv-line--short"></div>
+                        <div class="mockup-score">
+                          <span class="mockup-score-label">Score ATS</span>
+                          <span class="mockup-score-value">92/100</span>
+                          <div class="mockup-score-bar"></div>
+                        </div>
+                        <div class="mockup-paper">
+                          <div class="mockup-cv-header"></div>
+                          <div class="mockup-cv-sub"></div>
+                          <div class="mockup-cv-line mockup-cv-line--highlight"></div>
+                          <div class="mockup-cv-line"></div>
+                          <div class="mockup-cv-line mockup-cv-line--short"></div>
+                          <div class="mockup-cv-line mockup-cv-line--highlight"></div>
+                          <div class="mockup-cv-line"></div>
+                          <div class="mockup-cv-line mockup-cv-line--short"></div>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -245,33 +235,36 @@ a.ds-button{text-decoration:none}
           </section>
           <section id="comment" class="landing-section" data-section="how">
             <div class="landing-container">
-              <h2 class="landing-section-title">Comment ça marche</h2>
-              <div class="landing-steps">
-                <div class="landing-step">
-                  <div class="landing-step-icon"><svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>
-                  <span class="landing-step-num">Étape 1</span>
-                  <h3 class="landing-step-title">Importe ton profil</h3>
-                  <p class="landing-step-desc">LinkedIn, import de CV ou saisie manuelle : ton profil en quelques clics.</p>
-                </div>
-                <div class="landing-step">
-                  <div class="landing-step-icon"><svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/></svg></div>
-                  <span class="landing-step-num">Étape 2</span>
-                  <h3 class="landing-step-title">Colle l'annonce visée</h3>
-                  <p class="landing-step-desc">Copie le texte de l'offre d'emploi dans l'outil.</p>
-                </div>
-                <div class="landing-step">
-                  <div class="landing-step-icon"><svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg></div>
-                  <span class="landing-step-num">Étape 3</span>
-                  <h3 class="landing-step-title">Laisse l'IA faire la magie</h3>
-                  <p class="landing-step-desc">Adaptation instantanée et suivi de tes candidatures.</p>
-                </div>
+              <div class="landing-section-head">
+                <p class="landing-eyebrow">En 3 étapes</p>
+                <h2 class="landing-section-title ds-heading-xl">Comment ça marche</h2>
               </div>
+              <ol class="landing-steps">
+                <li class="landing-step">
+                  <span class="landing-step-num" aria-hidden="true">01</span>
+                  <h3 class="landing-step-title ds-heading-sm">Importe ton profil</h3>
+                  <p class="landing-step-desc">LinkedIn, import de CV ou saisie manuelle : ton profil en quelques clics.</p>
+                </li>
+                <li class="landing-step">
+                  <span class="landing-step-num" aria-hidden="true">02</span>
+                  <h3 class="landing-step-title ds-heading-sm">Colle l'annonce visée</h3>
+                  <p class="landing-step-desc">Copie le texte de l'offre d'emploi dans l'outil.</p>
+                </li>
+                <li class="landing-step">
+                  <span class="landing-step-num" aria-hidden="true">03</span>
+                  <h3 class="landing-step-title ds-heading-sm">Laisse l'IA faire la magie</h3>
+                  <p class="landing-step-desc">Adaptation instantanée et suivi de tes candidatures.</p>
+                </li>
+              </ol>
             </div>
           </section>
-          <section id="tarifs" class="landing-section" data-section="pricing">
+          <section id="tarifs" class="landing-section landing-section--inverse" data-section="pricing">
             <div class="landing-container">
-              <h2 class="landing-section-title">Tarifs</h2>
-              <p class="landing-section-subtitle">Commence gratuitement. Passe Pro quand tu en as besoin.</p>
+              <div class="landing-section-head">
+                <p class="landing-eyebrow">Simple et sans surprise</p>
+                <h2 class="landing-section-title ds-heading-xl">Tarifs</h2>
+                <p class="landing-section-subtitle">Commence gratuitement. Passe Pro quand tu en as besoin.</p>
+              </div>
               <div class="landing-pricing">
                 <div class="pricing-card" data-attr="home-pricing-card-free" data-zone="pricing" data-level="tertiary">
                   <div class="pricing-card-header">
@@ -279,12 +272,12 @@ a.ds-button{text-decoration:none}
                     <div class="pricing-price"><span class="pricing-amount">0€</span><span class="pricing-period">pour toujours</span></div>
                   </div>
                   <ul class="pricing-features">
-                    <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>3 adaptations de CV</li>
-                    <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Import PDF  / LinkedIn</li>
-                    <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Suivi de candidatures</li>
-                    <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Export PDF</li>
+                    <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>3 adaptations de CV</li>
+                    <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>Import PDF  / LinkedIn</li>
+                    <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>Suivi de candidatures</li>
+                    <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>Export PDF</li>
                   </ul>
-                  <a href="/login" class="ds-button ds-button--secondary ds-button--md pricing-cta" data-attr="home-pricing-cta-free" data-track="cta" data-zone="pricing" data-level="secondary">Commencer gratuitement</a>
+                  <a href="/login" class="ds-button ds-button--secondary ds-button--inverse ds-button--lg pricing-cta" data-attr="home-pricing-cta-free" data-track="cta" data-zone="pricing" data-level="secondary">Commencer gratuitement</a>
                 </div>
                 <div class="pricing-card pricing-card--pro" data-attr="home-pricing-card-pro" data-zone="pricing" data-level="tertiary">
                   <div class="pricing-badge" data-attr="home-pricing-badge-popular" data-zone="pricing" data-level="tertiary">Populaire</div>
@@ -293,32 +286,38 @@ a.ds-button{text-decoration:none}
                     <div class="pricing-price"><span class="pricing-amount">10€</span><span class="pricing-period">/ mois</span></div>
                   </div>
                   <ul class="pricing-features">
-                    <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Adaptations illimitées</li>
-                    <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Import PDF  / LinkedIn</li>
-                    <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Suivi de candidatures illimité</li>
-                    <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Export PDF &amp; dossier complet</li>
-                    <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Lettre de motivation IA</li>
-                    <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Support prioritaire</li>
+                    <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>Adaptations illimitées</li>
+                    <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>Import PDF  / LinkedIn</li>
+                    <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>Suivi de candidatures illimité</li>
+                    <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>Export PDF &amp; dossier complet</li>
+                    <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>Lettre de motivation IA</li>
+                    <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>Support prioritaire</li>
                   </ul>
-                  <a href="/login?plan=pro" class="ds-button ds-button--primary ds-button--md pricing-cta" data-attr="home-pricing-cta-pro" data-track="cta" data-zone="pricing" data-level="primary">Passer Pro</a>
+                  <a href="/login?plan=pro" class="ds-button ds-button--primary ds-button--lg pricing-cta" data-attr="home-pricing-cta-pro" data-track="cta" data-zone="pricing" data-level="primary">Passer Pro</a>
                 </div>
               </div>
             </div>
           </section>
-          <section id="features" class="landing-section" data-section="features">
+          <section id="features" class="landing-section landing-section--subtle" data-section="features">
             <div class="landing-container">
-              <h2 class="landing-section-title">Fonctionnalités</h2>
+              <div class="landing-section-head">
+                <p class="landing-eyebrow">Tout au même endroit</p>
+                <h2 class="landing-section-title ds-heading-xl">Fonctionnalités</h2>
+              </div>
               <div class="landing-features-grid">
                 <div class="landing-feature-card">
-                  <h3 class="landing-feature-title">Générateur de CV IA</h3>
+                  <div class="landing-card-icon"><svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg></div>
+                  <h3 class="landing-feature-title ds-heading-sm">Générateur de CV IA</h3>
                   <p class="landing-feature-desc">Adaptation aux mots-clés de chaque annonce (ATS-friendly).</p>
                 </div>
                 <div class="landing-feature-card">
-                  <h3 class="landing-feature-title">Suivi de candidatures</h3>
+                  <div class="landing-card-icon"><svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 17 2 2 4-4"/><path d="m3 7 2 2 4-4"/><path d="M13 6h8"/><path d="M13 12h8"/><path d="M13 18h8"/></svg></div>
+                  <h3 class="landing-feature-title ds-heading-sm">Suivi de candidatures</h3>
                   <p class="landing-feature-desc">Statuts, entretiens, refus - tout centralisé au même endroit.</p>
                 </div>
                 <div class="landing-feature-card">
-                  <h3 class="landing-feature-title">Export PDF ultra-propre</h3>
+                  <div class="landing-card-icon"><svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M16 13H8"/><path d="M16 17H8"/></svg></div>
+                  <h3 class="landing-feature-title ds-heading-sm">Export PDF ultra-propre</h3>
                   <p class="landing-feature-desc">CV et lettre de motivation prêts à envoyer.</p>
                 </div>
               </div>
@@ -326,46 +325,77 @@ a.ds-button{text-decoration:none}
           </section>
           <section class="landing-section" data-section="why">
             <div class="landing-container">
-              <h2 class="landing-section-title">Pourquoi AxeL Job ?</h2>
-              <div class="landing-features-grid">
-                <div class="landing-feature-card">
-                  <h3 class="landing-feature-title">Score ATS optimisé</h3>
-                  <p class="landing-feature-desc">Chaque CV est analysé et adapté pour maximiser son passage dans les filtres automatiques des recruteurs (voir Qu'est-ce que l'ATS ?).</p>
-                  <a href="/ats" class="landing-ats-link" data-attr="home-why-link-ats" data-track="nav" data-zone="why" data-level="tertiary">Qu'est-ce que l'ATS ?</a>
+              <div class="landing-audience">
+                <div class="landing-section-head">
+                  <p class="landing-eyebrow">Ce que tu y gagnes</p>
+                  <h2 class="landing-section-title ds-heading-xl">Pourquoi AxeL Job ?</h2>
                 </div>
-                <div class="landing-feature-card">
-                  <h3 class="landing-feature-title">Gain de temps massif</h3>
-                  <p class="landing-feature-desc">Plus besoin de réécrire manuellement chaque candidature. L'IA adapte en quelques secondes.</p>
-                </div>
-                <div class="landing-feature-card">
-                  <h3 class="landing-feature-title">Suivi centralisé</h3>
-                  <p class="landing-feature-desc">Toutes tes candidatures au même endroit : statuts, entretiens, relances et exports.</p>
-                </div>
+                <ul class="landing-audience-list">
+                  <li>
+                    <h3 class="landing-audience-title">Score ATS optimisé</h3>
+                    <p class="landing-feature-desc">Chaque CV est analysé et adapté pour maximiser son passage dans les filtres automatiques des recruteurs (voir Qu'est-ce que l'ATS ?).</p>
+                    <a href="/ats" class="landing-ats-link" data-attr="home-why-link-ats" data-track="nav" data-zone="why" data-level="tertiary">Qu'est-ce que l'ATS ?</a>
+                  </li>
+                  <li>
+                    <h3 class="landing-audience-title">Gain de temps massif</h3>
+                    <p class="landing-feature-desc">Plus besoin de réécrire manuellement chaque candidature. L'IA adapte en quelques secondes.</p>
+                  </li>
+                  <li>
+                    <h3 class="landing-audience-title">Suivi centralisé</h3>
+                    <p class="landing-feature-desc">Toutes tes candidatures au même endroit : statuts, entretiens, relances et exports.</p>
+                  </li>
+                </ul>
               </div>
             </div>
           </section>
           <section class="landing-cta-bottom" data-section="final">
             <div class="landing-container">
-              <h2>Prêt à décrocher le job de tes rêves ?</h2>
+              <h2 class="ds-heading-xl">Prêt à décrocher le job de tes rêves ?</h2>
               <p>Crée ton compte gratuit et teste 3 adaptations de CV.</p>
-              <a href="/login" class="ds-button ds-button--primary ds-button--md landing-cta-hero" data-attr="home-final-cta-signup" data-track="cta" data-zone="final" data-level="primary">Essayer gratuitement</a>
+              <div class="landing-cta-actions">
+                <a href="/login" class="ds-button ds-button--primary ds-button--lg landing-cta-hero" data-attr="home-final-cta-signup" data-track="cta" data-zone="final" data-level="primary">Essayer gratuitement</a>
+                <a href="#tarifs" class="ds-button ds-button--secondary ds-button--inverse ds-button--lg" data-attr="home-final-cta-pricing" data-track="nav" data-zone="final" data-level="secondary">Voir les tarifs</a>
+              </div>
             </div>
           </section>
         </main>
         <footer class="landing-footer">
           <div class="landing-container">
-            <div class="landing-footer-inner">
-              <p>© 2026 AxeL Job - Ton CV sur-mesure pour chaque annonce. Une réalisation <a href="https://axelproject.fr" rel="noopener noreferrer" data-attr="footer-link-axelproject" data-track="nav" data-zone="footer" data-level="tertiary">Axel Project</a>.</p>
-              <nav class="landing-footer-links" aria-label="Guides, FAQ et pages légales">
-                <a href="mailto:contact@axelproject.fr?subject=Support%20AxeL%20Job">Support</a>
-                <a href="/ats" data-attr="footer-link-ats" data-track="nav" data-zone="footer" data-level="tertiary">CV et ATS</a>
-                <a href="/faq" data-attr="footer-link-faq" data-track="nav" data-zone="footer" data-level="tertiary">FAQ</a>
-                <a href="/modeles-cv" data-attr="footer-link-modeles" data-track="nav" data-zone="footer" data-level="tertiary">Modèles de CV</a>
-                <a href="/guide-cv" data-attr="footer-link-guide" data-track="nav" data-zone="footer" data-level="tertiary">Guide CV</a>
-                <a href="/erreurs-cv" data-attr="footer-link-erreurs" data-track="nav" data-zone="footer" data-level="tertiary">Erreurs à éviter</a>
-                <a href="/cv-par-metier" data-attr="footer-link-metier" data-track="nav" data-zone="footer" data-level="tertiary">CV par métier</a>
-                <a href="/cv-adapte-chaque-offre" data-attr="footer-link-adapte" data-track="nav" data-zone="footer" data-level="tertiary">CV adapté à chaque offre</a>
-                <span class="landing-footer-sep">|</span>
+            <div class="landing-footer-cols">
+              <div class="landing-footer-brand">
+                <a href="/" class="landing-brand-link" data-attr="footer-link-home" data-track="nav" data-zone="footer" data-level="tertiary">
+                  <img src="/favicon.svg" alt="" class="landing-logo" width="36" height="36" />
+                  <span class="landing-brand">AxeL Job</span>
+                </a>
+              </div>
+              <nav aria-label="Guides">
+                <p class="landing-footer-heading">Guides</p>
+                <ul class="landing-footer-list">
+                  <li><a href="/ats" data-attr="footer-link-ats" data-track="nav" data-zone="footer" data-level="tertiary">CV et ATS</a></li>
+                  <li><a href="/faq" data-attr="footer-link-faq" data-track="nav" data-zone="footer" data-level="tertiary">FAQ</a></li>
+                  <li><a href="/modeles-cv" data-attr="footer-link-modeles" data-track="nav" data-zone="footer" data-level="tertiary">Modèles de CV</a></li>
+                  <li><a href="/guide-cv" data-attr="footer-link-guide" data-track="nav" data-zone="footer" data-level="tertiary">Guide CV</a></li>
+                </ul>
+              </nav>
+              <nav aria-label="Ressources">
+                <p class="landing-footer-heading">Ressources</p>
+                <ul class="landing-footer-list">
+                  <li><a href="/erreurs-cv" data-attr="footer-link-erreurs" data-track="nav" data-zone="footer" data-level="tertiary">Erreurs à éviter</a></li>
+                  <li><a href="/cv-par-metier" data-attr="footer-link-metier" data-track="nav" data-zone="footer" data-level="tertiary">CV par métier</a></li>
+                  <li><a href="/cv-adapte-chaque-offre" data-attr="footer-link-adapte" data-track="nav" data-zone="footer" data-level="tertiary">CV adapté à chaque offre</a></li>
+                </ul>
+              </nav>
+              <nav aria-label="Aide">
+                <p class="landing-footer-heading">Aide</p>
+                <ul class="landing-footer-list">
+                  <li><a href="mailto:contact@axelproject.fr?subject=Support%20AxeL%20Job">Support</a></li>
+                  <li><a href="/login" data-attr="footer-link-login" data-track="nav" data-zone="footer" data-level="tertiary">Se connecter</a></li>
+                </ul>
+              </nav>
+            </div>
+            <div class="landing-footer-bottom">
+              <p data-landing-copyright>© 2026 AxeL Job - Ton CV sur-mesure pour chaque annonce. Une réalisation <a href="https://axelproject.fr" rel="noopener noreferrer" data-attr="footer-link-axelproject" data-track="nav" data-zone="footer" data-level="tertiary">Axel Project</a>.</p>
+              <nav class="landing-footer-legal" aria-label="Pages légales">
                 <a href="/mentions-legales" data-attr="footer-link-mentions" data-track="nav" data-zone="footer" data-level="tertiary">Mentions légales</a>
                 <a href="/confidentialite" data-attr="footer-link-confidentialite" data-track="nav" data-zone="footer" data-level="tertiary">Confidentialité</a>
                 <a href="/cgu" data-attr="footer-link-cgu" data-track="nav" data-zone="footer" data-level="tertiary">CGU</a>
@@ -373,6 +403,34 @@ a.ds-button{text-decoration:none}
             </div>
           </div>
         </footer>
+        <script>
+          (function () {
+            var p = document.querySelector('[data-landing-copyright]');
+            if (p && p.firstChild && p.firstChild.nodeType === 3) {
+              p.firstChild.nodeValue = p.firstChild.nodeValue.replace(/© \d{4}/, '© ' + new Date().getFullYear());
+            }
+            var menus = document.querySelectorAll('.static-crawlable details.landing-menu, .static-crawlable details.landing-burger-menu');
+            function closeAll(except) {
+              for (var i = 0; i < menus.length; i++) if (menus[i] !== except) menus[i].removeAttribute('open');
+            }
+            document.addEventListener('click', function (e) {
+              for (var i = 0; i < menus.length; i++) if (menus[i].open && !menus[i].contains(e.target)) menus[i].removeAttribute('open');
+            });
+            document.addEventListener('keydown', function (e) {
+              if (e.key !== 'Escape') return;
+              for (var i = 0; i < menus.length; i++) {
+                if (menus[i].open) {
+                  menus[i].removeAttribute('open');
+                  var sm = menus[i].querySelector('summary');
+                  if (sm) sm.focus();
+                }
+              }
+            });
+            for (var j = 0; j < menus.length; j++) {
+              menus[j].addEventListener('toggle', function () { if (this.open) closeAll(this); });
+            }
+          })();
+        </script>
       </div>
     </div>
     <!-- Entrée build : charge l'app uniquement sur /app et /login (voir src/entry-conditional.js) -->

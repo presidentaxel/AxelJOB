@@ -44,6 +44,7 @@ test('le HTML statique et landingCopy disent la même chose', async () => {
   const shared = [...new Set(sharedLandingStrings().map(norm))];
   const year = new Date().getFullYear();
   const copyright = norm(landingCopyright(year));
+  const yearless = (line) => line.replace(/^© \d{4} /, '© ');
   const blob = norm(lines.join('\n'));
 
   for (const sentence of shared) {
@@ -52,8 +53,15 @@ test('le HTML statique et landingCopy disent la même chose', async () => {
 
   const known = new Set(shared);
   for (const line of lines) {
-    if (line === copyright) continue;
+    if (yearless(line) === yearless(copyright)) continue;
     assert.ok(known.has(line), `texte du HTML statique absent de landingCopy : ${line}`);
   }
-  assert.ok(lines.includes(copyright), `pied de page attendu : ${copyright}`);
+  // L'année du HTML source est remplacée au chargement par un petit script.
+  assert.ok(
+    lines.some((line) => yearless(line) === yearless(copyright)),
+    `pied de page attendu : ${copyright}`,
+  );
+  assert.match(html, /data-landing-copyright/);
+  assert.match(html, /new Date\(\)\.getFullYear\(\)/);
+  assert.doesNotMatch(html, /Adaptez votre|Améliorez votre|suivez vos/);
 });

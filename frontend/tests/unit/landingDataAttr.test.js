@@ -12,6 +12,9 @@ const SHARED_IDS = [
   'nav-link-faq',
   'nav-link-modeles',
   'nav-link-guide',
+  'nav-link-login',
+  'nav-link-pricing',
+  'nav-menu-resources',
   'nav-cta-signup',
   'nav-cta-start',
   'home-hero-title',
@@ -68,7 +71,8 @@ test('landing React et HTML statique portent les data-attr AXE-359 en miroir', a
   }
 
   assert.equal(jsxIds.includes('nav-logo'), false);
-  assert.equal(jsxIds.includes('nav-link-back'), false);
+  assert.ok(jsxIds.includes('nav-link-back'));
+  assert.ok(htmlIds.includes('nav-link-back'));
 
   const footerIds = [
     'footer-link-ats',
