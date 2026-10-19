@@ -6,25 +6,41 @@ import logging
 import time
 
 from backend.config import STRIPE_PRICE_ID_FREE, STRIPE_SECRET_KEY
-from backend.db import get_user_plan, get_user_stripe_ids, set_user_plan
+from backend.db import attach_user_stripe_ids, get_user_plan, get_user_stripe_ids
 from backend.services.billing_notifications import stripe_client
 
 logger = logging.getLogger(__name__)
 
 _RETRY_AFTER_SEC = 300.0
+_BILLABLE_STATUS = frozenset({"active", "trialing", "past_due", "unpaid"})
 _failed_until: dict[str, float] = {}
 
 
-def ensure_stripe_customer(user_id: str, email: str | None = None) -> str | None:
+def ensure_stripe_customer(
+    user_id: str,
+    email: str | None = None,
+    create_if_missing: bool = True,
+) -> str | None:
     """Retrouve ou crée le Customer Stripe et, en plan free, l'abonnement à 0€.
 
-    Un compte Pro n'en reçoit pas un deuxième. Si Stripe ne répond pas, retourne
-    None : le compte Auth reste valide et un passage suivant reprend l'id.
+    create_if_missing=False ne fait que retrouver un client déjà là : la
+    suppression de compte s'en sert pour ne pas ouvrir un client au moment
+    de l'effacement. Un compte Pro n'en reçoit pas un deuxième. Si Stripe ne
+    répond pas, retourne None : le compte Auth reste valide.
     """
     uid = (user_id or "").strip()
     if not uid or uid == "default" or "'" in uid or '"' in uid:
         return None
     customer_id, subscription_id = get_user_stripe_ids(uid)
+    if not create_if_missing:
+        if customer_id or not STRIPE_SECRET_KEY:
+            return customer_id
+        try:
+            client = stripe_client(STRIPE_SECRET_KEY)
+            return _find_customer_id(client, uid)
+        except Exception:
+            logger.warning("stripe customer lookup failed for %s", uid, exc_info=True)
+            return None
     plan = get_user_plan(uid) or "free"
     if plan not in ("free", "pro"):
         plan = "free"
@@ -52,8 +68,8 @@ def ensure_stripe_customer(user_id: str, email: str | None = None) -> str | None
         if not customer_id:
             return None
         customer_id = str(customer_id)
-        if plan == "pro" or not STRIPE_PRICE_ID_FREE:
-            set_user_plan(uid, plan, stripe_customer_id=customer_id)
+        if get_user_plan(uid) == "pro" or not STRIPE_PRICE_ID_FREE:
+            attach_user_stripe_ids(uid, customer_id)
             _failed_until.pop(uid, None)
             return customer_id
         active_id = _first_active_subscription_id(client, customer_id)
@@ -66,10 +82,9 @@ def ensure_stripe_customer(user_id: str, email: str | None = None) -> str | None
                 }
             )
             active_id = getattr(created_sub, "id", None)
-        set_user_plan(
+        attach_user_stripe_ids(
             uid,
-            "free",
-            stripe_customer_id=customer_id,
+            customer_id,
             stripe_subscription_id=str(active_id) if active_id else None,
         )
         _failed_until.pop(uid, None)
@@ -95,6 +110,25 @@ def cancel_free_subscriptions(customer_id: str, keep_subscription_id: str | None
         if subscription_price_id(sub) != STRIPE_PRICE_ID_FREE:
             continue
         client.subscriptions.cancel(sub_id)
+
+
+def list_billable_subscriptions(client, customer_id: str) -> list:
+    """Abonnements encore facturables du client (actifs, essai, impayés)."""
+    if not customer_id:
+        return []
+    listed = client.subscriptions.list(
+        params={"customer": customer_id, "status": "all", "limit": 100}
+    )
+    found = []
+    for sub in _iter_stripe_list(listed):
+        status = str(_attr(sub, "status") or "").strip().lower()
+        if status in _BILLABLE_STATUS:
+            found.append(sub)
+    return found
+
+
+def find_stripe_customer_id(client, user_id: str) -> str | None:
+    return _find_customer_id(client, user_id)
 
 
 def subscription_uses_free_price(sub) -> bool:
@@ -134,7 +168,7 @@ def _find_customer_id(client, user_id: str) -> str | None:
         if found:
             return str(found)
     sessions = client.checkout.sessions.list(params={"limit": 100})
-    for session in getattr(sessions, "data", None) or []:
+    for session in _iter_stripe_list(sessions):
         if getattr(session, "client_reference_id", None) != user_id:
             continue
         customer = getattr(session, "customer", None)
@@ -146,6 +180,20 @@ def _find_customer_id(client, user_id: str) -> str | None:
         if found:
             return str(found)
     return None
+
+
+def _iter_stripe_list(result) -> list:
+    """Suit la pagination Stripe. Les doubles de test n'exposent que data."""
+    pager = getattr(result, "auto_paging_iter", None)
+    if callable(pager) and type(pager).__name__ != "MagicMock":
+        return list(pager())
+    data = getattr(result, "data", None)
+    if data is None:
+        return []
+    try:
+        return list(data)
+    except TypeError:
+        return []
 
 
 def _attr(obj, name: str):

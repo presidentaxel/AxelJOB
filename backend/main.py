@@ -119,6 +119,8 @@ from backend.services import billing_notifications, template_access
 from backend.services.stripe_customer import (
     cancel_free_subscriptions,
     ensure_stripe_customer,
+    find_stripe_customer_id,
+    list_billable_subscriptions,
     subscription_uses_free_price,
 )
 
@@ -2141,15 +2143,7 @@ def _stripe_client():
 
 
 def _stripe_customer_id_for_user(client, user_id: str) -> str | None:
-    customers = client.customers.search(params={"query": f"metadata['user_id']:'{user_id}'"})
-    if customers.data:
-        return customers.data[0].id
-    sessions = client.checkout.sessions.list(params={"limit": 100})
-    for s in sessions.data:
-        if s.client_reference_id == user_id and s.customer:
-            cid = s.customer
-            return cid if isinstance(cid, str) else _stripe_attr(cid, "id")
-    return None
+    return find_stripe_customer_id(client, user_id)
 
 
 def _stripe_first_active_subscription_id(client, customer_id: str) -> str | None:
@@ -2616,32 +2610,53 @@ class DeleteAccountBody(BaseModel):
     cancel_subscription: bool = False
 
 
+def _subscription_customer_id(sub) -> str | None:
+    sub_cust = _stripe_attr(sub, "customer")
+    if isinstance(sub_cust, dict):
+        sub_cust = sub_cust.get("id")
+    return str(sub_cust) if sub_cust else None
+
+
 def _cancel_subscription_for_account_deletion(user_id: str, confirmed: bool) -> None:
-    """Annule tout de suite un abonnement actif, seulement si la case a été confirmée."""
+    """Annule les abonnements Free et Pro encore facturables avant d'effacer le compte."""
     from backend.services.account_delete import (
         assert_subscription_cancel_confirmed,
         subscription_is_active,
     )
 
-    if not STRIPE_SECRET_KEY or get_paywall_disabled(user_id):
+    if not STRIPE_SECRET_KEY:
         return
+    paywall_off = get_paywall_disabled(user_id)
     try:
         import stripe
 
         client = stripe.StripeClient(STRIPE_SECRET_KEY)
-        ensure_stripe_customer(user_id)
-        cust_id, sub_id = _resolve_pro_subscription_id(client, user_id)
-        if not cust_id or not sub_id:
+        cust_id = ensure_stripe_customer(user_id, create_if_missing=False)
+        stored_sub = None
+        if not cust_id:
+            cust_id, stored_sub = get_user_stripe_ids(user_id)
+        else:
+            _stored_customer, stored_sub = get_user_stripe_ids(user_id)
+        if not cust_id:
             return
-        sub = client.subscriptions.retrieve(sub_id)
-        sub_cust = _stripe_attr(sub, "customer")
-        if isinstance(sub_cust, dict):
-            sub_cust = sub_cust.get("id")
-        if sub_cust and sub_cust != cust_id:
-            raise HTTPException(
-                status_code=403, detail="Cet abonnement n'est pas associé à ton compte."
-            )
-        status = (_stripe_attr(sub, "status") or "").lower()
+        subs = list_billable_subscriptions(client, cust_id)
+        known = {str(_stripe_attr(sub, "id") or "") for sub in subs}
+        if stored_sub and stored_sub not in known:
+            extra = client.subscriptions.retrieve(stored_sub)
+            extra_customer = _subscription_customer_id(extra)
+            if extra_customer and extra_customer != cust_id:
+                raise HTTPException(
+                    status_code=403, detail="Cet abonnement n'est pas associé à ton compte."
+                )
+            extra_status = (_stripe_attr(extra, "status") or "").strip().lower()
+            if extra_status in ("active", "trialing", "past_due", "unpaid"):
+                subs.append(extra)
+        for sub in subs:
+            sub_customer = _subscription_customer_id(sub)
+            if sub_customer and sub_customer != cust_id:
+                raise HTTPException(
+                    status_code=403, detail="Cet abonnement n'est pas associé à ton compte."
+                )
     except HTTPException:
         raise
     except Exception as exc:
@@ -2650,33 +2665,30 @@ def _cancel_subscription_for_account_deletion(user_id: str, confirmed: bool) -> 
             status_code=503,
             detail="Impossible de vérifier l'abonnement. Réessaie.",
         ) from exc
-    if subscription_uses_free_price(sub):
+    paid = [
+        sub
+        for sub in subs
+        if not subscription_uses_free_price(sub)
+        and subscription_is_active((_stripe_attr(sub, "status") or "").strip().lower())
+    ]
+    if paid and not paywall_off:
+        assert_subscription_cancel_confirmed((_stripe_attr(paid[0], "status") or ""), confirmed)
+    for sub in subs:
+        sub_id = str(_stripe_attr(sub, "id") or "")
+        if not sub_id:
+            continue
         try:
             client.subscriptions.cancel(sub_id)
         except Exception as exc:
-            logger.warning("account delete free subscription cancel failed: %s", type(exc).__name__)
+            logger.warning("account delete subscription cancel failed: %s", type(exc).__name__)
             raise HTTPException(
                 status_code=503,
                 detail="Annulation de l'abonnement impossible. Réessaie.",
             ) from exc
         _STRIPE_SNAPSHOT_CACHE.invalidate(sub_id)
+    if subs:
         _invalidate_stripe_caches_for_user(user_id)
         _invalidate_usage_cache(user_id)
-        return
-    assert_subscription_cancel_confirmed(status, confirmed)
-    if not subscription_is_active(status):
-        return
-    try:
-        client.subscriptions.cancel(sub_id)
-    except Exception as exc:
-        logger.warning("account delete subscription cancel failed: %s", type(exc).__name__)
-        raise HTTPException(
-            status_code=503,
-            detail="Annulation de l'abonnement impossible. Réessaie.",
-        ) from exc
-    _STRIPE_SNAPSHOT_CACHE.invalidate(sub_id)
-    _invalidate_stripe_caches_for_user(user_id)
-    _invalidate_usage_cache(user_id)
 
 
 @app.post("/api/auth/password-setup")
@@ -2692,7 +2704,7 @@ def api_password_setup(body: PasswordSetupBody):
 
 @app.post("/api/account/delete")
 def api_delete_account(request: Request, body: DeleteAccountBody):
-    """Supprime le compte du JWT. Annule d'abord l'abonnement actif si la case est confirmée."""
+    """Supprime le compte du JWT. Annule d'abord les abonnements Free et Pro encore actifs."""
     from backend.services.account_delete import delete_my_account
 
     user_id = _require_user_id(request)

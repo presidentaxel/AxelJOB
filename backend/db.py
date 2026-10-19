@@ -1259,6 +1259,64 @@ def set_user_plan(
         raise
 
 
+def attach_user_stripe_ids(
+    user_id: str,
+    stripe_customer_id: str,
+    stripe_subscription_id: str | None = None,
+) -> None:
+    """Lie les ids Stripe. Crée une ligne free seulement si le compte n'en a pas."""
+    uid = (user_id or "default").strip() or "default"
+    customer_id = (stripe_customer_id or "").strip()
+    if not customer_id or uid == "default":
+        return
+    sb = _get_supabase()
+    if not sb:
+        return
+    ts = datetime.now(timezone.utc).isoformat()
+    if USE_SUPABASE_PG:
+        try:
+            from backend import supabase_pg as spg
+
+            spg.attach_user_stripe_ids(
+                uid,
+                ts,
+                customer_id,
+                stripe_subscription_id=stripe_subscription_id,
+            )
+            _invalidate_user_plan_cache(uid)
+            return
+        except Exception as e:
+            _warn_pg_fallback("attach_user_stripe_ids", e)
+    try:
+        existing = (
+            sb.table("user_plans")
+            .select("plan, stripe_subscription_id")
+            .eq("user_id", uid)
+            .limit(1)
+            .execute()
+        )
+        if existing.data:
+            row = {"stripe_customer_id": customer_id, "updated_at": ts}
+            current = existing.data[0]
+            current_sub = (current.get("stripe_subscription_id") or "").strip()
+            if stripe_subscription_id and (current.get("plan") != "pro" or not current_sub):
+                row["stripe_subscription_id"] = stripe_subscription_id
+            sb.table("user_plans").update(row).eq("user_id", uid).execute()
+        else:
+            sb.table("user_plans").insert(
+                {
+                    "user_id": uid,
+                    "plan": "free",
+                    "updated_at": ts,
+                    "stripe_customer_id": customer_id,
+                    "stripe_subscription_id": stripe_subscription_id,
+                }
+            ).execute()
+        _invalidate_user_plan_cache(uid)
+    except Exception:
+        raise
+
+
 def update_adaptation(adaptation_id: str, updates: dict, user_id: str | None = None) -> dict | None:
     """Met à jour statut/archived/poste/entreprise et champs quali d'une candidature. Retourne le payload mis à jour."""
     current = get_adaptation(adaptation_id, user_id)

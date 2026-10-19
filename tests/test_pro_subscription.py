@@ -507,5 +507,52 @@ class TestUsageEndpoint(unittest.TestCase):
         self.assertEqual(out["adaptations_limit"], 999999)
 
 
+class TestAccountDeletionCancelsSubscriptions(unittest.TestCase):
+    """La suppression annule le Free à 0€ et le Pro, sans créer de client."""
+
+    def _sub(self, sub_id: str, price: str, status: str = "active"):
+        return SimpleNamespace(
+            id=sub_id,
+            status=status,
+            customer="cus_1",
+            items={"data": [{"price": {"id": price}}]},
+        )
+
+    def _cancel(self, confirmed: bool, subs: list):
+        client = MagicMock()
+        fake_stripe = MagicMock()
+        fake_stripe.StripeClient.return_value = client
+        with (
+            patch.object(main, "STRIPE_SECRET_KEY", "sk_test"),
+            patch.object(main, "get_paywall_disabled", return_value=False),
+            patch.object(main, "ensure_stripe_customer", return_value="cus_1") as lookup,
+            patch.object(main, "get_user_stripe_ids", return_value=("cus_1", None)),
+            patch.object(main, "list_billable_subscriptions", return_value=subs),
+            patch.object(main, "_invalidate_stripe_caches_for_user"),
+            patch.object(main, "_invalidate_usage_cache"),
+            patch("backend.services.stripe_customer.STRIPE_PRICE_ID_FREE", "price_free"),
+            patch.dict("sys.modules", {"stripe": fake_stripe}),
+        ):
+            main._cancel_subscription_for_account_deletion("user-1", confirmed)
+        lookup.assert_called_once_with("user-1", create_if_missing=False)
+        return client
+
+    def test_free_and_pro_are_both_cancelled_once_confirmed(self):
+        subs = [self._sub("sub_free", "price_free"), self._sub("sub_pro", "price_pro")]
+        client = self._cancel(True, subs)
+        cancelled = {call.args[0] for call in client.subscriptions.cancel.call_args_list}
+        self.assertEqual(cancelled, {"sub_free", "sub_pro"})
+
+    def test_paid_subscription_blocks_delete_until_confirmed(self):
+        subs = [self._sub("sub_free", "price_free"), self._sub("sub_pro", "price_pro")]
+        with self.assertRaises(HTTPException) as ctx:
+            self._cancel(False, subs)
+        self.assertEqual(ctx.exception.status_code, 400)
+
+    def test_free_subscription_is_cancelled_without_the_pro_checkbox(self):
+        client = self._cancel(False, [self._sub("sub_free", "price_free")])
+        client.subscriptions.cancel.assert_called_once_with("sub_free")
+
+
 if __name__ == "__main__":
     unittest.main()
