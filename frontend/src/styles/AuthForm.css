@@ -4,23 +4,35 @@
  */
 
 /* ---------- Mise en page 2 colonnes (formulaire crème | panneau encre) ---------- */
-.login-screen--split {
+.login-screen.login-screen--split {
   display: block;
+  height: auto;
+  min-height: 100dvh;
   padding: 0;
   background: var(--ds-color-bg-subtle);
 }
 
 .login-screen-card.auth-layout-card {
   max-width: calc(var(--ds-space-xxl) * 13 + var(--ds-space-md));
+  padding: calc(var(--ds-space-xl) + var(--ds-space-md)) var(--ds-space-xxl);
+  border: 1px solid var(--ds-color-border-subtle);
+  border-radius: var(--ds-radius-lg);
   text-align: left;
 }
 
+.login-screen-card.auth-layout-card h1 {
+  font-size: var(--ds-font-size-heading-lg);
+  line-height: var(--ds-font-line-height-heading);
+}
+
+/* Le lien « Retour » flotte au-dessus : la carte laisse 64px en haut pour ne pas passer dessous. */
 .login-screen--split .login-screen-back {
   z-index: 1;
 }
 
 .auth-layout {
   display: grid;
+  width: 100%;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   min-height: 100vh;
   background: var(--ds-color-bg-subtle);
@@ -32,7 +44,7 @@
   align-items: center;
   justify-content: center;
   gap: var(--ds-space-xl);
-  padding: var(--ds-space-xxl) var(--ds-layout-gutter-md);
+  padding: calc(var(--ds-space-xxl) * 2) var(--ds-layout-gutter-md) calc(var(--ds-space-xxl) * 1.5);
 }
 
 .auth-layout-card {
@@ -74,7 +86,7 @@
   margin: 0;
   font-family: var(--ds-font-family-display);
   font-weight: var(--ds-font-weight-medium);
-  font-size: clamp(2.125rem, 1.2rem + 1.6vw, var(--ds-font-size-display-md));
+  font-size: clamp(2.125rem, 3.6vw, 3.25rem);
   line-height: var(--ds-font-line-height-display);
   letter-spacing: var(--ds-font-letter-spacing-heading-xl);
   text-wrap: balance;
@@ -131,9 +143,9 @@
   padding: 0 0 var(--ds-space-md);
 }
 
-.auth-input {
+.auth-layout-card .auth-input {
   padding: var(--ds-space-md) calc(var(--ds-space-md) + var(--ds-space-xxs));
-  font-size: var(--ds-font-size-body-md);
+  font-size: var(--ds-font-size-body-sm);
   border: 1px solid var(--ds-color-border-input);
   border-radius: var(--ds-radius-md);
   font-family: inherit;
@@ -144,7 +156,7 @@
     box-shadow var(--ds-motion-duration-fast) var(--ds-motion-easing-standard);
 }
 
-.auth-input:focus {
+.auth-layout-card .auth-input:focus {
   outline: none;
   border-color: var(--ds-color-border-input-focus);
   box-shadow: 0 0 0 3px var(--ds-color-accent-highlight);

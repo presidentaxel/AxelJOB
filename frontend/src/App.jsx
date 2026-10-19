@@ -755,6 +755,7 @@ export default function App() {
   const [contextDocStatus, setContextDocStatus] = useState('');
   const [lastAdaptedCv, setLastAdaptedCv] = useState(null);
   const lastAdaptedCvRef = useRef(null);
+  const sawNoSessionRef = useRef(false);
   lastAdaptedCvRef.current = lastAdaptedCv;
   const [lastBaseCv, setLastBaseCv] = useState(null);
   /** URL photo fraîche (GET /api/cv) pour la preview CV, évite URL signée expirée */
@@ -1329,18 +1330,21 @@ export default function App() {
   useEffect(() => {
     if (authLoading) return;
     if (!supabase) return;
+    if (!session) sawNoSessionRef.current = true;
     if (session) {
       const params = new URLSearchParams(location.search);
+      /* Session apparue pendant cette visite (formulaire soumis) : l'utilisateur vient de se connecter. */
       const entry = decidePublicEntry({
         hasSession: true,
         pathname,
         locationState: location.state,
-        authCallback: hasPendingAuthCallback(),
+        authCallback: hasPendingAuthCallback() || sawNoSessionRef.current,
       });
       if (entry === 'stay') {
         /* AXE-504 : simple visite d'une page publique, la session reste en mémoire sans rediriger */
       } else if (entry === 'enter') {
         consumeAuthCallback();
+        sawNoSessionRef.current = false;
         if (wantsProCheckout(location.search)) {
           consumePlanIntentIfPro();
           navigate(APP_DEFAULT_ROUTE, { replace: true });
@@ -3544,7 +3548,7 @@ export default function App() {
     hasSession: true,
     pathname,
     locationState: location.state,
-    authCallback: hasPendingAuthCallback(),
+    authCallback: hasPendingAuthCallback() || sawNoSessionRef.current,
   }) === 'stay';
   if (!session || publicStay) {
     const authMode = authModeFromPath(pathname);

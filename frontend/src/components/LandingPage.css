@@ -401,7 +401,7 @@
 .landing .landing-hero-title {
   margin: 0 0 calc(var(--ds-space-xl) - var(--ds-space-xxs));
   color: var(--ds-color-text-default);
-  font-size: clamp(2.75rem, 1.2rem + 6.4vw, var(--ds-font-size-display-xl));
+  font-size: clamp(2.5rem, 5vw, 4rem);
   line-height: var(--ds-font-line-height-display);
   text-wrap: balance;
 }
@@ -830,7 +830,7 @@
   font-weight: var(--ds-font-weight-semibold);
   line-height: var(--ds-font-line-height-button);
   padding: var(--ds-space-xs) var(--ds-space-md);
-  border-radius: var(--ds-radius-full);
+  border-radius: var(--ds-radius-xs);
   letter-spacing: 0.08em;
   text-transform: uppercase;
   white-space: nowrap;
@@ -953,7 +953,7 @@
 /* ---------- Footer : grille 1,4fr + 3 colonnes ---------- */
 .landing-footer {
   width: 100%;
-  padding: calc(var(--ds-space-xxl) * 2) 0 var(--ds-space-xl);
+  padding: calc(var(--ds-space-xxl) * 2) 0 calc(var(--ds-space-xl) + 3rem);
   background: var(--ds-color-bg-subtle);
   color: var(--ds-color-text-muted);
   border-top: 1px solid var(--ds-color-border-subtle);

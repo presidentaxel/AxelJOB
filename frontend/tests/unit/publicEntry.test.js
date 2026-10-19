@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  isInternalLoginLink,
   decidePublicEntry,
   isAuthCallbackUrl,
   loginNavOptions,
@@ -53,3 +54,20 @@ test('loginNavOptions conserve les options et pose le state', () => {
   assert.equal(o.replace, true);
   assert.equal(o.state.loginIntent, true);
 });
+
+test("un lien interne vers /login (page statique) vaut clic de connexion", () => {
+  const origin = 'https://job.axelproject.fr';
+  assert.equal(isInternalLoginLink({ pathname: '/login', referrer: `${origin}/faq`, origin }), true);
+  assert.equal(isInternalLoginLink({ pathname: '/inscription', referrer: `${origin}/ats`, origin }), true);
+  assert.equal(isInternalLoginLink({ pathname: '/login', referrer: '', origin }), false, 'accès direct ou favori');
+  assert.equal(isInternalLoginLink({ pathname: '/login', referrer: 'https://exemple.fr/', origin }), false, 'autre site');
+  assert.equal(isInternalLoginLink({ pathname: '/', referrer: `${origin}/faq`, origin }), false, 'Recharger l’accueil');
+  assert.equal(isInternalLoginLink({ pathname: '/login', referrer: 'pas une url', origin }), false);
+});
+
+test("session apparue pendant la visite : le formulaire envoyé entre dans l'app", () => {
+  /* App passe sawNoSession=true à authCallback quand la session arrive après un état sans session. */
+  assert.equal(decidePublicEntry({ hasSession: true, pathname: '/login', locationState: null, authCallback: true }), 'enter');
+  assert.equal(decidePublicEntry({ hasSession: true, pathname: '/login', locationState: null, authCallback: false }), 'stay');
+});
+

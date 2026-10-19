@@ -20,22 +20,24 @@
   --content-section-pad: var(--ds-space-section-mobile);
 }
 
-* {
+/* Réglages globaux réservés aux pages HTML statiques (<html class="static-page">) :
+   la SPA importe aussi cette feuille et ne doit pas voir html/body modifiés. */
+.static-page * {
   box-sizing: border-box;
   scrollbar-width: thin;
   scrollbar-color: var(--ds-color-border-default) transparent;
 }
 
-html {
+html.static-page {
   background: var(--ds-color-bg-subtle);
   scroll-behavior: smooth;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  html { scroll-behavior: auto; }
+  html.static-page { scroll-behavior: auto; }
 }
 
-body {
+.static-page body {
   margin: 0;
   min-height: 100vh;
   font-family: var(--ds-font-family-body);
@@ -769,7 +771,7 @@ body {
 /* ------------------------------------------------------------------ */
 .content-footer {
   width: 100%;
-  padding: 64px var(--content-gutter) var(--ds-space-xl);
+  padding: 64px var(--content-gutter) calc(var(--ds-space-xl) + 3rem);
   background: var(--ds-color-bg-subtle);
   border-top: 1px solid var(--ds-color-border-subtle);
   color: var(--ds-color-text-muted);
@@ -860,7 +862,7 @@ body {
   padding: 0;
   margin: 0;
   border: none;
-  border-radius: var(--ds-radius-full);
+  border-radius: var(--ds-radius-md);
   background: var(--ds-color-bg-inverse);
   color: var(--ds-color-text-inverse);
   cursor: pointer;
@@ -868,6 +870,20 @@ body {
   align-items: center;
   justify-content: center;
   transition: background var(--ds-motion-duration-fast) var(--ds-motion-easing-standard);
+}
+
+/* N'apparaît qu'après ~600px de défilement (navigateurs sans scroll-driven animations : toujours visible). */
+@supports (animation-timeline: scroll()) {
+  .content-scroll-top {
+    animation: content-scroll-top-reveal linear both;
+    animation-timeline: scroll(root);
+    animation-range: 0 600px;
+  }
+}
+
+@keyframes content-scroll-top-reveal {
+  from { opacity: 0; pointer-events: none; }
+  to { opacity: 1; pointer-events: auto; }
 }
 
 .content-scroll-top:hover {

@@ -4,6 +4,7 @@
  * Règle : une session Supabase existante ne sert PAS à quitter une page publique
  * (`/`, `/login` en chargement direct, FAQ, guides...). On n'entre dans l'app que si :
  *  - l'utilisateur a cliqué sur un bouton de connexion (CTA, header) ;
+ *  - ou l'utilisateur arrive d'un lien interne vers /login (pages statiques) ;
  *  - ou l'URL est un retour d'authentification (OAuth Google/LinkedIn, lien e-mail de
  *    réinitialisation de mot de passe), qui doit aboutir dans l'app.
  *
@@ -33,6 +34,21 @@ export function isAuthCallbackUrl(search = '', hash = '') {
   return new URLSearchParams(String(search || '')).has('code');
 }
 
+/**
+ * Arrivée sur /login, /inscription... par un lien interne (page statique : FAQ, guide, 404...).
+ * Ces pages sont servies en HTML statique : leurs liens « Se connecter » sont des chargements
+ * complets, sans state de router. Un referrer de même origine sur une page d'authentification
+ * vaut donc clic de connexion. « Recharger l'accueil » arrive sur `/`, pas ici.
+ */
+export function isInternalLoginLink({ pathname, referrer, origin }) {
+  if (!isAuthPath(pathname) || !referrer || !origin) return false;
+  try {
+    return new URL(referrer).origin === origin;
+  } catch {
+    return false;
+  }
+}
+
 export function isPublicEntryPath(pathname) {
   return pathname === '/' || isAuthPath(pathname);
 }
@@ -52,7 +68,13 @@ export function decidePublicEntry({ hasSession, pathname, locationState, authCal
 /* Snapshot pris à l'import : supabase-js nettoie le hash/?code= après avoir créé la session,
    avant que l'effet de redirection de App ne s'exécute. */
 let authCallbackPending =
-  typeof window !== 'undefined' && isAuthCallbackUrl(window.location.search, window.location.hash);
+  typeof window !== 'undefined' &&
+  (isAuthCallbackUrl(window.location.search, window.location.hash) ||
+    isInternalLoginLink({
+      pathname: window.location.pathname,
+      referrer: typeof document !== 'undefined' ? document.referrer : '',
+      origin: window.location.origin,
+    }));
 
 export function hasPendingAuthCallback() {
   return authCallbackPending;
