@@ -45,6 +45,60 @@ function LinkedInIcon({ className }) {
   );
 }
 
+/** Mascotte du panneau encre (panda stylisé, couleurs via les classes .auth-mascot-* de AuthForm.css). */
+function Mascot() {
+  return (
+    <svg className="auth-aside-mascot" viewBox="0 0 120 120" role="img" aria-label="Mascotte AxeL Job">
+      <circle className="auth-mascot-dark" cx="28" cy="26" r="16" />
+      <circle className="auth-mascot-dark" cx="92" cy="26" r="16" />
+      <circle className="auth-mascot-body" cx="60" cy="64" r="44" />
+      <ellipse className="auth-mascot-dark" cx="42" cy="58" rx="11" ry="14" transform="rotate(18 42 58)" />
+      <ellipse className="auth-mascot-dark" cx="78" cy="58" rx="11" ry="14" transform="rotate(-18 78 58)" />
+      <circle className="auth-mascot-body" cx="43" cy="57" r="3.5" />
+      <circle className="auth-mascot-body" cx="77" cy="57" r="3.5" />
+      <ellipse className="auth-mascot-dark" cx="60" cy="76" rx="6" ry="4.5" />
+      <circle className="auth-mascot-accent" cx="60" cy="100" r="5" />
+    </svg>
+  );
+}
+
+const AUTH_ASIDE_POINTS = ['3 adaptations de CV offertes', 'Score ATS sur chaque candidature', 'Sans carte bancaire'];
+
+/** Panneau encre à droite des pages de connexion / inscription (ordre DOM : après le formulaire). */
+export function AuthAside() {
+  return (
+    <aside className="auth-aside" aria-label="Pourquoi AxeL Job">
+      <Mascot />
+      <p className="auth-aside-title">
+        Ton CV, <em>adapté</em> à chaque offre.
+      </p>
+      <p className="auth-aside-text">Colle l&apos;annonce, AxeL Job réécrit ton CV avec les bons mots-clés et suit tes candidatures.</p>
+      <ul className="auth-aside-list">
+        {AUTH_ASIDE_POINTS.map((point) => (
+          <li key={point}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true"><polyline points="20 6 9 17 4 12" /></svg>
+            {point}
+          </li>
+        ))}
+      </ul>
+    </aside>
+  );
+}
+
+/**
+ * Mise en page 2 colonnes (formulaire crème | panneau encre).
+ * À poser autour de la carte `.login-screen-card.auth-layout-card` :
+ *   <AuthLayout><div className="login-screen-card auth-layout-card">…</div></AuthLayout>
+ */
+export function AuthLayout({ children }) {
+  return (
+    <div className="auth-layout">
+      <div className="auth-layout-main">{children}</div>
+      <AuthAside />
+    </div>
+  );
+}
+
 export default function AuthForm({ onSuccess, linkedInOnly = false }) {
   const navigate = useNavigate();
   const { pathname } = useLocation();

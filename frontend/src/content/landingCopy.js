@@ -89,7 +89,7 @@ export const landingText = {
   ctaTry: 'Essayer gratuitement',
   ctaLogin: 'Se connecter',
   ctaStart: 'Commencer',
-  heroKicker: 'CV adapté par l'IA',
+  heroKicker: "CV adapté par l'IA",
   heroTitleBefore: HERO_TITLE_BEFORE,
   heroTitleHighlight: HERO_TITLE_HIGHLIGHT,
   heroTitleAfter: HERO_TITLE_AFTER,
@@ -123,8 +123,8 @@ export const landingText = {
   atsLink: "Qu'est-ce que l'ATS ?",
   finalTitle: 'Prêt à décrocher le job de tes rêves ?',
   finalSubtitle: 'Crée ton compte gratuit et teste 3 adaptations de CV.',
-  footerColLegal: 'Légal',
-  footerColContact: 'Contact',
+  footerColGuides: 'Guides',
+  footerColHelp: 'Aide',
   footerBefore:
     'AxeL Job - Ton CV sur-mesure pour chaque annonce. Une réalisation',
   footerBrand: 'Axel Project',
@@ -136,16 +136,23 @@ export const landingText = {
   footerErreurs: 'Erreurs à éviter',
   footerMetier: 'CV par métier',
   footerAdapte: 'CV adapté à chaque offre',
+  navModelesShort: 'Modèles CV',
+  navGuide: 'Guide CV',
+  ctaHow: 'Voir comment ça marche',
+  ctaSeePricing: 'Voir les tarifs',
   legalMentions: 'Mentions légales',
   legalPrivacy: 'Confidentialité',
   legalTerms: 'CGU',
 };
 
+/** Rassurance sous le CTA du hero (✓ orange). */
+export const HERO_REASSURE = [landingText.heroHint, 'Sans carte bancaire', 'Export PDF prêt à envoyer'];
+
 export const ARTICLE_NAV_LINKS = [
-  { to: '/ats', label: landingText.atsLink },
+  { to: '/ats', label: landingText.footerAts },
   { to: '/faq', label: landingText.footerFaq },
-  { to: '/modeles-cv', label: landingText.footerModeles },
-  { to: '/guide-cv', label: landingText.footerGuide },
+  { to: '/modeles-cv', label: landingText.navModelesShort },
+  { to: '/guide-cv', label: landingText.navGuide },
   { to: '/erreurs-cv', label: landingText.footerErreurs },
   { to: '/cv-par-metier', label: landingText.footerMetier },
   { to: '/cv-adapte-chaque-offre', label: landingText.footerAdapte },
@@ -166,8 +173,9 @@ export function sharedLandingStrings() {
     ...FREE_FEATURES,
     ...PRO_FEATURES,
     ...ARTICLE_NAV_LINKS.map((link) => link.label),
-    'Étape 1',
-    'Étape 2',
-    'Étape 3',
+    ...HERO_REASSURE,
+    '01',
+    '02',
+    '03',
   ];
 }
