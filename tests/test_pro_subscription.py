@@ -137,6 +137,8 @@ class TestCreateCheckoutSession(unittest.TestCase):
             patch.object(main, "_require_user_id", return_value="user_1"),
             patch.object(main, "STRIPE_SECRET_KEY", "sk_test_xxx"),
             patch.object(main, "STRIPE_PRICE_ID_PRO_MONTHLY", "price_pro_monthly_123"),
+            patch.object(main, "ensure_stripe_customer", return_value="cus_123"),
+            patch.object(main, "_get_user_email_from_jwt", return_value="a@b.c"),
             patch.dict("sys.modules", {"stripe": fake_stripe}),
         ):
             out = main.api_create_checkout_session(req)
@@ -146,6 +148,7 @@ class TestCreateCheckoutSession(unittest.TestCase):
         params = fake_client.checkout.sessions.create.call_args.kwargs["params"]
         self.assertEqual(params["mode"], "subscription")
         self.assertEqual(params["client_reference_id"], "user_1")
+        self.assertEqual(params["customer"], "cus_123")
         self.assertEqual(params["line_items"], [{"price": "price_pro_monthly_123", "quantity": 1}])
 
     def test_create_checkout_session_requires_auth(self):

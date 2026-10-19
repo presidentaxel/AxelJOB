@@ -116,6 +116,7 @@ from backend.security import check_user_input_for_injection
 from backend.sentry_business import capture_business_event, record_jwt_reject
 from backend.sentry_config import bind_sentry_user, init_sentry
 from backend.services import billing_notifications, template_access
+from backend.services.stripe_customer import ensure_stripe_customer
 
 init_sentry()
 
@@ -2077,17 +2078,19 @@ def api_create_checkout_session(request: Request):
 
         client = stripe.StripeClient(STRIPE_SECRET_KEY)
         base = (FRONTEND_URL or "").rstrip("/")
-        session = client.checkout.sessions.create(
-            params={
-                "mode": "subscription",
-                "client_reference_id": user_id,
-                "allow_promotion_codes": True,
-                "line_items": [{"price": STRIPE_PRICE_ID_PRO_MONTHLY, "quantity": 1}],
-                "subscription_data": {"metadata": {"user_id": user_id}},
-                "success_url": f"{base}/app?success=pro",
-                "cancel_url": f"{base}/app?cancel=checkout",
-            }
-        )
+        customer_id = ensure_stripe_customer(user_id, _get_user_email_from_jwt(request))
+        params = {
+            "mode": "subscription",
+            "client_reference_id": user_id,
+            "allow_promotion_codes": True,
+            "line_items": [{"price": STRIPE_PRICE_ID_PRO_MONTHLY, "quantity": 1}],
+            "subscription_data": {"metadata": {"user_id": user_id}},
+            "success_url": f"{base}/app?success=pro",
+            "cancel_url": f"{base}/app?cancel=checkout",
+        }
+        if customer_id:
+            params["customer"] = customer_id
+        session = client.checkout.sessions.create(params=params)
         return {"url": session.url}
     except Exception as e:
         logger.exception(e)
@@ -2418,6 +2421,7 @@ def api_cancel_subscription(request: Request):
         import stripe
 
         client = stripe.StripeClient(STRIPE_SECRET_KEY)
+        ensure_stripe_customer(user_id, _get_user_email_from_jwt(request))
         cust_id, sub_id = _resolve_pro_subscription_id(client, user_id)
         if not cust_id or not sub_id:
             raise HTTPException(status_code=404, detail="Aucun abonnement Stripe actif trouvé.")
@@ -2609,6 +2613,7 @@ def _cancel_subscription_for_account_deletion(user_id: str, confirmed: bool) -> 
         import stripe
 
         client = stripe.StripeClient(STRIPE_SECRET_KEY)
+        ensure_stripe_customer(user_id)
         cust_id, sub_id = _resolve_pro_subscription_id(client, user_id)
         if not cust_id or not sub_id:
             return
@@ -2822,6 +2827,7 @@ def api_usage(request: Request):
         return cached
     if user_id:
         ensure_implicit_free_adaptation_anchor(user_id)
+        ensure_stripe_customer(user_id, _get_user_email_from_jwt(request))
     plan = get_user_plan(uid)
     no_paywall = get_paywall_disabled(uid)
     count_adapt = count_quota_adaptations(uid)
