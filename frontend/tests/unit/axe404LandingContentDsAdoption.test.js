@@ -55,9 +55,9 @@ test('Landing importe Button ; FAQ, ATS et Articles passent par ContentChrome (q
   assert.match(chrome, /import Button from '\.\/ui\/Button\.jsx'/);
 });
 
-test('Les CTA des pages de contenu sont rendus via Button as={Link} vers /login (ContentChrome)', async () => {
+test('Les CTA des pages de contenu sont rendus via Button as={Link} vers /inscription?plan=free (ContentChrome)', async () => {
   const text = await readFile(path.join(SRC, 'components/ContentChrome.jsx'), 'utf8');
-  assert.match(text, /<Button\s+as=\{Link\}\s+to="\/login"/);
+  assert.match(text, /<Button\s+as=\{Link\}\s+to="\/inscription\?plan=free"/);
   assert.doesNotMatch(text, /className="button button-primary/);
   assert.doesNotMatch(text, /<Link to="\/login" className="button/);
 });
