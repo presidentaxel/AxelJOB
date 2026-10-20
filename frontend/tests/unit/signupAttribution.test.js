@@ -101,6 +101,48 @@ test('CTA login page n’écrase pas l’attribution landing', () => {
   assert.equal(readPlanIntent(), 'pro');
 });
 
+test('CTA inscription ?plan=free|pro persistés, connexion sans plan', () => {
+  assert.equal(
+    persistFromCtaClick({
+      dataAttr: 'home-hero-cta-signup',
+      dataTrack: 'cta',
+      linkUrl: '/inscription?plan=free',
+    }),
+    true,
+  );
+  assert.equal(readPlanIntent(), 'free');
+  assert.equal(readSourceCtaId(), 'home-hero-cta-signup');
+  persistFromCtaClick({
+    dataAttr: 'home-pricing-cta-pro',
+    dataTrack: 'cta',
+    linkUrl: '/inscription?plan=pro',
+  });
+  assert.equal(readPlanIntent(), 'pro');
+  assert.equal(shouldPersistSourceCta('nav-cta-signup', 'cta', '/login'), true);
+  assert.equal(shouldPersistSourceCta('home-final-cta-signup', 'cta', '/faq'), false);
+});
+
+test('hydrate ?plan=free et redirect OAuth restent sur /inscription', () => {
+  assert.equal(hydratePlanIntentFromSearch('?plan=free'), 'free');
+  assert.equal(readPlanIntent(), 'free');
+  assert.equal(
+    buildLoginRedirectTo('https://job.axelproject.fr', '?plan=free&utm_source=meta', '', '/inscription'),
+    'https://job.axelproject.fr/inscription?plan=free&utm_source=meta',
+  );
+  assert.equal(
+    buildLoginRedirectTo('https://job.axelproject.fr', '?plan=pro', 'free', '/inscription'),
+    'https://job.axelproject.fr/inscription?plan=pro',
+  );
+  assert.equal(
+    buildLoginRedirectTo('https://job.axelproject.fr', '', 'free', '/inscription'),
+    'https://job.axelproject.fr/inscription?plan=free',
+  );
+  assert.equal(
+    buildLoginRedirectTo('https://job.axelproject.fr', '?utm_campaign=a', 'free', '/login'),
+    'https://job.axelproject.fr/login?utm_campaign=a',
+  );
+});
+
 test('nav / hors login : pas de persist', () => {
   assert.equal(shouldPersistSourceCta('footer-link-faq', 'nav', '/faq'), false);
   assert.equal(

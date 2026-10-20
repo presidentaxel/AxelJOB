@@ -41,7 +41,7 @@ export const PUBLIC_HEADER = {
   pricing: { label: landingText.navPricing, id: 'nav-link-pricing', drawerId: 'nav-drawer-pricing' },
   resources: { label: landingText.navResources, toggleId: 'nav-menu-resources', drawerTitle: landingText.navResources },
   login: { to: '/login', label: landingText.ctaLogin, id: 'nav-link-login', drawerId: 'nav-drawer-login' },
-  cta: { to: '/login', label: landingText.ctaTry, id: 'nav-cta-signup', drawerId: 'nav-cta-drawer' },
+  cta: { to: '/inscription?plan=free', label: landingText.ctaTry, id: 'nav-cta-signup', drawerId: 'nav-cta-drawer' },
   burgerId: 'nav-burger',
 };
 

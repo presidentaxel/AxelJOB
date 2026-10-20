@@ -63,6 +63,29 @@ export function isLoginLinkUrl(linkUrl) {
   return pathFromLinkUrl(linkUrl) === '/login';
 }
 
+export function isSignupLinkUrl(linkUrl) {
+  return pathFromLinkUrl(linkUrl) === '/inscription';
+}
+
+/** CTA d'acquisition : inscription + plan. Les autres restent sur /login. */
+const SIGNUP_FREE = '/inscription?plan=free';
+
+const SIGNUP_CTA_URL = {
+  'home-hero-cta-signup': SIGNUP_FREE,
+  'home-final-cta-signup': SIGNUP_FREE,
+  'home-pricing-cta-free': SIGNUP_FREE,
+  'home-pricing-cta-pro': '/inscription?plan=pro',
+  'nav-cta-signup': SIGNUP_FREE,
+  'nav-cta-drawer': SIGNUP_FREE,
+  'faq-cta-signup': SIGNUP_FREE,
+  'ats-cta-signup': SIGNUP_FREE,
+  'modeles-cta-signup': SIGNUP_FREE,
+  'guide-cta-signup': SIGNUP_FREE,
+  'erreurs-cta-signup': SIGNUP_FREE,
+  'metier-cta-signup': SIGNUP_FREE,
+  'adapte-cta-signup': SIGNUP_FREE,
+};
+
 export function planIntentFromCta(dataAttr, linkUrl) {
   if (dataAttr && PLAN_INTENT_BY_CTA[dataAttr]) return PLAN_INTENT_BY_CTA[dataAttr];
   const raw = (linkUrl || '').trim();
@@ -78,7 +101,7 @@ export function planIntentFromCta(dataAttr, linkUrl) {
 export function shouldPersistSourceCta(dataAttr, dataTrack, linkUrl) {
   if (dataTrack !== 'cta' || !dataAttr) return false;
   if (LOGIN_PAGE_ATTR_RE.test(dataAttr)) return false;
-  return isLoginLinkUrl(linkUrl);
+  return isLoginLinkUrl(linkUrl) || isSignupLinkUrl(linkUrl);
 }
 
 function storageGet(key) {
@@ -118,16 +141,18 @@ export function persistFromCtaClick({ dataAttr, dataTrack, linkUrl }) {
 /** Boutons React sans href : même persist que le tracker (landing SPA). */
 export function persistLoginCta(dataAttr) {
   if (!dataAttr) return false;
-  const linkUrl = planIntentFromCta(dataAttr, '') === 'pro' ? '/login?plan=pro' : '/login';
+  const linkUrl = SIGNUP_CTA_URL[dataAttr]
+    || (planIntentFromCta(dataAttr, '') === 'pro' ? '/login?plan=pro' : '/login');
   return persistFromCtaClick({ dataAttr, dataTrack: 'cta', linkUrl });
 }
 
-/** URL ?plan=pro complète un plan_intent manquant (lien partagé / OAuth). */
+/** URL ?plan=free|pro complète un plan_intent manquant (lien partagé / OAuth). */
 export function hydratePlanIntentFromSearch(search) {
   const params = new URLSearchParams(search || '');
-  if (params.get('plan') !== 'pro') return readPlanIntent();
-  if (readPlanIntent() !== 'pro') storageSet(PLAN_INTENT_KEY, 'pro');
-  return 'pro';
+  const plan = params.get('plan');
+  if (plan !== 'pro' && plan !== 'free') return readPlanIntent();
+  if (readPlanIntent() !== plan) storageSet(PLAN_INTENT_KEY, plan);
+  return plan;
 }
 
 export function consumePlanIntentIfPro() {
@@ -143,17 +168,21 @@ export function wantsProCheckout(search) {
 }
 
 /**
- * redirectTo OAuth / reset : origin + /login + plan + UTM déjà présents.
+ * redirectTo OAuth / reset : origin + chemin d'auth + plan + UTM déjà présents.
+ * Depuis /inscription, on revient sur /inscription (plan=free ou plan=pro).
+ * Depuis /login ou le reset, on revient sur /login (plan=pro seulement).
  * @param {string} origin
  * @param {string} [search]
  * @param {string} [planIntent]
+ * @param {string} [pathname]
  */
-export function buildLoginRedirectTo(origin, search, planIntent) {
+export function buildLoginRedirectTo(origin, search, planIntent, pathname) {
   const base = (origin || '').replace(/\/$/, '');
   const fromUrl = new URLSearchParams(search || '');
   const params = new URLSearchParams();
+  const path = pathname === '/inscription' ? '/inscription' : '/login';
   const plan = fromUrl.get('plan') || planIntent || '';
-  if (plan === 'pro') params.set('plan', 'pro');
+  if (plan === 'pro' || (path === '/inscription' && plan === 'free')) params.set('plan', plan);
   for (const k of UTM_QUERY_KEYS) {
     const v = (fromUrl.get(k) || '').trim();
     if (v) params.set(k, v);
@@ -163,7 +192,7 @@ export function buildLoginRedirectTo(origin, search, planIntent) {
     params.set('next', nextPath);
   }
   const qs = params.toString();
-  return `${base}/login${qs ? `?${qs}` : ''}`;
+  return `${base}${path}${qs ? `?${qs}` : ''}`;
 }
 
 export function currentLoginRedirectTo() {
@@ -173,6 +202,7 @@ export function currentLoginRedirectTo() {
     window.location.origin,
     window.location.search,
     readPlanIntent(),
+    window.location.pathname,
   );
 }
 

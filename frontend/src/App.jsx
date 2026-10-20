@@ -3576,7 +3576,7 @@ export default function App() {
       );
     }
     if (pathname === '/') {
-      return <Suspense fallback={<div className="landing" style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><span aria-hidden>Chargement…</span></div>}><LandingPage onCtaClick={() => navigate('/login', loginNavOptions())} onProClick={() => navigate('/login?plan=pro', loginNavOptions())} /></Suspense>;
+      return <Suspense fallback={<div className="landing" style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><span aria-hidden>Chargement…</span></div>}><LandingPage onCtaClick={() => navigate('/login', loginNavOptions())} onSignupClick={() => navigate('/inscription?plan=free', loginNavOptions())} onProClick={() => navigate('/inscription?plan=pro', loginNavOptions())} /></Suspense>;
     }
     const marketing = renderPublicMarketingPage(pathname, navigate);
     if (marketing) return marketing;
