@@ -71,10 +71,11 @@ test('home-pricing-cta-free → cta_click et select_plan free', () => {
 
 test('href réel gagne sur la map catalogue', () => {
   assert.equal(resolveLinkUrl('nav-cta-signup', '/login?plan=pro'), '/login?plan=pro');
-  assert.equal(resolveLinkUrl('nav-cta-signup', ''), '/login');
+  assert.equal(resolveLinkUrl('nav-cta-signup', ''), '/inscription?plan=free');
   assert.equal(CTA_LINK_URLS['home-pricing-cta-pro'], '/inscription?plan=pro');
   assert.equal(CTA_LINK_URLS['home-hero-cta-signup'], '/inscription?plan=free');
-  assert.equal(CTA_LINK_URLS['nav-cta-signup'], '/login');
+  assert.equal(CTA_LINK_URLS['nav-cta-signup'], '/inscription?plan=free');
+  assert.equal(CTA_LINK_URLS['faq-cta-signup'], '/inscription?plan=free');
   assert.equal(CTA_LINK_URLS['nav-cta-start'], '/login');
 });
 

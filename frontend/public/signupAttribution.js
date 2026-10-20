@@ -68,11 +68,22 @@ export function isSignupLinkUrl(linkUrl) {
 }
 
 /** CTA d'acquisition : inscription + plan. Les autres restent sur /login. */
+const SIGNUP_FREE = '/inscription?plan=free';
+
 const SIGNUP_CTA_URL = {
-  'home-hero-cta-signup': '/inscription?plan=free',
-  'home-final-cta-signup': '/inscription?plan=free',
-  'home-pricing-cta-free': '/inscription?plan=free',
+  'home-hero-cta-signup': SIGNUP_FREE,
+  'home-final-cta-signup': SIGNUP_FREE,
+  'home-pricing-cta-free': SIGNUP_FREE,
   'home-pricing-cta-pro': '/inscription?plan=pro',
+  'nav-cta-signup': SIGNUP_FREE,
+  'nav-cta-drawer': SIGNUP_FREE,
+  'faq-cta-signup': SIGNUP_FREE,
+  'ats-cta-signup': SIGNUP_FREE,
+  'modeles-cta-signup': SIGNUP_FREE,
+  'guide-cta-signup': SIGNUP_FREE,
+  'erreurs-cta-signup': SIGNUP_FREE,
+  'metier-cta-signup': SIGNUP_FREE,
+  'adapte-cta-signup': SIGNUP_FREE,
 };
 
 export function planIntentFromCta(dataAttr, linkUrl) {

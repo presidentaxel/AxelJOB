@@ -91,7 +91,7 @@ export function ContentToc({ items }) {
   );
 }
 
-/** Bande encre + bouton orange vers /login. */
+/** Bande encre + bouton orange vers l'inscription gratuite. */
 export function ContentCta({
   signupId,
   title = 'Un CV adapté à chaque offre, en un clic',
@@ -105,7 +105,7 @@ export function ContentCta({
         <p>{text}</p>
         <Button
           as={Link}
-          to="/login" state={loginNavOptions().state}
+          to="/inscription?plan=free" state={loginNavOptions().state}
           variant="primary"
           size="lg"
           onClick={() => persistLoginCta(signupId)}

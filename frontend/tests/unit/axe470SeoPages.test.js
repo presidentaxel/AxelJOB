@@ -141,13 +141,13 @@ test('en-tête et pied de page statiques reprennent les libellés et URLs de lan
     ['/cv-par-metier', landingText.footerMetier],
     ['/cv-adapte-chaque-offre', landingText.footerAdapte],
     ['/login', landingText.ctaLogin],
-    ['/login', landingText.ctaTry],
+    ['/inscription?plan=free', landingText.ctaTry],
     ['/#tarifs', landingText.navPricing],
   ]) {
     assert.ok(header.includes(`href="${href}"`) && header.includes(`>${label}</a>`), `header ${href} ${label}`);
   }
   assert.ok(header.includes(`>${landingText.navResources}</span>`));
-  assert.ok(header.includes('class="public-header-cta"') && header.includes('href="/login"'));
+  assert.ok(header.includes('class="public-header-cta"') && header.includes('href="/inscription?plan=free"'));
   for (const [href, label] of [
     ['/ats', landingText.footerAts],
     ['/faq', landingText.footerFaq],
@@ -165,11 +165,11 @@ test('en-tête et pied de page statiques reprennent les libellés et URLs de lan
   assert.ok(footer.includes(landingText.footerBefore));
 });
 
-test('chaque page SEO mène vers /login (CTA de fin de page) avec un identifiant d’analytics', () => {
+test('chaque page SEO mène vers /inscription?plan=free (CTA de fin de page) avec un identifiant d’analytics', () => {
   for (const page of SEO_PAGES) {
     const cta = html(page).match(/<section class="content-cta"[\s\S]*?<\/section>/);
     assert.ok(cta, `${page}: CTA`);
-    assert.match(cta[0], /href="\/login" class="button button-primary" data-attr="[a-z]+-cta-signup"/, page);
+    assert.match(cta[0], /href="\/inscription\?plan=free" class="button button-primary" data-attr="[a-z]+-cta-signup"/, page);
   }
 });
 

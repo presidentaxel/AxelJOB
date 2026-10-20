@@ -1,6 +1,7 @@
 /**
  * AXE-505 : les CTA d'acquisition ouvrent /inscription avec le plan.
- * « Se connecter » et « Commencer » restent sur /login, sans plan.
+ * « Se connecter » reste sur /login, sans plan. Le bouton « Essayer gratuitement »
+ * du header et le CTA de fin des pages de contenu ouvrent /inscription?plan=free.
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -23,9 +24,17 @@ test('index.html : acquisition vers /inscription, connexion vers /login', async 
   assert.equal(hrefForAttr(html, 'home-final-cta-signup'), '/inscription?plan=free');
   assert.equal(hrefForAttr(html, 'home-pricing-cta-free'), '/inscription?plan=free');
   assert.equal(hrefForAttr(html, 'home-pricing-cta-pro'), '/inscription?plan=pro');
-  assert.equal(hrefForAttr(html, 'nav-cta-signup'), '/login');
-  assert.equal(hrefForAttr(html, 'nav-cta-drawer'), '/login');
+  assert.equal(hrefForAttr(html, 'nav-cta-signup'), '/inscription?plan=free');
+  assert.equal(hrefForAttr(html, 'nav-cta-drawer'), '/inscription?plan=free');
+  assert.equal(hrefForAttr(html, 'nav-link-login'), '/login');
   assert.equal(html.includes('href="/login?plan='), false);
+});
+
+test('pages de contenu : header et CTA de fin vers /inscription?plan=free', async () => {
+  const faq = await readFile(path.join(FRONTEND_ROOT, 'public/faq.html'), 'utf8');
+  assert.equal(hrefForAttr(faq, 'nav-cta-signup'), '/inscription?plan=free');
+  assert.equal(hrefForAttr(faq, 'faq-cta-signup'), '/inscription?plan=free');
+  assert.equal(hrefForAttr(faq, 'nav-link-login'), '/login');
 });
 
 test('Landing et App envoient les quatre CTA vers /inscription', async () => {
@@ -37,7 +46,11 @@ test('Landing et App envoient les quatre CTA vers /inscription', async () => {
   assert.match(landing, /goLogin\('home-pricing-cta-free', onSignupClick\)/);
   assert.match(landing, /goLogin\('home-pricing-cta-pro', onProClick\)/);
   assert.match(header, /login:\s*\{[^}]*to:\s*'\/login'/);
-  assert.match(header, /cta:\s*\{[^}]*to:\s*'\/login'/);
+  assert.match(header, /cta:\s*\{[^}]*to:\s*'\/inscription\?plan=free'/);
+  assert.match(
+    await readFile(path.join(FRONTEND_ROOT, 'src/components/ContentChrome.jsx'), 'utf8'),
+    /to="\/inscription\?plan=free"/,
+  );
   assert.match(app, /onCtaClick=\{\(\) => navigate\('\/login', loginNavOptions\(\)\)\}/);
   assert.match(app, /onSignupClick=\{\(\) => navigate\('\/inscription\?plan=free', loginNavOptions\(\)\)\}/);
   assert.match(app, /onProClick=\{\(\) => navigate\('\/inscription\?plan=pro', loginNavOptions\(\)\)\}/);
