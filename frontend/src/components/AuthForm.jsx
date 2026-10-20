@@ -45,6 +45,43 @@ function LinkedInIcon({ className }) {
   );
 }
 
+const AUTH_ASIDE_POINTS = ['3 adaptations de CV offertes', 'Score ATS sur chaque candidature', 'Sans carte bancaire'];
+
+/** Panneau encre à droite des pages de connexion / inscription (ordre DOM : après le formulaire). */
+export function AuthAside() {
+  return (
+    <aside className="auth-aside" aria-label="Pourquoi AxeL Job">
+      <img src="/favicon.svg" alt="" width="96" height="96" className="auth-aside-mascot" />
+      <h2 className="auth-aside-title">
+        Ton CV, <em>adapté</em> à chaque offre.
+      </h2>
+      <p className="auth-aside-text">Colle l&apos;annonce, AxeL Job réécrit ton CV avec les bons mots-clés et suit tes candidatures.</p>
+      <ul className="auth-aside-list">
+        {AUTH_ASIDE_POINTS.map((point) => (
+          <li key={point}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true"><polyline points="20 6 9 17 4 12" /></svg>
+            {point}
+          </li>
+        ))}
+      </ul>
+    </aside>
+  );
+}
+
+/**
+ * Mise en page 2 colonnes (formulaire crème | panneau encre).
+ * À poser autour de la carte `.login-screen-card.auth-layout-card` :
+ *   <AuthLayout><div className="login-screen-card auth-layout-card">…</div></AuthLayout>
+ */
+export function AuthLayout({ children }) {
+  return (
+    <div className="auth-layout">
+      <div className="auth-layout-main">{children}</div>
+      <AuthAside />
+    </div>
+  );
+}
+
 export default function AuthForm({ onSuccess, linkedInOnly = false }) {
   const navigate = useNavigate();
   const { pathname } = useLocation();
@@ -358,7 +395,7 @@ export default function AuthForm({ onSuccess, linkedInOnly = false }) {
       <Button type="submit" variant="primary" className="auth-submit" disabled={loading} loading={loading} {...analyticsAttrs('login-cta-submit', 'login', 'primary', 'cta')}>
         {loading ? '…' : resetMode ? 'Envoyer le lien' : isSignUp ? 'Créer un compte' : 'Se connecter'}
       </Button>
-      {!resetMode && (
+      {!resetMode && !isSignUp && (
         <button type="button" className="auth-toggle" onClick={() => navigate(AUTH_PATHS.reset)} {...analyticsAttrs('login-link-forgot', 'login', 'tertiary', 'nav')}>
           Mot de passe oublié ?
         </button>

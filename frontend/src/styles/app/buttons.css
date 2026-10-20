@@ -5,7 +5,7 @@
  *   tone:    default | inverse
  *   state:   :hover :active :focus-visible :disabled [aria-busy]
  *
- * La forme pill vient de --ds-radius-action, pas d'une variante.
+ * Le rayon des CTA (8px) vient de --ds-radius-action, pas d'une variante.
  *
  * Markup cible : .ds-button.ds-button--primary.ds-button--md
  * .btn reste pour les contrôles métier (btn-add, btn-import-cv), pas pour les CTA.

@@ -1,18 +1,15 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="fr" class="static-page">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="icon" type="image/png" sizes="48x48" href="/favicon-48.png" />
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,200..800;1,200..800&display=swap" rel="stylesheet" />
   <title>Pourquoi adapter son CV à chaque offre d'emploi (et comment le faire efficacement) | AxeL Job</title>
   <meta name="description" content="Données recruteurs sur la personnalisation du CV, mots-clés ATS, signal d'intention, temps gagné avec l'IA. Guide + outil AxeL Job." />
   <link rel="canonical" href="https://job.axelproject.fr/cv-adapte-chaque-offre" />
-  <meta name="theme-color" content="#5b4cff" />
+  <meta name="theme-color" content="#faf6ef" />
   <link rel="sitemap" type="application/xml" title="Plan du site AxeL Job" href="/sitemap.xml" />
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="AxeL Job" />
@@ -27,7 +24,10 @@
   <meta name="twitter:description" content="Statistiques, mots-clés, adaptation efficace avec l'IA." />
   <meta name="twitter:image" content="https://job.axelproject.fr/axel_og_image.png" />
   <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
+  <link rel="stylesheet" href="/ds-tokens.css" />
+  <link rel="stylesheet" href="/fonts/axel-fonts.css" />
   <link rel="stylesheet" href="/static-pages.css" />
+  <link rel="stylesheet" href="/public-header.css" />
   <link rel="stylesheet" href="/consent-banner.css" />
   <script src="/analytics-config.js"></script>
   <script src="/consent-gtm.js"></script>
@@ -40,22 +40,85 @@
   <div id="root">
     <div class="static-crawlable">
       <div class="content-page">
-        <header class="content-header">
-          <div class="content-header-inner">
-            <a href="/" class="content-back" data-attr="nav-link-back" data-track="nav" data-zone="header" data-level="tertiary">← Retour à l'accueil</a>
+        <!-- PUBLIC-HEADER:START (généré par scripts/sync-public-header.mjs, source : src/content/publicHeader.js) -->
+        <header class="public-header" data-public-header="static">
+          <div class="public-header-inner">
+            <a href="/" class="public-header-brand" data-attr="nav-link-back" data-track="nav" data-zone="header" data-level="tertiary">
+              <img src="/favicon.svg" alt="" class="public-header-logo" width="36" height="36" />
+              <span class="public-header-brand-name">AxeL Job</span>
+            </a>
+            <nav class="public-header-nav" aria-label="Navigation principale">
+              <a href="/#tarifs" class="public-header-link" data-attr="nav-link-pricing" data-track="nav" data-zone="header" data-level="tertiary">Tarifs</a>
+              <div class="public-header-menu">
+                <button type="button" class="public-header-menu-toggle is-current" aria-expanded="false" aria-controls="public-header-resources" data-attr="nav-menu-resources" data-track="nav" data-zone="header" data-level="tertiary"><span class="public-header-label" data-label="Ressources">Ressources</span><svg class="public-header-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
+                <ul id="public-header-resources" class="public-header-menu-list">
+                  <li><a href="/ats" data-attr="nav-link-ats" data-track="nav" data-zone="header" data-level="tertiary">CV et ATS</a></li>
+                  <li><a href="/faq" data-attr="nav-link-faq" data-track="nav" data-zone="header" data-level="tertiary">FAQ</a></li>
+                  <li><a href="/modeles-cv" data-attr="nav-link-modeles" data-track="nav" data-zone="header" data-level="tertiary">Modèles CV</a></li>
+                  <li><a href="/guide-cv" data-attr="nav-link-guide" data-track="nav" data-zone="header" data-level="tertiary">Guide CV</a></li>
+                  <li><a href="/erreurs-cv" data-attr="nav-link-erreurs" data-track="nav" data-zone="header" data-level="tertiary">Erreurs à éviter</a></li>
+                  <li><a href="/cv-par-metier" data-attr="nav-link-metier" data-track="nav" data-zone="header" data-level="tertiary">CV par métier</a></li>
+                  <li><a href="/cv-adapte-chaque-offre" aria-current="page" data-attr="nav-link-adapte" data-track="nav" data-zone="header" data-level="tertiary">CV adapté à chaque offre</a></li>
+                </ul>
+              </div>
+              <a href="/login" class="public-header-login" data-attr="nav-link-login" data-track="nav" data-zone="header" data-level="tertiary">Se connecter</a>
+              <a href="/login" class="public-header-cta" data-attr="nav-cta-signup" data-track="cta" data-zone="header" data-level="primary">Essayer gratuitement</a>
+            </nav>
+            <button type="button" class="public-header-burger" aria-expanded="false" aria-controls="public-header-panel" aria-label="Ouvrir le menu" data-attr="nav-burger" data-track="nav" data-zone="header" data-level="tertiary"><svg class="public-header-burger-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path class="public-header-burger-open" d="M4 7h16M4 12h16M4 17h16"/><path class="public-header-burger-close" d="M18 6 6 18M6 6l12 12"/></svg></button>
           </div>
+          <nav id="public-header-panel" class="public-header-panel" aria-label="Navigation mobile" hidden>
+            <a href="/#tarifs" data-attr="nav-drawer-pricing" data-track="nav" data-zone="header" data-level="tertiary">Tarifs</a>
+            <p class="public-header-panel-title">Ressources</p>
+            <ul>
+              <li><a href="/ats" data-attr="nav-drawer-ats" data-track="nav" data-zone="header" data-level="tertiary">CV et ATS</a></li>
+              <li><a href="/faq" data-attr="nav-drawer-faq" data-track="nav" data-zone="header" data-level="tertiary">FAQ</a></li>
+              <li><a href="/modeles-cv" data-attr="nav-drawer-modeles" data-track="nav" data-zone="header" data-level="tertiary">Modèles CV</a></li>
+              <li><a href="/guide-cv" data-attr="nav-drawer-guide" data-track="nav" data-zone="header" data-level="tertiary">Guide CV</a></li>
+              <li><a href="/erreurs-cv" data-attr="nav-drawer-erreurs" data-track="nav" data-zone="header" data-level="tertiary">Erreurs à éviter</a></li>
+              <li><a href="/cv-par-metier" data-attr="nav-drawer-metier" data-track="nav" data-zone="header" data-level="tertiary">CV par métier</a></li>
+              <li><a href="/cv-adapte-chaque-offre" aria-current="page" data-attr="nav-drawer-adapte" data-track="nav" data-zone="header" data-level="tertiary">CV adapté à chaque offre</a></li>
+            </ul>
+            <a href="/login" data-attr="nav-drawer-login" data-track="nav" data-zone="header" data-level="tertiary">Se connecter</a>
+            <a href="/login" class="public-header-panel-cta" data-attr="nav-cta-drawer" data-track="cta" data-zone="drawer" data-level="primary">Essayer gratuitement</a>
+          </nav>
         </header>
+        <nav class="resources-subnav" aria-label="Pages de ressources" data-resources-subnav="static">
+          <ul class="resources-subnav-list">
+            <li><a href="/ats" data-attr="nav-subnav-ats" data-track="nav" data-zone="subnav" data-level="tertiary">CV et ATS</a></li>
+            <li><a href="/faq" data-attr="nav-subnav-faq" data-track="nav" data-zone="subnav" data-level="tertiary">FAQ</a></li>
+            <li><a href="/modeles-cv" data-attr="nav-subnav-modeles" data-track="nav" data-zone="subnav" data-level="tertiary">Modèles CV</a></li>
+            <li><a href="/guide-cv" data-attr="nav-subnav-guide" data-track="nav" data-zone="subnav" data-level="tertiary">Guide CV</a></li>
+            <li><a href="/erreurs-cv" data-attr="nav-subnav-erreurs" data-track="nav" data-zone="subnav" data-level="tertiary">Erreurs à éviter</a></li>
+            <li><a href="/cv-par-metier" data-attr="nav-subnav-metier" data-track="nav" data-zone="subnav" data-level="tertiary">CV par métier</a></li>
+            <li><a href="/cv-adapte-chaque-offre" aria-current="page" data-attr="nav-subnav-adapte" data-track="nav" data-zone="subnav" data-level="tertiary">CV adapté à chaque offre</a></li>
+          </ul>
+        </nav>
+        <!-- PUBLIC-HEADER:END -->
+        <main>
         <section class="content-hero">
           <div class="content-hero-inner">
-            <h1>CV adapté à chaque offre</h1>
+            <p class="content-kicker">CV adapté à chaque offre</p>
+            <h1>CV <em class="ds-highlight">adapté</em> à chaque offre</h1>
             <p class="content-lead">Envoyer le même CV partout, c'est la stratégie la plus répandue. C'est aussi l'une des moins efficaces.</p>
           </div>
         </section>
+        <div class="content-toc-wrap">
+          <nav class="content-toc" aria-label="Sommaire">
+            <p class="content-toc-title">Sommaire</p>
+            <ol>
+              <li><a href="#ce-que-disent-les-donnees">Ce que disent les données</a></li>
+              <li><a href="#pourquoi-ca-fonctionne">Pourquoi ça fonctionne</a></li>
+              <li><a href="#ce-qu-adapter-un-cv-veut-vraiment-dire">Ce qu'adapter un CV veut vraiment dire</a></li>
+              <li><a href="#le-cout-de-la-personnalisation">Le coût de la personnalisation</a></li>
+              <li><a href="#comment-ca-marche-avec-axel-job">Comment ça marche avec AxeL Job&nbsp;?</a></li>
+            </ol>
+          </nav>
+        </div>
         <section class="content-section">
           <div class="content-section-inner content-prose">
             <div class="content-section-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg></div>
             <div class="content-section-body">
-              <h2>Ce que disent les données</h2>
+              <h2 id="ce-que-disent-les-donnees">Ce que disent les données</h2>
               <p>Selon une analyse <a href="https://www.jobscan.co/blog/tailor-resume-job-description/" class="content-source" target="_blank" rel="noopener noreferrer">Jobscan</a> portant sur près d'un million de candidatures, 83&nbsp;% des recruteurs déclarent être plus enclins à recruter un candidat qui a adapté son CV au poste. 63&nbsp;% veulent explicitement recevoir un CV personnalisé pour chaque offre. Et plus de 55&nbsp;% citent l'absence de personnalisation comme l'une des erreurs les plus fréquentes et les plus dommageables.</p>
               <p>L'impact est mesurable à grande échelle. Selon des données issues de 3,2 millions d'utilisateurs <a href="https://www.tealhq.com/post/how-to-tailor-your-resume-to-a-job" class="content-source" target="_blank" rel="noopener noreferrer">Teal</a>, adapter son CV à une offre rend 6 fois plus probable d'obtenir un entretien. <a href="https://huntr.co/blog/how-to-tailor-resume-to-job-description" class="content-source" target="_blank" rel="noopener noreferrer">Huntr</a>, après analyse de ses propres données, constate une multiplication par 2,21 du taux de conversion candidature → entretien pour les utilisateurs qui personnalisent leur CV.</p>
             </div>
@@ -65,7 +128,7 @@
           <div class="content-section-inner content-prose">
             <div class="content-section-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg></div>
             <div class="content-section-body">
-              <h2>Pourquoi ça fonctionne</h2>
+              <h2 id="pourquoi-ca-fonctionne">Pourquoi ça fonctionne</h2>
               <p>Il y a deux raisons&nbsp;:</p>
               <ol>
                 <li><strong>Les mots-clés.</strong> 88&nbsp;% des employeurs estiment perdre des candidats qualifiés parce que ces derniers n'utilisent pas les termes exacts que le recruteur a configurés dans l'ATS pour filtrer les profils.<span class="content-source">SelectSoftware Reviews</span> Un CV générique rate ces correspondances, même si l'expérience est pertinente.</li>
@@ -78,7 +141,7 @@
           <div class="content-section-inner content-prose">
             <div class="content-section-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></div>
             <div class="content-section-body">
-              <h2>Ce qu'adapter un CV veut vraiment dire</h2>
+              <h2 id="ce-qu-adapter-un-cv-veut-vraiment-dire">Ce qu'adapter un CV veut vraiment dire</h2>
               <p>Adapter son CV ne signifie pas tout réécrire. Dans la pratique, c'est&nbsp;:</p>
               <ul>
                 <li>Changer le titre pour qu'il corresponde exactement au titre du poste dans l'offre (<a href="https://www.jobscan.co/blog/tailor-resume-job-description/" class="content-source" target="_blank" rel="noopener noreferrer">Jobscan</a>&nbsp;: ×3,5 sur le taux d'entretien)</li>
@@ -93,7 +156,7 @@
           <div class="content-section-inner content-prose">
             <div class="content-section-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></div>
             <div class="content-section-body">
-              <h2>Le coût de la personnalisation</h2>
+              <h2 id="le-cout-de-la-personnalisation">Le coût de la personnalisation</h2>
               <p>Le frein principal, c'est le temps. Adapter un CV manuellement pour chaque offre prend en moyenne 45 à 60 minutes. Sur 20 candidatures, c'est 15 à 20 heures. C'est là que les outils d'IA entrent en jeu&nbsp;: en analysant l'offre et en adaptant automatiquement le CV, ils réduisent ce temps à quelques minutes - sans changer le fond, en optimisant la forme et les mots-clés.</p>
             </div>
           </div>
@@ -102,12 +165,13 @@
           <div class="content-section-inner content-prose">
             <div class="content-section-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg></div>
             <div class="content-section-body">
-              <h2>Comment ça marche avec AxeL Job ?</h2>
+              <h2 id="comment-ca-marche-avec-axel-job">Comment ça marche avec AxeL Job&nbsp;?</h2>
               <p>Tu renseignes ton profil une fois (expériences, formation, compétences). Pour chaque candidature, tu colles le texte de l'annonce. L'IA adapte ton CV&nbsp;: résumé reformulé avec les mots-clés de l'offre, expériences réordonnées ou mises en avant, formulations alignées sur l'annonce. Tu gardes le contrôle, tu peux modifier avant d'exporter en PDF.</p>
               <p>Peu d'outils proposent une <strong>adaptation automatique du contenu à chaque annonce</strong> - c'est ce que fait AxeL Job. Tu n'as pas à copier-coller les mots-clés toi-même&nbsp;; l'IA les intègre de façon naturelle à partir du texte de l'offre.</p>
             </div>
           </div>
         </section>
+        </main>
         <section class="content-cta" data-section="content-cta">
           <div class="content-cta-inner">
             <h2>Un CV adapté à chaque offre, en un clic</h2>
@@ -116,22 +180,49 @@
           </div>
         </section>
         <footer class="content-footer">
-          <nav class="content-footer-nav">
-            <a href="/ats" data-attr="footer-link-ats" data-track="nav" data-zone="footer" data-level="tertiary">CV et ATS</a>
-            <a href="/faq" data-attr="footer-link-faq" data-track="nav" data-zone="footer" data-level="tertiary">FAQ</a>
-            <a href="/modeles-cv" data-attr="footer-link-modeles" data-track="nav" data-zone="footer" data-level="tertiary">Modèles de CV</a>
-            <a href="/guide-cv" data-attr="footer-link-guide" data-track="nav" data-zone="footer" data-level="tertiary">Guide CV</a>
-            <a href="/erreurs-cv" data-attr="footer-link-erreurs" data-track="nav" data-zone="footer" data-level="tertiary">Erreurs à éviter</a>
-            <a href="/cv-par-metier" data-attr="footer-link-metier" data-track="nav" data-zone="footer" data-level="tertiary">CV par métier</a>
-            <a href="/cv-adapte-chaque-offre" data-attr="footer-link-adapte" data-track="nav" data-zone="footer" data-level="tertiary">CV adapté à chaque offre</a>
-            <a href="/mentions-legales" data-attr="footer-link-mentions" data-track="nav" data-zone="footer" data-level="tertiary">Mentions légales</a>
-            <a href="/confidentialite" data-attr="footer-link-confidentialite" data-track="nav" data-zone="footer" data-level="tertiary">Confidentialité</a>
-            <a href="/cgu" data-attr="footer-link-cgu" data-track="nav" data-zone="footer" data-level="tertiary">CGU</a>
-          </nav>
+          <div class="content-footer-inner">
+            <div class="content-footer-brand">
+              <a href="/" class="content-brand" data-attr="footer-link-home" data-track="nav" data-zone="footer" data-level="tertiary"><img src="/favicon.svg" alt="" class="content-logo" width="36" height="36" /><span>AxeL Job</span></a>
+            </div>
+            <nav class="content-footer-col" aria-label="Guides">
+              <p class="content-footer-title">Guides</p>
+              <ul>
+                <li><a href="/ats" data-attr="footer-link-ats" data-track="nav" data-zone="footer" data-level="tertiary">CV et ATS</a></li>
+                <li><a href="/faq" data-attr="footer-link-faq" data-track="nav" data-zone="footer" data-level="tertiary">FAQ</a></li>
+                <li><a href="/modeles-cv" data-attr="footer-link-modeles" data-track="nav" data-zone="footer" data-level="tertiary">Modèles de CV</a></li>
+                <li><a href="/guide-cv" data-attr="footer-link-guide" data-track="nav" data-zone="footer" data-level="tertiary">Guide CV</a></li>
+              </ul>
+            </nav>
+            <nav class="content-footer-col" aria-label="Ressources">
+              <p class="content-footer-title">Ressources</p>
+              <ul>
+                <li><a href="/erreurs-cv" data-attr="footer-link-erreurs" data-track="nav" data-zone="footer" data-level="tertiary">Erreurs à éviter</a></li>
+                <li><a href="/cv-par-metier" data-attr="footer-link-metier" data-track="nav" data-zone="footer" data-level="tertiary">CV par métier</a></li>
+                <li><a href="/cv-adapte-chaque-offre" data-attr="footer-link-adapte" data-track="nav" data-zone="footer" data-level="tertiary">CV adapté à chaque offre</a></li>
+              </ul>
+            </nav>
+            <nav class="content-footer-col" aria-label="Aide">
+              <p class="content-footer-title">Aide</p>
+              <ul>
+                <li><a href="mailto:contact@axelproject.fr?subject=Support%20AxeL%20Job" data-attr="footer-link-support" data-track="nav" data-zone="footer" data-level="tertiary">Support</a></li>
+                <li><a href="/login" data-attr="footer-link-login" data-track="nav" data-zone="footer" data-level="tertiary">Se connecter</a></li>
+              </ul>
+            </nav>
+          </div>
+          <div class="content-footer-bar">
+            <p class="content-footer-copy">© <span data-year>2026</span> AxeL Job - Ton CV sur-mesure pour chaque annonce. Une réalisation <a href="https://axelproject.fr" rel="noopener noreferrer" data-attr="footer-link-axelproject" data-track="nav" data-zone="footer" data-level="tertiary">Axel Project</a>.</p>
+            <nav class="content-footer-legal" aria-label="Pages légales">
+              <a href="/mentions-legales" data-attr="footer-link-mentions" data-track="nav" data-zone="footer" data-level="tertiary">Mentions légales</a>
+              <a href="/confidentialite" data-attr="footer-link-confidentialite" data-track="nav" data-zone="footer" data-level="tertiary">Confidentialité</a>
+              <a href="/cgu" data-attr="footer-link-cgu" data-track="nav" data-zone="footer" data-level="tertiary">CGU</a>
+            </nav>
+          </div>
         </footer>
       </div>
     </div>
   </div>
   <script src="/content-scroll-top.js" defer></script>
+<script src="/public-header.js" defer></script>
+<script src="/footer-year.js" defer></script>
 </body>
 </html>

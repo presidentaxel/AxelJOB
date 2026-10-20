@@ -17,7 +17,7 @@
   --accent-hover: var(--color-primary-press);
   --accent-light: var(--color-canvas-lavender);
   --accent-subtle: var(--color-canvas-cream);
-  --success: var(--color-deep-green);
+  --success: var(--ds-color-feedback-success);
   --success-light: var(--color-pale-green);
   --danger: var(--color-error);
   --danger-light: var(--ds-color-feedback-error-subtle);
@@ -84,6 +84,14 @@ body {
   height: 100%;
   min-width: 0;
   width: 100%;
+}
+
+/* Pages publiques (landing, contenu, légales) : le wrapper prend la hauteur de son contenu au lieu de
+   se réduire à celle du viewport, sinon l'en-tête sticky quitte l'écran après un viewport. */
+#root > .landing,
+#root > .content-page,
+#root > .legal-page {
+  flex-shrink: 0;
 }
 
 .app-shell button,

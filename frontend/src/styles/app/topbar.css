@@ -1,5 +1,5 @@
 /**
- * Topbar /app - navigation principale (Cohere 2026).
+ * Topbar /app - navigation principale (design Axel).
  */
 .topbar {
   display: flex;
@@ -289,7 +289,7 @@
 }
 
 .topbar-account-code-feedback--ok {
-  color: var(--color-deep-green);
+  color: var(--ds-color-feedback-success);
 }
 
 .topbar-account-menu-sep {

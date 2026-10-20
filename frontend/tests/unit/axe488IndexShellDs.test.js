@@ -18,14 +18,17 @@ test('les CTA du shell index.html sont des ds-button', async () => {
   const html = await readFile(INDEX, 'utf8');
   assert.doesNotMatch(html, /class="[^"]*\bbutton button-primary\b/);
   assert.doesNotMatch(html, /class="[^"]*\bbutton button-secondary\b/);
-  assert.match(html, /class="[^"]*\bds-button ds-button--primary ds-button--md\b/);
-  assert.match(html, /class="[^"]*\bds-button ds-button--secondary ds-button--md\b/);
+  assert.match(html, /class="[^"]*\bds-button ds-button--primary ds-button--(?:md|lg)\b/);
+  assert.match(html, /class="[^"]*\bds-button ds-button--secondary ds-button--(?:md|lg)\b/);
   assert.doesNotMatch(html, AUBERGINE);
 });
 
-test('la landing React ne garde pas le halo aubergine', async () => {
+test('la landing React ne garde pas le halo aubergine ni de hex', async () => {
   const css = await readFile(path.join(ROOT, 'src/components/LandingPage.css'), 'utf8');
   assert.doesNotMatch(css, AUBERGINE);
+  assert.doesNotMatch(css, /#[0-9a-fA-F]{3,8}\b/);
+  assert.doesNotMatch(css, /--ds-color-(neutral|orange|sun|green|red|blue|amber)-\d/);
+  assert.match(css, /\.landing-hero\s*\{[^}]*var\(--ds-color-bg-subtle\)/);
 });
 
 test('le CSS critique des CTA ne cite que des hex déjà dans tokens.json', async () => {
@@ -38,6 +41,6 @@ test('le CSS critique des CTA ne cite que des hex déjà dans tokens.json', asyn
   for (const [, hex] of decls) {
     assert.match(tokens, new RegExp(hex, 'i'), `${hex} absent de tokens.json`);
   }
-  assert.match(html, /--ds-color-action-primary-bg:#17171c/);
+  assert.match(html, /--ds-color-action-primary-bg:#c23709/);
   assert.match(html, /\.ds-button--primary\{background:var\(--ds-color-action-primary-bg\)/);
 });

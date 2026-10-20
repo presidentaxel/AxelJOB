@@ -24,22 +24,22 @@ test('index.html : acquisition vers /inscription, connexion vers /login', async 
   assert.equal(hrefForAttr(html, 'home-pricing-cta-free'), '/inscription?plan=free');
   assert.equal(hrefForAttr(html, 'home-pricing-cta-pro'), '/inscription?plan=pro');
   assert.equal(hrefForAttr(html, 'nav-cta-signup'), '/login');
-  assert.equal(hrefForAttr(html, 'nav-cta-start'), '/login');
-  assert.equal(html.includes('nav-cta-signup"') && html.includes('href="/login?plan='), false);
+  assert.equal(hrefForAttr(html, 'nav-cta-drawer'), '/login');
+  assert.equal(html.includes('href="/login?plan='), false);
 });
 
 test('Landing et App envoient les quatre CTA vers /inscription', async () => {
   const landing = await readFile(path.join(FRONTEND_ROOT, 'src/components/LandingPage.jsx'), 'utf8');
+  const header = await readFile(path.join(FRONTEND_ROOT, 'src/content/publicHeader.js'), 'utf8');
   const app = await readFile(path.join(FRONTEND_ROOT, 'src/App.jsx'), 'utf8');
   assert.match(landing, /goLogin\('home-hero-cta-signup', onSignupClick\)/);
   assert.match(landing, /goLogin\('home-final-cta-signup', onSignupClick\)/);
   assert.match(landing, /goLogin\('home-pricing-cta-free', onSignupClick\)/);
   assert.match(landing, /goLogin\('home-pricing-cta-pro', onProClick\)/);
-  assert.match(landing, /goLogin\('nav-cta-signup', onCtaClick\)/);
-  assert.match(landing, /goLogin\('nav-cta-start', onCtaClick\)/);
-  assert.match(landing, /goLogin\('nav-cta-drawer', onCtaClick\)/);
-  assert.match(app, /onCtaClick=\{\(\) => navigate\('\/login'\)\}/);
-  assert.match(app, /onSignupClick=\{\(\) => navigate\('\/inscription\?plan=free'\)\}/);
-  assert.match(app, /onProClick=\{\(\) => navigate\('\/inscription\?plan=pro'\)\}/);
+  assert.match(header, /login:\s*\{[^}]*to:\s*'\/login'/);
+  assert.match(header, /cta:\s*\{[^}]*to:\s*'\/login'/);
+  assert.match(app, /onCtaClick=\{\(\) => navigate\('\/login', loginNavOptions\(\)\)\}/);
+  assert.match(app, /onSignupClick=\{\(\) => navigate\('\/inscription\?plan=free', loginNavOptions\(\)\)\}/);
+  assert.match(app, /onProClick=\{\(\) => navigate\('\/inscription\?plan=pro', loginNavOptions\(\)\)\}/);
   assert.doesNotMatch(app, /navigate\('\/login\?plan=pro'\)/);
 });

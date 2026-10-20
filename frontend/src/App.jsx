@@ -25,12 +25,12 @@ import { supabase } from './lib/supabase';
 import { supabaseConfigMessage } from './lib/userFacingError.js';
 import { fetchAuthSessionWithTimeout } from './lib/supabaseAuthSession';
 import { analyticsAttrs } from './lib/analyticsAttrs.js';
-import AuthForm from './components/AuthForm';
-import { authModeFromPath, isAuthPath } from './lib/authPaths.js';
+import AuthForm, { AuthLayout } from './components/AuthForm';
+import { authModeFromPath } from './lib/authPaths.js';
+import { consumeAuthCallback, decidePublicEntry, hasPendingAuthCallback, isPublicEntryPath, loginNavOptions } from './lib/publicEntry.js';
 import AppTopbar from './components/AppTopbar';
 import CompanyLogo from './components/CompanyLogo';
 import CandidatureBoardCard from './components/CandidatureBoardCard';
-import { NotFoundPage } from './components/ErrorPages';
 import Button from './components/ui/Button.jsx';
 import Input from './components/ui/Input.jsx';
 import PasswordInput from './components/ui/PasswordInput.jsx';
@@ -67,6 +67,7 @@ import {
 
 const ProfileView = lazyWithChunkReload(() => import('./components/editor/ProfileViewSwitcher'));
 const SettingsView = lazyWithChunkReload(() => import('./components/SettingsView'));
+const NotFoundPage = lazyWithChunkReload(() => import('./components/NotFoundPage'));
 const LandingPage = lazyWithChunkReload(() => import('./components/LandingPage'));
 const LegalPages = lazyWithChunkReload(() => import('./components/LegalPages'));
 const AtsPage = lazyWithChunkReload(() => import('./components/AtsPage'));
@@ -754,6 +755,7 @@ export default function App() {
   const [contextDocStatus, setContextDocStatus] = useState('');
   const [lastAdaptedCv, setLastAdaptedCv] = useState(null);
   const lastAdaptedCvRef = useRef(null);
+  const sawNoSessionRef = useRef(false);
   lastAdaptedCvRef.current = lastAdaptedCv;
   const [lastBaseCv, setLastBaseCv] = useState(null);
   /** URL photo fraîche (GET /api/cv) pour la preview CV, évite URL signée expirée */
@@ -1328,9 +1330,21 @@ export default function App() {
   useEffect(() => {
     if (authLoading) return;
     if (!supabase) return;
+    if (!session) sawNoSessionRef.current = true;
     if (session) {
       const params = new URLSearchParams(location.search);
-      if (pathname === '/' || isAuthPath(pathname)) {
+      /* Session apparue pendant cette visite (formulaire soumis) : l'utilisateur vient de se connecter. */
+      const entry = decidePublicEntry({
+        hasSession: true,
+        pathname,
+        locationState: location.state,
+        authCallback: hasPendingAuthCallback() || sawNoSessionRef.current,
+      });
+      if (entry === 'stay') {
+        /* AXE-504 : simple visite d'une page publique, la session reste en mémoire sans rediriger */
+      } else if (entry === 'enter') {
+        consumeAuthCallback();
+        sawNoSessionRef.current = false;
         if (wantsProCheckout(location.search)) {
           consumePlanIntentIfPro();
           navigate(APP_DEFAULT_ROUTE, { replace: true });
@@ -1357,7 +1371,7 @@ export default function App() {
         navigate('/', { replace: true });
       }
     }
-  }, [session, pathname, authLoading, navigate, location.search]);
+  }, [session, pathname, authLoading, navigate, location.search, location.state]);
 
   /* /app sans sous-chemin reconnu → CV (évite état incohérent URL / contenu) */
   useEffect(() => {
@@ -3529,31 +3543,40 @@ export default function App() {
   }
 
   /* Non connecté : login visible tout de suite (AXE-372), sans attendre getSession. */
-  if (!session) {
+  /* AXE-504 : session ouverte mais simple visite de / ou /login -> on affiche la page publique */
+  const publicStay = !!session && decidePublicEntry({
+    hasSession: true,
+    pathname,
+    locationState: location.state,
+    authCallback: hasPendingAuthCallback() || sawNoSessionRef.current,
+  }) === 'stay';
+  if (!session || publicStay) {
     const authMode = authModeFromPath(pathname);
     if (authMode) {
       const authTitle = authMode === 'signup' ? 'Créer un compte' : authMode === 'reset' ? 'Mot de passe oublié' : 'Connexion';
       return (
-        <div className="login-screen" data-section="login">
+        <div className="login-screen login-screen--split" data-section="login">
           <button type="button" className="login-screen-back" onClick={() => navigate('/')} aria-label="Retour à l'accueil" {...analyticsAttrs('nav-link-back', 'header', 'tertiary', 'nav')}>
             &larr; Retour à l&apos;accueil
           </button>
-          <div className="login-screen-card">
-            <img src="/favicon.svg" alt="AxeL Job" className="login-screen-logo" />
-            <h1>{authTitle}</h1>
-            <p className="login-screen-intro">Adapte ton CV à chaque offre en quelques secondes.</p>
-            {loginOtpExpired && (
-              <div className="auth-error" style={{ marginBottom: '1rem' }}>
-                Le lien de connexion a expiré ou n&apos;est plus valide. Demande un nouveau lien ci-dessous.
-              </div>
-            )}
-            <AuthForm onSuccess={() => setAuthLoading(false)} />
-          </div>
+          <AuthLayout>
+            <div className="login-screen-card auth-layout-card">
+              <img src="/favicon.svg" alt="AxeL Job" className="login-screen-logo" />
+              <h1>{authTitle}</h1>
+              <p className="login-screen-intro">Adapte ton CV à chaque offre en quelques secondes.</p>
+              {loginOtpExpired && (
+                <div className="auth-error" style={{ marginBottom: '1rem' }}>
+                  Le lien de connexion a expiré ou n&apos;est plus valide. Demande un nouveau lien ci-dessous.
+                </div>
+              )}
+              <AuthForm onSuccess={() => setAuthLoading(false)} />
+            </div>
+          </AuthLayout>
         </div>
       );
     }
     if (pathname === '/') {
-      return <Suspense fallback={<div className="landing" style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><span aria-hidden>Chargement…</span></div>}><LandingPage onCtaClick={() => navigate('/login')} onSignupClick={() => navigate('/inscription?plan=free')} onProClick={() => navigate('/inscription?plan=pro')} /></Suspense>;
+      return <Suspense fallback={<div className="landing" style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><span aria-hidden>Chargement…</span></div>}><LandingPage onCtaClick={() => navigate('/login', loginNavOptions())} onSignupClick={() => navigate('/inscription?plan=free', loginNavOptions())} onProClick={() => navigate('/inscription?plan=pro', loginNavOptions())} /></Suspense>;
     }
     const marketing = renderPublicMarketingPage(pathname, navigate);
     if (marketing) return marketing;
@@ -3564,11 +3587,11 @@ export default function App() {
         </div>
       );
     }
-    return <NotFoundPage />;
+    return <Suspense fallback={null}><NotFoundPage /></Suspense>;
   }
 
   /* Connecté : redirection / ou /login vers /app (useEffect) ; pages publiques hors /app ; sinon 404 */
-  if (!authLoading && session && (pathname === '/' || isAuthPath(pathname))) {
+  if (!authLoading && session && isPublicEntryPath(pathname)) {
     return (
       <div className="app-shell" style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <span aria-live="polite">Chargement…</span>
@@ -3578,7 +3601,7 @@ export default function App() {
   if (!authLoading && session && !pathname.startsWith('/app')) {
     const marketing = renderPublicMarketingPage(pathname, navigate);
     if (marketing) return marketing;
-    return <NotFoundPage />;
+    return <Suspense fallback={null}><NotFoundPage /></Suspense>;
   }
 
   const showOnboardingBoot = !!(session && pathname.startsWith('/app') && !onboardingChecked);

@@ -1,18 +1,15 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="fr" class="static-page">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="icon" type="image/png" sizes="48x48" href="/favicon-48.png" />
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,200..800;1,200..800&display=swap" rel="stylesheet" />
   <title>ATS : qu'est-ce que c'est et comment ça fonctionne vraiment ? | AxeL Job</title>
   <meta name="description" content="ATS : définition, statistiques recruteurs, rejet automatique vs humain, parsing PDF/DOCX, volume de candidatures. Comment faire passer ton CV." />
   <link rel="canonical" href="https://job.axelproject.fr/ats" />
-  <meta name="theme-color" content="#5b4cff" />
+  <meta name="theme-color" content="#faf6ef" />
   <link rel="sitemap" type="application/xml" title="Plan du site AxeL Job" href="/sitemap.xml" />
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="AxeL Job" />
@@ -27,7 +24,10 @@
   <meta name="twitter:description" content="ATS : définition, statistiques recruteurs, rejet automatique vs humain, parsing PDF/DOCX, volume de candidatures." />
   <meta name="twitter:image" content="https://job.axelproject.fr/axel_og_image.png" />
   <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
+  <link rel="stylesheet" href="/ds-tokens.css" />
+  <link rel="stylesheet" href="/fonts/axel-fonts.css" />
   <link rel="stylesheet" href="/static-pages.css" />
+  <link rel="stylesheet" href="/public-header.css" />
   <link rel="stylesheet" href="/consent-banner.css" />
   <script src="/analytics-config.js"></script>
   <script src="/consent-gtm.js"></script>
@@ -37,34 +37,97 @@
   <div id="root">
     <div class="static-crawlable">
       <div class="content-page">
-        <header class="content-header">
-          <div class="content-header-inner">
-            <a href="/" class="content-back" data-attr="nav-link-back" data-track="nav" data-zone="header" data-level="tertiary">← Retour à l'accueil</a>
+        <!-- PUBLIC-HEADER:START (généré par scripts/sync-public-header.mjs, source : src/content/publicHeader.js) -->
+        <header class="public-header" data-public-header="static">
+          <div class="public-header-inner">
+            <a href="/" class="public-header-brand" data-attr="nav-link-back" data-track="nav" data-zone="header" data-level="tertiary">
+              <img src="/favicon.svg" alt="" class="public-header-logo" width="36" height="36" />
+              <span class="public-header-brand-name">AxeL Job</span>
+            </a>
+            <nav class="public-header-nav" aria-label="Navigation principale">
+              <a href="/#tarifs" class="public-header-link" data-attr="nav-link-pricing" data-track="nav" data-zone="header" data-level="tertiary">Tarifs</a>
+              <div class="public-header-menu">
+                <button type="button" class="public-header-menu-toggle is-current" aria-expanded="false" aria-controls="public-header-resources" data-attr="nav-menu-resources" data-track="nav" data-zone="header" data-level="tertiary"><span class="public-header-label" data-label="Ressources">Ressources</span><svg class="public-header-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
+                <ul id="public-header-resources" class="public-header-menu-list">
+                  <li><a href="/ats" aria-current="page" data-attr="nav-link-ats" data-track="nav" data-zone="header" data-level="tertiary">CV et ATS</a></li>
+                  <li><a href="/faq" data-attr="nav-link-faq" data-track="nav" data-zone="header" data-level="tertiary">FAQ</a></li>
+                  <li><a href="/modeles-cv" data-attr="nav-link-modeles" data-track="nav" data-zone="header" data-level="tertiary">Modèles CV</a></li>
+                  <li><a href="/guide-cv" data-attr="nav-link-guide" data-track="nav" data-zone="header" data-level="tertiary">Guide CV</a></li>
+                  <li><a href="/erreurs-cv" data-attr="nav-link-erreurs" data-track="nav" data-zone="header" data-level="tertiary">Erreurs à éviter</a></li>
+                  <li><a href="/cv-par-metier" data-attr="nav-link-metier" data-track="nav" data-zone="header" data-level="tertiary">CV par métier</a></li>
+                  <li><a href="/cv-adapte-chaque-offre" data-attr="nav-link-adapte" data-track="nav" data-zone="header" data-level="tertiary">CV adapté à chaque offre</a></li>
+                </ul>
+              </div>
+              <a href="/login" class="public-header-login" data-attr="nav-link-login" data-track="nav" data-zone="header" data-level="tertiary">Se connecter</a>
+              <a href="/login" class="public-header-cta" data-attr="nav-cta-signup" data-track="cta" data-zone="header" data-level="primary">Essayer gratuitement</a>
+            </nav>
+            <button type="button" class="public-header-burger" aria-expanded="false" aria-controls="public-header-panel" aria-label="Ouvrir le menu" data-attr="nav-burger" data-track="nav" data-zone="header" data-level="tertiary"><svg class="public-header-burger-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path class="public-header-burger-open" d="M4 7h16M4 12h16M4 17h16"/><path class="public-header-burger-close" d="M18 6 6 18M6 6l12 12"/></svg></button>
           </div>
+          <nav id="public-header-panel" class="public-header-panel" aria-label="Navigation mobile" hidden>
+            <a href="/#tarifs" data-attr="nav-drawer-pricing" data-track="nav" data-zone="header" data-level="tertiary">Tarifs</a>
+            <p class="public-header-panel-title">Ressources</p>
+            <ul>
+              <li><a href="/ats" aria-current="page" data-attr="nav-drawer-ats" data-track="nav" data-zone="header" data-level="tertiary">CV et ATS</a></li>
+              <li><a href="/faq" data-attr="nav-drawer-faq" data-track="nav" data-zone="header" data-level="tertiary">FAQ</a></li>
+              <li><a href="/modeles-cv" data-attr="nav-drawer-modeles" data-track="nav" data-zone="header" data-level="tertiary">Modèles CV</a></li>
+              <li><a href="/guide-cv" data-attr="nav-drawer-guide" data-track="nav" data-zone="header" data-level="tertiary">Guide CV</a></li>
+              <li><a href="/erreurs-cv" data-attr="nav-drawer-erreurs" data-track="nav" data-zone="header" data-level="tertiary">Erreurs à éviter</a></li>
+              <li><a href="/cv-par-metier" data-attr="nav-drawer-metier" data-track="nav" data-zone="header" data-level="tertiary">CV par métier</a></li>
+              <li><a href="/cv-adapte-chaque-offre" data-attr="nav-drawer-adapte" data-track="nav" data-zone="header" data-level="tertiary">CV adapté à chaque offre</a></li>
+            </ul>
+            <a href="/login" data-attr="nav-drawer-login" data-track="nav" data-zone="header" data-level="tertiary">Se connecter</a>
+            <a href="/login" class="public-header-panel-cta" data-attr="nav-cta-drawer" data-track="cta" data-zone="drawer" data-level="primary">Essayer gratuitement</a>
+          </nav>
         </header>
+        <nav class="resources-subnav" aria-label="Pages de ressources" data-resources-subnav="static">
+          <ul class="resources-subnav-list">
+            <li><a href="/ats" aria-current="page" data-attr="nav-subnav-ats" data-track="nav" data-zone="subnav" data-level="tertiary">CV et ATS</a></li>
+            <li><a href="/faq" data-attr="nav-subnav-faq" data-track="nav" data-zone="subnav" data-level="tertiary">FAQ</a></li>
+            <li><a href="/modeles-cv" data-attr="nav-subnav-modeles" data-track="nav" data-zone="subnav" data-level="tertiary">Modèles CV</a></li>
+            <li><a href="/guide-cv" data-attr="nav-subnav-guide" data-track="nav" data-zone="subnav" data-level="tertiary">Guide CV</a></li>
+            <li><a href="/erreurs-cv" data-attr="nav-subnav-erreurs" data-track="nav" data-zone="subnav" data-level="tertiary">Erreurs à éviter</a></li>
+            <li><a href="/cv-par-metier" data-attr="nav-subnav-metier" data-track="nav" data-zone="subnav" data-level="tertiary">CV par métier</a></li>
+            <li><a href="/cv-adapte-chaque-offre" data-attr="nav-subnav-adapte" data-track="nav" data-zone="subnav" data-level="tertiary">CV adapté à chaque offre</a></li>
+          </ul>
+        </nav>
+        <!-- PUBLIC-HEADER:END -->
+        <main>
         <section class="content-hero">
           <div class="content-hero-inner">
-            <h1>Qu'est-ce qu'un ATS ?</h1>
-            <p class="content-lead">Tu envoies ta candidature. Quelques minutes plus tard, tu reçois un refus automatique. Pas de retour, pas d'explication. La faute à l'ATS ? Pas forcément. Voici ce que les données disent vraiment.</p>
+            <p class="content-kicker">CV et ATS</p>
+            <h1>Qu'est-ce qu'un <em class="ds-highlight">ATS</em> ?</h1>
+            <p class="content-lead">Tu envoies ta candidature. Quelques minutes plus tard, tu reçois un refus automatique. Pas de retour, pas d'explication. La faute à l'ATS&nbsp;? Pas forcément. Voici ce que les données disent vraiment.</p>
           </div>
         </section>
+        <div class="content-toc-wrap">
+          <nav class="content-toc" aria-label="Sommaire">
+            <p class="content-toc-title">Sommaire</p>
+            <ol>
+              <li><a href="#l-ats-c-est-quoi">L'ATS, c'est quoi&nbsp;?</a></li>
+              <li><a href="#ce-que-l-ats-fait-vraiment-et-ce-qu-il-ne-fait-pas">Ce que l'ATS fait vraiment (et ce qu'il ne fait pas)</a></li>
+              <li><a href="#pourquoi-certains-cv-passent-mieux-que-d-autres">Pourquoi certains CV passent mieux que d'autres</a></li>
+              <li><a href="#ce-que-ca-change-pour-toi">Ce que ça change pour toi</a></li>
+              <li><a href="#comment-axel-job-t-aide">Comment AxeL Job t'aide&nbsp;?</a></li>
+            </ol>
+          </nav>
+        </div>
         <section class="content-section">
           <div class="content-section-inner content-prose">
             <div class="content-section-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v2.5l-6 7v6l-4 2v-8l-6-7V4z"/></svg></div>
             <div class="content-section-body">
-              <h2>L'ATS, c'est quoi ?</h2>
+              <h2 id="l-ats-c-est-quoi">L'ATS, c'est quoi&nbsp;?</h2>
               <p>Un ATS (Applicant Tracking System, ou logiciel de gestion des candidatures) est un outil utilisé par les entreprises pour traiter les candidatures à grande échelle. Il centralise les CV reçus, les organise, permet de les filtrer par mots-clés ou critères, et gère les communications avec les candidats.</p>
               <p>Aujourd'hui, plus de 98&nbsp;% des entreprises du Fortune 500 utilisent un ATS, et 75&nbsp;% des recruteurs s'appuient sur ces outils pour gérer leurs candidatures (<a href="https://www.jobscan.co/blog/tailor-resume-job-description/" class="content-source" target="_blank" rel="noopener noreferrer">Jobscan</a>).</p>
               <div class="content-visual">
                 <svg viewBox="0 0 280 160" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <rect x="20" y="20" width="70" height="44" rx="8" fill="#4f46e5" fill-opacity="0.15" stroke="#4f46e5" stroke-width="2"/>
-                  <text x="55" y="47" text-anchor="middle" fill="#4f46e5" font-size="11" font-weight="600">CV envoyé</text>
-                  <path d="M90 42 L120 42 L120 80 L150 80" stroke="#4f46e5" stroke-width="2" stroke-dasharray="4 3" fill="none"/>
-                  <rect x="130" y="58" width="80" height="44" rx="8" fill="#4f46e5" fill-opacity="0.2" stroke="#4f46e5" stroke-width="2"/>
-                  <text x="170" y="85" text-anchor="middle" fill="#4f46e5" font-size="11" font-weight="600">ATS trie</text>
-                  <path d="M210 80 L240 80 L240 118 L260 118" stroke="#4f46e5" stroke-width="2" stroke-dasharray="4 3" fill="none"/>
-                  <rect x="200" y="104" width="70" height="44" rx="8" fill="#059669" fill-opacity="0.2" stroke="#059669" stroke-width="2"/>
-                  <text x="235" y="131" text-anchor="middle" fill="#059669" font-size="10" font-weight="600">Entretien</text>
+                  <rect x="20" y="20" width="70" height="44" rx="8" fill="var(--ds-color-accent-brand)" fill-opacity="0.15" stroke="var(--ds-color-accent-brand)" stroke-width="2"/>
+                  <text x="55" y="47" text-anchor="middle" fill="var(--ds-color-text-link)" font-size="11" font-weight="600">CV envoyé</text>
+                  <path d="M90 42 L120 42 L120 80 L150 80" stroke="var(--ds-color-accent-brand)" stroke-width="2" stroke-dasharray="4 3" fill="none"/>
+                  <rect x="130" y="58" width="80" height="44" rx="8" fill="var(--ds-color-accent-brand)" fill-opacity="0.2" stroke="var(--ds-color-accent-brand)" stroke-width="2"/>
+                  <text x="170" y="85" text-anchor="middle" fill="var(--ds-color-text-link)" font-size="11" font-weight="600">ATS trie</text>
+                  <path d="M210 80 L240 80 L240 118 L260 118" stroke="var(--ds-color-accent-brand)" stroke-width="2" stroke-dasharray="4 3" fill="none"/>
+                  <rect x="200" y="104" width="70" height="44" rx="8" fill="var(--ds-color-feedback-success)" fill-opacity="0.2" stroke="var(--ds-color-feedback-success)" stroke-width="2"/>
+                  <text x="235" y="131" text-anchor="middle" fill="var(--ds-color-feedback-success)" font-size="10" font-weight="600">Entretien</text>
                 </svg>
               </div>
             </div>
@@ -74,7 +137,7 @@
           <div class="content-section-inner content-prose">
             <div class="content-section-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></svg></div>
             <div class="content-section-body">
-              <h2>Ce que l'ATS fait vraiment (et ce qu'il ne fait pas)</h2>
+              <h2 id="ce-que-l-ats-fait-vraiment-et-ce-qu-il-ne-fait-pas">Ce que l'ATS fait vraiment (et ce qu'il ne fait pas)</h2>
               <p>La croyance populaire veut que les ATS rejettent automatiquement 75&nbsp;% des CV avant qu'un humain ne les lise. C'est faux. Selon <a href="https://enhancv.com/blog/does-ats-reject-resumes/" class="content-source" target="_blank" rel="noopener noreferrer">Enhancv</a>, cette statistique remonte à une entreprise appelée Preptel, qui a fermé ses portes en 2013 sans jamais publier de méthodologie.</p>
               <p>La réalité, documentée par une étude <a href="https://enhancv.com/blog/does-ats-reject-resumes/" class="content-source" target="_blank" rel="noopener noreferrer">Enhancv</a> menée sur 25 recruteurs en 2025&nbsp;: 100&nbsp;% utilisent des questions d'élimination binaires (autorisation de travail, certifications, localisation), mais seulement 8&nbsp;% configurent un rejet automatique basé sur le contenu du CV. Les 92&nbsp;% restants rejettent manuellement ou uniquement via ces questions d'élimination.</p>
               <p>En clair&nbsp;: l'ATS classe et organise, les humains rejettent. Le vrai problème n'est pas un algorithme mystérieux - c'est le volume. Toujours selon <a href="https://enhancv.com/blog/does-ats-reject-resumes/" class="content-source" target="_blank" rel="noopener noreferrer">Enhancv</a>, un poste junior reçoit entre 400 et 600 candidatures, et certains postes en remote dépassent 1&nbsp;000 la première semaine.</p>
@@ -85,7 +148,7 @@
           <div class="content-section-inner content-prose">
             <div class="content-section-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></div>
             <div class="content-section-body">
-              <h2>Pourquoi certains CV passent mieux que d'autres</h2>
+              <h2 id="pourquoi-certains-cv-passent-mieux-que-d-autres">Pourquoi certains CV passent mieux que d'autres</h2>
               <p>Il y a deux vrais risques&nbsp;:</p>
               <ol>
                 <li><strong>Les questions d'élimination.</strong> Si l'offre exige 5 ans d'expérience et que tu en as 2, tu es éliminé automatiquement - pas par un algorithme qui lit ton CV, mais parce que tu ne réponds pas au critère binaire posé.</li>
@@ -98,7 +161,7 @@
           <div class="content-section-inner content-prose">
             <div class="content-section-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg></div>
             <div class="content-section-body">
-              <h2>Ce que ça change pour toi</h2>
+              <h2 id="ce-que-ca-change-pour-toi">Ce que ça change pour toi</h2>
               <p class="content-callout">L'objectif n'est pas de «&nbsp;tromper&nbsp;» l'ATS. C'est de lui rendre la tâche facile. Format simple, mots-clés alignés avec l'offre, sections bien nommées («&nbsp;Expérience&nbsp;», «&nbsp;Formation&nbsp;», «&nbsp;Compétences&nbsp;»)&nbsp;: c'est tout ce qu'il faut.</p>
             </div>
           </div>
@@ -107,11 +170,12 @@
           <div class="content-section-inner content-prose">
             <div class="content-section-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg></div>
             <div class="content-section-body">
-              <h2>Comment AxeL Job t'aide ?</h2>
+              <h2 id="comment-axel-job-t-aide">Comment AxeL Job t'aide&nbsp;?</h2>
               <p>AxeL Job utilise l'IA pour adapter ton CV à chaque offre&nbsp;: reformulation du résumé, mise en avant des expériences pertinentes, intégration des mots-clés de l'annonce de façon naturelle. Objectif&nbsp;: optimiser ton passage dans les ATS tout en gardant un CV honnête et lisible par les recruteurs.</p>
             </div>
           </div>
         </section>
+        </main>
         <section class="content-cta" data-section="content-cta">
           <div class="content-cta-inner">
             <h2>Passe les filtres ATS à chaque candidature</h2>
@@ -120,22 +184,49 @@
           </div>
         </section>
         <footer class="content-footer">
-          <nav class="content-footer-nav">
-            <a href="/ats" data-attr="footer-link-ats" data-track="nav" data-zone="footer" data-level="tertiary">CV et ATS</a>
-            <a href="/faq" data-attr="footer-link-faq" data-track="nav" data-zone="footer" data-level="tertiary">FAQ</a>
-            <a href="/modeles-cv" data-attr="footer-link-modeles" data-track="nav" data-zone="footer" data-level="tertiary">Modèles de CV</a>
-            <a href="/guide-cv" data-attr="footer-link-guide" data-track="nav" data-zone="footer" data-level="tertiary">Guide CV</a>
-            <a href="/erreurs-cv" data-attr="footer-link-erreurs" data-track="nav" data-zone="footer" data-level="tertiary">Erreurs à éviter</a>
-            <a href="/cv-par-metier" data-attr="footer-link-metier" data-track="nav" data-zone="footer" data-level="tertiary">CV par métier</a>
-            <a href="/cv-adapte-chaque-offre" data-attr="footer-link-adapte" data-track="nav" data-zone="footer" data-level="tertiary">CV adapté à chaque offre</a>
-            <a href="/mentions-legales" data-attr="footer-link-mentions" data-track="nav" data-zone="footer" data-level="tertiary">Mentions légales</a>
-            <a href="/confidentialite" data-attr="footer-link-confidentialite" data-track="nav" data-zone="footer" data-level="tertiary">Confidentialité</a>
-            <a href="/cgu" data-attr="footer-link-cgu" data-track="nav" data-zone="footer" data-level="tertiary">CGU</a>
-          </nav>
+          <div class="content-footer-inner">
+            <div class="content-footer-brand">
+              <a href="/" class="content-brand" data-attr="footer-link-home" data-track="nav" data-zone="footer" data-level="tertiary"><img src="/favicon.svg" alt="" class="content-logo" width="36" height="36" /><span>AxeL Job</span></a>
+            </div>
+            <nav class="content-footer-col" aria-label="Guides">
+              <p class="content-footer-title">Guides</p>
+              <ul>
+                <li><a href="/ats" data-attr="footer-link-ats" data-track="nav" data-zone="footer" data-level="tertiary">CV et ATS</a></li>
+                <li><a href="/faq" data-attr="footer-link-faq" data-track="nav" data-zone="footer" data-level="tertiary">FAQ</a></li>
+                <li><a href="/modeles-cv" data-attr="footer-link-modeles" data-track="nav" data-zone="footer" data-level="tertiary">Modèles de CV</a></li>
+                <li><a href="/guide-cv" data-attr="footer-link-guide" data-track="nav" data-zone="footer" data-level="tertiary">Guide CV</a></li>
+              </ul>
+            </nav>
+            <nav class="content-footer-col" aria-label="Ressources">
+              <p class="content-footer-title">Ressources</p>
+              <ul>
+                <li><a href="/erreurs-cv" data-attr="footer-link-erreurs" data-track="nav" data-zone="footer" data-level="tertiary">Erreurs à éviter</a></li>
+                <li><a href="/cv-par-metier" data-attr="footer-link-metier" data-track="nav" data-zone="footer" data-level="tertiary">CV par métier</a></li>
+                <li><a href="/cv-adapte-chaque-offre" data-attr="footer-link-adapte" data-track="nav" data-zone="footer" data-level="tertiary">CV adapté à chaque offre</a></li>
+              </ul>
+            </nav>
+            <nav class="content-footer-col" aria-label="Aide">
+              <p class="content-footer-title">Aide</p>
+              <ul>
+                <li><a href="mailto:contact@axelproject.fr?subject=Support%20AxeL%20Job" data-attr="footer-link-support" data-track="nav" data-zone="footer" data-level="tertiary">Support</a></li>
+                <li><a href="/login" data-attr="footer-link-login" data-track="nav" data-zone="footer" data-level="tertiary">Se connecter</a></li>
+              </ul>
+            </nav>
+          </div>
+          <div class="content-footer-bar">
+            <p class="content-footer-copy">© <span data-year>2026</span> AxeL Job - Ton CV sur-mesure pour chaque annonce. Une réalisation <a href="https://axelproject.fr" rel="noopener noreferrer" data-attr="footer-link-axelproject" data-track="nav" data-zone="footer" data-level="tertiary">Axel Project</a>.</p>
+            <nav class="content-footer-legal" aria-label="Pages légales">
+              <a href="/mentions-legales" data-attr="footer-link-mentions" data-track="nav" data-zone="footer" data-level="tertiary">Mentions légales</a>
+              <a href="/confidentialite" data-attr="footer-link-confidentialite" data-track="nav" data-zone="footer" data-level="tertiary">Confidentialité</a>
+              <a href="/cgu" data-attr="footer-link-cgu" data-track="nav" data-zone="footer" data-level="tertiary">CGU</a>
+            </nav>
+          </div>
         </footer>
       </div>
     </div>
   </div>
   <script src="/content-scroll-top.js" defer></script>
+<script src="/public-header.js" defer></script>
+<script src="/footer-year.js" defer></script>
 </body>
 </html>
