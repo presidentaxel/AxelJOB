@@ -56,7 +56,7 @@
 
 .editor-canva-position-drawer__section-label {
   margin: 0 0 6px;
-  font-family: CohereMono, Arial, ui-sans-serif, system-ui, sans-serif;
+  font-family: var(--ds-font-family-mono);
   font-size: 0.65rem;
   font-weight: 400;
   letter-spacing: 0.06em;

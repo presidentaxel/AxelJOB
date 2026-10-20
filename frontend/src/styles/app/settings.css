@@ -283,8 +283,9 @@
 .settings-preview code {
   display: block;
   margin-top: 0.25rem;
-  font-family: var(--ds-font-family-mono);
-  font-size: 0.8125rem;
+  font-family: var(--ds-font-family-body);
+  font-size: var(--ds-font-size-label-md);
+  font-weight: var(--ds-font-weight-medium);
   color: var(--ds-color-text-default);
   word-break: break-all;
 }

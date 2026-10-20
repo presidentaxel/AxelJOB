@@ -20,6 +20,8 @@ Point d'entree de la documentation technique, securite et operations.
 | Recette GA4 (GTM, DebugView) | [docs/ga4-recette.md](ga4-recette.md) |
 | Intégration `wip/innovation` → `main` (AXE-27) | [docs/axe-27-integration-strategy.md](axe-27-integration-strategy.md) |
 | Spike import PDF/Word → CV scoré (AXE-41) | [docs/axe-41-import-pipeline-spike.md](axe-41-import-pipeline-spike.md) |
+| Design system (palette Axel, tokens `--ds-*`, polices, contraste) | [docs/design-system.md](design-system.md) |
+| Référence visuelle du site CRM (composants, mise en page, écarts assumés) | [docs/crm-design-reference.md](crm-design-reference.md) |
 | Verifier la Definition of Done engineering | `docs/engineering-standards.md` |
 | Appliquer la baseline securite | `docs/security.md` |
 | Secrets Cursor Cloud / `.env` local | [README.md](../README.md) (section Cursor Cloud Agents) + `scripts/materialize_dotenv.py` |

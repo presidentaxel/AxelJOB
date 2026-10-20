@@ -63,7 +63,7 @@ test('AXE-360 : FAQ, login, 404 et CTA contenu en miroir, sans doublon par fichi
   const faqHtml = await readRel('public/faq.html');
   const authJsx = await readRel('src/components/AuthForm.jsx');
   const appJsx = await readRel('src/App.jsx');
-  const errorJsx = await readRel('src/components/ErrorPages.jsx');
+  const errorJsx = await readRel('src/components/NotFoundPage.jsx');
   const errorHtml = await readRel('public/404.html');
   const articlesJsx = await readRel('src/components/ArticlesPages.jsx');
   const atsJsx = await readRel('src/components/AtsPage.jsx');
@@ -100,12 +100,12 @@ test('AXE-360 : FAQ, login, 404 et CTA contenu en miroir, sans doublon par fichi
 
   assert.ok(errorJsx.includes("'error-cta-home'"));
   assert.ok(errorJsx.includes("'error-cta-login'"));
-  assert.ok(errorJsx.includes("navigate('/login')"));
+  assert.ok(errorJsx.includes("navigate('/login', loginNavOptions())"));
   assert.equal(errorJsx.includes('navigate(-1)'), false);
   assert.ok(errorHtml.includes('data-attr="error-cta-home"'));
   assert.ok(errorHtml.includes('data-attr="error-cta-login"'));
 
-  assert.ok(atsJsx.includes("'ats-cta-signup'"));
+  assert.ok(atsJsx.includes("ats-cta-signup"));
   assert.ok(atsHtml.includes('data-attr="ats-cta-signup"'));
 
   for (const [htmlFile, , signupId] of ARTICLE_PAIRS) {

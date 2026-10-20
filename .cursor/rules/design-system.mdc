@@ -1,5 +1,5 @@
 ---
-description: Design system AxeL Job — tokens sémantiques Cohere, Button, Input
+description: Design system AxeL Job — tokens sémantiques palette Axel, Button, Input
 alwaysApply: true
 ---
 
@@ -7,9 +7,9 @@ alwaysApply: true
 
 Source de vérité : **`frontend/src/design/tokens.json`** (CSS `--ds-*`).  
 Contrat : **`docs/design-system.md`**.  
-`docs/DESIGN-cohere.md` = analyse visuelle, pas le contrat de build.
+`docs/DESIGN-cohere.md` = archive (ancienne inspiration), remplacée par la palette Axel.
 
-Un composant **ne référence jamais une primitive** (`#17171c`, `color.neutral.900`). Uniquement `--ds-color-action-*`, `--ds-color-text-*`, `--ds-color-bg-*`, etc.
+Un composant **ne référence jamais une primitive** (`#d63d0c`, `color.orange.600`). Uniquement `--ds-color-action-*`, `--ds-color-text-*`, `--ds-color-bg-*`, etc.
 
 ## Couches
 

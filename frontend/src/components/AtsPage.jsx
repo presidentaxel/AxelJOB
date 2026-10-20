@@ -1,10 +1,7 @@
-import { Link } from 'react-router-dom';
 import { ARTICLE_SOURCE_URLS as U } from '../content/articleSources.js';
-import { analyticsAttrs } from '../lib/analyticsAttrs.js';
-import { persistLoginCta } from '../../public/signupAttribution.js';
 import ContentScrollToTop from './ContentScrollToTop';
-import Button from './ui/Button.jsx';
-import './ContentPages.css';
+import { landingText } from '../content/landingCopy.js';
+import { ContentHeader, ContentHeroTitle, ContentToc, ContentCta, ContentFooter } from './ContentChrome.jsx';
 
 function Out({ href, children }) {
   return (
@@ -52,38 +49,37 @@ function IconSparkles() {
 function VisualAtsFlow() {
   return (
     <svg viewBox="0 0 280 160" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <rect x="20" y="20" width="70" height="44" rx="8" fill="var(--accent)" fillOpacity="0.15" stroke="var(--accent)" strokeWidth="2" />
-      <text x="55" y="47" textAnchor="middle" fill="var(--accent)" fontSize="11" fontWeight="600">CV envoyé</text>
-      <path d="M90 42 L120 42 L120 80 L150 80" stroke="var(--accent)" strokeWidth="2" strokeDasharray="4 3" fill="none" />
-      <rect x="130" y="58" width="80" height="44" rx="8" fill="var(--accent)" fillOpacity="0.2" stroke="var(--accent)" strokeWidth="2" />
-      <text x="170" y="85" textAnchor="middle" fill="var(--accent)" fontSize="11" fontWeight="600">ATS trie</text>
-      <path d="M210 80 L240 80 L240 118 L260 118" stroke="var(--accent)" strokeWidth="2" strokeDasharray="4 3" fill="none" />
-      <rect x="200" y="104" width="70" height="44" rx="8" fill="var(--success)" fillOpacity="0.2" stroke="var(--success)" strokeWidth="2" />
-      <text x="235" y="131" textAnchor="middle" fill="var(--success)" fontSize="10" fontWeight="600">Entretien</text>
+      <rect x="20" y="20" width="70" height="44" rx="8" fill="var(--ds-color-accent-brand)" fillOpacity="0.15" stroke="var(--ds-color-accent-brand)" strokeWidth="2" />
+      <text x="55" y="47" textAnchor="middle" fill="var(--ds-color-text-link)" fontSize="11" fontWeight="600">CV envoyé</text>
+      <path d="M90 42 L120 42 L120 80 L150 80" stroke="var(--ds-color-accent-brand)" strokeWidth="2" strokeDasharray="4 3" fill="none" />
+      <rect x="130" y="58" width="80" height="44" rx="8" fill="var(--ds-color-accent-brand)" fillOpacity="0.2" stroke="var(--ds-color-accent-brand)" strokeWidth="2" />
+      <text x="170" y="85" textAnchor="middle" fill="var(--ds-color-text-link)" fontSize="11" fontWeight="600">ATS trie</text>
+      <path d="M210 80 L240 80 L240 118 L260 118" stroke="var(--ds-color-accent-brand)" strokeWidth="2" strokeDasharray="4 3" fill="none" />
+      <rect x="200" y="104" width="70" height="44" rx="8" fill="var(--ds-color-feedback-success)" fillOpacity="0.2" stroke="var(--ds-color-feedback-success)" strokeWidth="2" />
+      <text x="235" y="131" textAnchor="middle" fill="var(--ds-color-feedback-success)" fontSize="10" fontWeight="600">Entretien</text>
     </svg>
   );
 }
 
-export default function AtsPage({ onBack }) {
+const TOC_ITEMS = [{ id: 'ats-definition', label: "L'ATS, c'est quoi\u00a0?" }, { id: 'ats-role', label: "Ce que l'ATS fait vraiment (et ce qu'il ne fait pas)" }, { id: 'ats-parsing', label: "Pourquoi certains CV passent mieux que d'autres" }, { id: 'ats-pour-toi', label: "Ce que ça change pour toi" }, { id: 'ats-axel', label: "Comment AxeL Job t'aide\u00a0?" }];
+
+export default function AtsPage() {
   return (
     <div className="content-page">
-      <header className="content-header">
-        <div className="content-header-inner">
-          <Link to="/" className="content-back" onClick={(e) => { e.preventDefault(); onBack?.(); }} {...analyticsAttrs('nav-link-back', 'header', 'tertiary', 'nav')}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m15 18-6-6 6-6" /></svg>
-            Retour à l&apos;accueil
-          </Link>
-        </div>
-      </header>
+      <ContentHeader />
+
+      <main>
 
       <section className="content-hero">
         <div className="content-hero-inner">
-          <h1>Qu&apos;est-ce qu&apos;un ATS ?</h1>
+          <ContentHeroTitle kicker={landingText.footerAts} title="Qu'est-ce qu'un ATS ?" highlight="ATS" />
           <p className="content-lead">
-            Tu envoies ta candidature. Quelques minutes plus tard, tu reçois un refus automatique. Pas de retour, pas d&apos;explication. La faute à l&apos;ATS ? Pas forcément. Voici ce que les données disent vraiment.
+            Tu envoies ta candidature. Quelques minutes plus tard, tu reçois un refus automatique. Pas de retour, pas d&apos;explication. La faute à l&apos;ATS&nbsp;? Pas forcément. Voici ce que les données disent vraiment.
           </p>
         </div>
       </section>
+
+      <ContentToc items={TOC_ITEMS} />
 
       <section className="content-section">
         <div className="content-section-inner content-prose">
@@ -91,7 +87,7 @@ export default function AtsPage({ onBack }) {
             <IconFunnel />
           </div>
           <div className="content-section-body">
-            <h2>L&apos;ATS, c&apos;est quoi ?</h2>
+            <h2 id="ats-definition">L&apos;ATS, c&apos;est quoi&nbsp;?</h2>
             <p>
               Un ATS (Applicant Tracking System, ou logiciel de gestion des candidatures) est un outil utilisé par les entreprises pour traiter les candidatures à grande échelle. Il centralise les CV reçus, les organise, permet de les filtrer par mots-clés ou critères, et gère les communications avec les candidats.
             </p>
@@ -113,7 +109,7 @@ export default function AtsPage({ onBack }) {
             <IconAlert />
           </div>
           <div className="content-section-body">
-            <h2>Ce que l&apos;ATS fait vraiment (et ce qu&apos;il ne fait pas)</h2>
+            <h2 id="ats-role">Ce que l&apos;ATS fait vraiment (et ce qu&apos;il ne fait pas)</h2>
             <p>
               La croyance populaire veut que les ATS rejettent automatiquement 75&nbsp;% des CV avant qu&apos;un humain ne les lise. C&apos;est faux. Selon{' '}
               <Out href={U.ENHANCV_ATS}>Enhancv</Out>
@@ -139,7 +135,7 @@ export default function AtsPage({ onBack }) {
             <IconChecklist />
           </div>
           <div className="content-section-body">
-            <h2>Pourquoi certains CV passent mieux que d&apos;autres</h2>
+            <h2 id="ats-parsing">Pourquoi certains CV passent mieux que d&apos;autres</h2>
             <p>Il y a deux vrais risques&nbsp;:</p>
             <ol>
               <li>
@@ -161,7 +157,7 @@ export default function AtsPage({ onBack }) {
             <IconSparkles />
           </div>
           <div className="content-section-body">
-            <h2>Ce que ça change pour toi</h2>
+            <h2 id="ats-pour-toi">Ce que ça change pour toi</h2>
             <p className="content-callout">
               L&apos;objectif n&apos;est pas de «&nbsp;tromper&nbsp;» l&apos;ATS. C&apos;est de lui rendre la tâche facile. Format simple, mots-clés alignés avec l&apos;offre, sections bien nommées («&nbsp;Expérience&nbsp;», «&nbsp;Formation&nbsp;», «&nbsp;Compétences&nbsp;»)&nbsp;: c&apos;est tout ce qu&apos;il faut.
             </p>
@@ -175,7 +171,7 @@ export default function AtsPage({ onBack }) {
             <IconSparkles />
           </div>
           <div className="content-section-body">
-            <h2>Comment AxeL Job t&apos;aide ?</h2>
+            <h2 id="ats-axel">Comment AxeL Job t&apos;aide&nbsp;?</h2>
             <p>
               AxeL Job utilise l&apos;IA pour adapter ton CV à chaque offre&nbsp;: reformulation du résumé, mise en avant des expériences pertinentes, intégration des mots-clés de l&apos;annonce de façon naturelle. Objectif&nbsp;: optimiser ton passage dans les ATS tout en gardant un CV honnête et lisible par les recruteurs.
             </p>
@@ -183,29 +179,11 @@ export default function AtsPage({ onBack }) {
         </div>
       </section>
 
-      <section className="content-cta" data-section="content-cta">
-        <div className="content-cta-inner">
-          <h2>Passe les filtres ATS à chaque candidature</h2>
-          <p>Adapte ton CV en un clic à chaque offre. Essai gratuit, sans carte bancaire.</p>
-          <Button as={Link} to="/login" variant="primary" onClick={() => persistLoginCta('ats-cta-signup')} {...analyticsAttrs('ats-cta-signup', 'content', 'primary', 'cta')}>
-            Essayer AxeL Job gratuitement
-          </Button>
-        </div>
-      </section>
+      </main>
 
-      <footer className="content-footer">
-        <nav className="content-footer-nav">
-          <Link to="/faq" {...analyticsAttrs('footer-link-faq', 'footer', 'tertiary', 'nav')}>FAQ</Link>
-          <Link to="/modeles-cv" {...analyticsAttrs('footer-link-modeles', 'footer', 'tertiary', 'nav')}>Modèles de CV</Link>
-          <Link to="/guide-cv" {...analyticsAttrs('footer-link-guide', 'footer', 'tertiary', 'nav')}>Guide CV</Link>
-          <Link to="/erreurs-cv" {...analyticsAttrs('footer-link-erreurs', 'footer', 'tertiary', 'nav')}>Erreurs à éviter</Link>
-          <Link to="/cv-par-metier" {...analyticsAttrs('footer-link-metier', 'footer', 'tertiary', 'nav')}>CV par métier</Link>
-          <Link to="/cv-adapte-chaque-offre" {...analyticsAttrs('footer-link-adapte', 'footer', 'tertiary', 'nav')}>CV adapté à chaque offre</Link>
-          <Link to="/mentions-legales" {...analyticsAttrs('footer-link-mentions', 'footer', 'tertiary', 'nav')}>Mentions légales</Link>
-          <Link to="/confidentialite" {...analyticsAttrs('footer-link-confidentialite', 'footer', 'tertiary', 'nav')}>Confidentialité</Link>
-          <Link to="/cgu" {...analyticsAttrs('footer-link-cgu', 'footer', 'tertiary', 'nav')}>CGU</Link>
-        </nav>
-      </footer>
+      <ContentCta signupId="ats-cta-signup" title="Passe les filtres ATS à chaque candidature" text="Adapte ton CV en un clic à chaque offre. Essai gratuit, sans carte bancaire." label="Essayer AxeL Job gratuitement" />
+
+      <ContentFooter />
       <ContentScrollToTop />
     </div>
   );
