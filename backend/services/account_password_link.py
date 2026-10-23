@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-import html
 import logging
 import time
+
+from backend.services.email_layout import EmailButton, paragraph, render_email
 
 logger = logging.getLogger(__name__)
 
@@ -88,6 +89,18 @@ def providers_for_email(email: str) -> tuple[set[str], bool] | None:
     return {str(item) for item in providers}, bool(row[1])
 
 
+def password_setup_email_html(link: str) -> str:
+    return render_email(
+        title="Choisis ton mot de passe",
+        highlight="mot de passe",
+        preheader="Un compte existe déjà avec cet e-mail.",
+        body=[paragraph(ACCOUNT_EXISTS_SENTENCE)],
+        button=EmailButton("Choisir un mot de passe", link),
+        footer_note="Tu n’es pas à l’origine de cette demande ? Ignore simplement cet e-mail.",
+        show_link_fallback=True,
+    )
+
+
 def _send_with_resend(email: str, link: str) -> bool:
     from backend.config import RESEND_API_KEY, RESEND_FROM_EMAIL
 
@@ -97,16 +110,12 @@ def _send_with_resend(email: str, link: str) -> bool:
         import resend
 
         resend.api_key = RESEND_API_KEY
-        safe_link = html.escape(link, quote=True)
         resend.Emails.send(
             {
                 "from": RESEND_FROM_EMAIL,
                 "to": [email],
                 "subject": "Un compte existe déjà — choisis ton mot de passe",
-                "html": (
-                    f"<p>{ACCOUNT_EXISTS_SENTENCE}</p>"
-                    f'<p><a href="{safe_link}">Choisir un mot de passe</a></p>'
-                ),
+                "html": password_setup_email_html(link),
             }
         )
         return True
