@@ -6,7 +6,6 @@ Données : Supabase (cv_base, applications) ou fallback fichiers.
 
 import asyncio
 import hashlib
-import html as html_module
 import json
 import logging
 import re
@@ -65,7 +64,11 @@ from backend.config import (
 from backend.cv_html_render import render_cv_html as _render_cv_html
 from backend.rate_limit import check_rate_limit, rate_limit_max_adapt
 from backend.services.public_error import public_http_detail
-from backend.services.support_ticket import support_ticket_failure_detail
+from backend.services.support_ticket import (
+    support_reply_email_html,
+    support_ticket_email_html,
+    support_ticket_failure_detail,
+)
 from backend.template_registry import DEFAULT_TEMPLATE_ID
 
 _thread_pool = ThreadPoolExecutor(max_workers=thread_pool_max_workers())
@@ -2238,6 +2241,7 @@ def _send_subscription_cancelled_email(to_email: str, period_end_label: str) -> 
         period_end_label=period_end_label,
         resend_api_key=RESEND_API_KEY,
         resend_from_email=RESEND_FROM_EMAIL,
+        frontend_url=FRONTEND_URL,
     )
 
 
@@ -2525,68 +2529,7 @@ def _send_support_ticket_email(
         import resend
 
         resend.api_key = RESEND_API_KEY
-        # Message avec retours à la ligne en <br> pour l'affichage HTML
-        message_html = html_module.escape(message).replace("\n", "<br>")
-        html = f"""
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Nouveau ticket support</title>
-</head>
-<body style="margin:0; padding:0; background-color:#f1f5f9; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 15px; line-height: 1.5; color: #334155;">
-  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color:#f1f5f9; padding: 24px 16px;">
-    <tr>
-      <td align="center">
-        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width: 560px; background-color:#ffffff; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); overflow: hidden;">
-          <tr>
-            <td style="background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%); padding: 24px 28px; text-align: center;">
-              <span style="font-size: 13px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: rgba(255,255,255,0.9);">AxeL Job · Support</span>
-              <h1 style="margin: 8px 0 0 0; font-size: 20px; font-weight: 700; color: #ffffff;">Nouveau ticket</h1>
-            </td>
-          </tr>
-          <tr>
-            <td style="padding: 28px;">
-              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-bottom: 20px;">
-                <tr>
-                  <td style="padding: 12px 16px; background-color: #f8fafc; border-radius: 8px; border-left: 4px solid #6366f1;">
-                    <span style="font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: #64748b;">De</span>
-                    <div style="font-size: 15px; font-weight: 500; color: #1e293b; margin-top: 2px;">{html_module.escape(user_email)}</div>
-                  </td>
-                </tr>
-              </table>
-              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-bottom: 20px;">
-                <tr>
-                  <td style="padding: 12px 16px; background-color: #f8fafc; border-radius: 8px; border-left: 4px solid #6366f1;">
-                    <span style="font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: #64748b;">Sujet</span>
-                    <div style="font-size: 15px; font-weight: 500; color: #1e293b; margin-top: 2px;">{html_module.escape(subject)}</div>
-                  </td>
-                </tr>
-              </table>
-              <div style="font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: #64748b; margin-bottom: 8px;">Message</div>
-              <div style="padding: 16px; background-color: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0; color: #334155; font-size: 14px; line-height: 1.6;">{message_html}</div>
-              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top: 24px;">
-                <tr>
-                  <td style="padding: 16px; background-color: #eef2ff; border-radius: 8px; text-align: center;">
-                    <span style="font-size: 13px; color: #4f46e5;">Réponds à cet email pour envoyer ta réponse à l'utilisateur.</span>
-                  </td>
-                </tr>
-              </table>
-            </td>
-          </tr>
-          <tr>
-            <td style="padding: 16px 28px; background-color: #f8fafc; border-top: 1px solid #e2e8f0; text-align: center;">
-              <span style="font-size: 12px; color: #94a3b8;">AxeL Job - Ton CV sur-mesure pour chaque annonce</span>
-            </td>
-          </tr>
-        </table>
-      </td>
-    </tr>
-  </table>
-</body>
-</html>
-"""
+        html = support_ticket_email_html(user_email, subject, message, FRONTEND_URL)
         params = {
             "from": RESEND_FROM_EMAIL,
             "to": [to_support.strip()],
@@ -2769,44 +2712,7 @@ def _send_support_reply_email(to_email: str, message: str) -> bool:
         import resend
 
         resend.api_key = RESEND_API_KEY
-        message_html = html_module.escape(message).replace("\n", "<br>")
-        html = f"""
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Réponse support AxeL Job</title>
-</head>
-<body style="margin:0; padding:0; background-color:#f1f5f9; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 15px; line-height: 1.5; color: #334155;">
-  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color:#f1f5f9; padding: 24px 16px;">
-    <tr>
-      <td align="center">
-        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width: 560px; background-color:#ffffff; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); overflow: hidden;">
-          <tr>
-            <td style="background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%); padding: 24px 28px; text-align: center;">
-              <span style="font-size: 13px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: rgba(255,255,255,0.9);">AxeL Job · Support</span>
-              <h1 style="margin: 8px 0 0 0; font-size: 20px; font-weight: 700; color: #ffffff;">Réponse à ton ticket</h1>
-            </td>
-          </tr>
-          <tr>
-            <td style="padding: 28px;">
-              <div style="padding: 20px; background-color: #f8fafc; border-radius: 8px; border-left: 4px solid #6366f1; color: #334155; font-size: 15px; line-height: 1.6;">{message_html}</div>
-              <p style="margin: 24px 0 0 0; font-size: 13px; color: #64748b;">Si tu as d'autres questions, rouvre un ticket depuis l'app (Support).</p>
-            </td>
-          </tr>
-          <tr>
-            <td style="padding: 16px 28px; background-color: #f8fafc; border-top: 1px solid #e2e8f0; text-align: center;">
-              <span style="font-size: 12px; color: #94a3b8;">AxeL Job - Ton CV sur-mesure pour chaque annonce</span>
-            </td>
-          </tr>
-        </table>
-      </td>
-    </tr>
-  </table>
-</body>
-</html>
-"""
+        html = support_reply_email_html(message, FRONTEND_URL)
         params = {
             "from": RESEND_FROM_EMAIL,
             "to": [to_email.strip()],
