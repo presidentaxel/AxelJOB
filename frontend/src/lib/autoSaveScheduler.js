@@ -226,6 +226,20 @@ export function createAutoSaveScheduler({
     transition({ kind: 'disposed' });
   }
 
+  /** Annule un enregistrement pas encore parti, sans appeler saveFn. */
+  function dropPending() {
+    if (disposed) return;
+    clearTimer();
+    state = {
+      ...state,
+      kind: state.kind === 'saving' || state.kind === 'retrying' ? state.kind : 'idle',
+      hasPending: false,
+      pendingPayload: undefined,
+      error: null,
+    };
+    emit();
+  }
+
   // Etat initial emis immediatement pour que l UI puisse s aligner.
   emit();
 
@@ -234,6 +248,7 @@ export function createAutoSaveScheduler({
     flush,
     hasPendingChanges,
     dispose,
+    dropPending,
     getState: snapshot,
   };
 }

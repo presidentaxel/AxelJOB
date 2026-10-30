@@ -56,6 +56,7 @@ import {
   saveCanvasDraft,
   setActiveCanvasContext,
   setCanvasDraftPrefs,
+  setCanvasDraftUserId,
   templateCanvasContextKey,
 } from '../../lib/canvasLayoutDrafts.js';
 import { resolveTemplateContextLayout } from '../../lib/canvasTemplateRestore.js';
@@ -184,7 +185,7 @@ import '../../styles/EditorCvImportModal.css';
  */
 
 function CvEditorBeta({
-  session: _session,
+  session,
   refreshKey = 0,
   templateId,
   templateOptions,
@@ -365,6 +366,16 @@ function CvEditorBeta({
     autoSaveRef.current = autoSave;
   }, [autoSave]);
 
+  const accountId = session?.user?.id || '';
+  const prevAccountIdRef = useRef(accountId);
+  useLayoutEffect(() => {
+    if (prevAccountIdRef.current !== accountId) {
+      autoSaveRef.current?.discard?.();
+      prevAccountIdRef.current = accountId;
+    }
+    setCanvasDraftUserId(accountId);
+  }, [accountId]);
+
   const refreshCanvasDrafts = useCallback(() => {
     setCanvasDrafts(listCanvasDrafts(templatesList));
   }, [templatesList]);
@@ -434,6 +445,8 @@ function CvEditorBeta({
 
   useEffect(() => {
     let aborted = false;
+    setCanvasDraftUserId(accountId);
+    setCv(null);
     setLoading(true);
     setProfileLoadError(null);
     designBridgeSeededRef.current = false;
@@ -486,7 +499,7 @@ function CvEditorBeta({
         setLoading(false);
       });
     return () => { aborted = true; };
-  }, [resetLayout, refreshKey, profileLoadAttempt]);
+  }, [resetLayout, refreshKey, profileLoadAttempt, accountId]);
 
   // Libellés des brouillons locaux quand la liste templates arrive (async) -
   // sans re-fetch ni reset du layout en cours (fix B).

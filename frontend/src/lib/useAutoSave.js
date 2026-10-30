@@ -154,6 +154,11 @@ export function useAutoSave({
     state,
     schedule: (payload) => schedulerRef.current && schedulerRef.current.schedule(payload),
     flush: () => (schedulerRef.current ? schedulerRef.current.flush() : Promise.resolve()),
+    discard: () => {
+      if (schedulerRef.current && typeof schedulerRef.current.dropPending === 'function') {
+        schedulerRef.current.dropPending();
+      }
+    },
     hasPendingChanges: () => Boolean(schedulerRef.current && schedulerRef.current.hasPendingChanges()),
   };
 }

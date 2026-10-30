@@ -13,6 +13,7 @@ import {
   saveCanvasDraft,
   setActiveCanvasContext,
   setCanvasDraftPrefs,
+  setCanvasDraftUserId,
   templateCanvasContextKey,
 } from '../../src/lib/canvasLayoutDrafts.js';
 
@@ -28,6 +29,7 @@ function installLocalStorage() {
 
 beforeEach(() => {
   installLocalStorage();
+  setCanvasDraftUserId('');
 });
 
 test('templateCanvasContextKey construit une cle stable', () => {
@@ -74,6 +76,17 @@ test('canvasContextLabel utilise les noms de templates', () => {
     canvasContextLabel('template:modern', [{ id: 'modern', name: 'Moderne' }]),
     'Moderne',
   );
+});
+
+test('AXE-498 : le brouillon local ne traverse pas les comptes', () => {
+  const layout = { version: 3, pages: [{ id: 'p1', blocks: [{ id: 'b1' }] }] };
+  setCanvasDraftUserId('user-a');
+  saveCanvasDraft('blank', layout, { label: 'Compte A' });
+  setCanvasDraftUserId('user-b');
+  assert.equal(loadCanvasDraft('blank'), null);
+  assert.deepEqual(listCanvasDrafts(), []);
+  setCanvasDraftUserId('user-a');
+  assert.equal(loadCanvasDraft('blank').label, 'Compte A');
 });
 
 test('clearCanvasDraft supprime un brouillon local (reset Page blanche)', () => {
