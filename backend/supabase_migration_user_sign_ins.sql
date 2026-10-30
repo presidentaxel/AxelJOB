@@ -19,3 +19,17 @@ create policy "Service role full access user_sign_ins"
   to service_role
   using (true)
   with check (true);
+
+-- La suppression du compte Auth emporte l'historique. L'API le fait aussi explicitement.
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'user_sign_ins_user_id_fkey'
+  ) then
+    alter table public.user_sign_ins
+      add constraint user_sign_ins_user_id_fkey
+      foreign key (user_id) references auth.users (id) on delete cascade;
+  end if;
+end $$;

@@ -2970,15 +2970,27 @@ def api_admin_monitoring_news(request: Request):
     return {"items": safe}
 
 
-def _account_activity_http(exc) -> HTTPException:
+_SIGN_IN_MIGRATION_MESSAGE = (
+    "Migration user_sign_ins requise (backend/supabase_migration_user_sign_ins.sql)."
+)
+
+
+def _account_activity_http(_exc: Exception) -> HTTPException:
+    return HTTPException(status_code=503, detail="Suivi des connexions indisponible.")
+
+
+def _account_activity_result(exc) -> dict:
+    """Table absente : 200, pour ne pas déclencher la coupure globale des appels API."""
+    from backend.services.account_activity import SIGN_IN_RETENTION_MONTHS
     from backend.services.account_activity_store import AccountActivityUnavailable
 
     if isinstance(exc, AccountActivityUnavailable) and exc.code == "migration_required":
-        return HTTPException(
-            status_code=503,
-            detail="Migration user_sign_ins requise (backend/supabase_migration_user_sign_ins.sql).",
-        )
-    return HTTPException(status_code=503, detail="Suivi des connexions indisponible.")
+        return {
+            "available": False,
+            "retention_months": SIGN_IN_RETENTION_MONTHS,
+            "message": _SIGN_IN_MIGRATION_MESSAGE,
+        }
+    raise _account_activity_http(exc) from exc
 
 
 @app.post("/api/account/sign-in")
@@ -3011,7 +3023,11 @@ def api_admin_monitoring_accounts(request: Request, paying_only: bool = True):
     try:
         return list_account_activity(paying_only=paying_only)
     except AccountActivityUnavailable as exc:
-        raise _account_activity_http(exc) from exc
+        return {
+            **_account_activity_result(exc),
+            "paying_only": paying_only,
+            "accounts": [],
+        }
 
 
 @app.get("/api/admin/monitoring/accounts/{user_id}/sign-ins")
@@ -3028,7 +3044,11 @@ def api_admin_monitoring_account_sign_ins(request: Request, user_id: str):
     except ValueError as exc:
         raise HTTPException(status_code=400, detail="Identifiant de compte invalide.") from exc
     except AccountActivityUnavailable as exc:
-        raise _account_activity_http(exc) from exc
+        return {
+            **_account_activity_result(exc),
+            "user_id": user_id,
+            "sign_ins": [],
+        }
 
 
 ADAPT_TODO_DEFAULT_STEPS = [
