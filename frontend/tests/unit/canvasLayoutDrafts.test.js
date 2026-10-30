@@ -13,8 +13,10 @@ import {
   saveCanvasDraft,
   setActiveCanvasContext,
   setCanvasDraftPrefs,
+  setCanvasDraftUserId,
   templateCanvasContextKey,
 } from '../../src/lib/canvasLayoutDrafts.js';
+import { clearCanvasLayoutDrafts, getLocalDataSummary } from '../../src/lib/settingsLocalData.js';
 
 function installLocalStorage() {
   const store = new Map();
@@ -28,6 +30,7 @@ function installLocalStorage() {
 
 beforeEach(() => {
   installLocalStorage();
+  setCanvasDraftUserId('');
 });
 
 test('templateCanvasContextKey construit une cle stable', () => {
@@ -74,6 +77,31 @@ test('canvasContextLabel utilise les noms de templates', () => {
     canvasContextLabel('template:modern', [{ id: 'modern', name: 'Moderne' }]),
     'Moderne',
   );
+});
+
+test('AXE-498 : le brouillon local ne traverse pas les comptes', () => {
+  const layout = { version: 3, pages: [{ id: 'p1', blocks: [{ id: 'b1' }] }] };
+  setCanvasDraftUserId('user-a');
+  saveCanvasDraft('blank', layout, { label: 'Compte A' });
+  setCanvasDraftUserId('user-b');
+  assert.equal(loadCanvasDraft('blank'), null);
+  assert.deepEqual(listCanvasDrafts(), []);
+  setCanvasDraftUserId('user-a');
+  assert.equal(loadCanvasDraft('blank').label, 'Compte A');
+});
+
+test('AXE-498 : les réglages visent le compte passé, pas le compte du module', () => {
+  const layout = { version: 3, pages: [{ id: 'p1', blocks: [] }] };
+  setCanvasDraftUserId('user-a');
+  saveCanvasDraft('blank', layout, { label: 'Compte A' });
+  setCanvasDraftUserId('user-b');
+  saveCanvasDraft('blank', layout, { label: 'Compte B' });
+  setCanvasDraftUserId('');
+  assert.equal(getLocalDataSummary('user-a').draftCount, 1);
+  assert.equal(clearCanvasLayoutDrafts('user-a'), true);
+  assert.equal(getLocalDataSummary('user-a').draftCount, 0);
+  setCanvasDraftUserId('user-b');
+  assert.equal(loadCanvasDraft('blank').label, 'Compte B');
 });
 
 test('clearCanvasDraft supprime un brouillon local (reset Page blanche)', () => {

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { apiGet, apiPost, apiPostFile, apiPut, trackEvent } from '../api';
+import { apiGet, apiPostFile, apiPut, trackEvent } from '../api';
+import { CV_IMPORT_REQUEST_TIMEOUT_MS } from '../lib/fetchWithDeadline.js';
 import { analyticsAttrs } from '../lib/analyticsAttrs.js';
 import {
   finishImportLoadingAnimation,
@@ -50,7 +51,6 @@ export default function OnboardingWizard({
   const [persistBody, setPersistBody] = useState(null);
   const [layoutCopied, setLayoutCopied] = useState(false);
   const [layoutHint, setLayoutHint] = useState('');
-  const [cvText, setCvText] = useState('');
   const [importStepIndex, setImportStepIndex] = useState(0);
   const [importProgress, setImportProgress] = useState(0);
   const fileRef = useRef(null);
@@ -113,20 +113,13 @@ export default function OnboardingWizard({
     setMethod('upload');
     trackEvent('onboarding_method_chosen', { method: 'file_upload' });
     try {
-      await runCvAnalysis(() => apiPostFile('/api/cv/import', file), 'upload');
+      await runCvAnalysis(
+        () => apiPostFile('/api/cv/import', file, 'file', { timeoutMs: CV_IMPORT_REQUEST_TIMEOUT_MS }),
+        'upload',
+      );
     } finally {
       if (fileRef.current) fileRef.current.value = '';
     }
-  };
-
-  const handleTextImport = async () => {
-    if (!cvText.trim()) return;
-    setMethod('text');
-    trackEvent('onboarding_method_chosen', { method: 'text_paste' });
-    await runCvAnalysis(
-      () => apiPost('/api/cv/import-text', { text: cvText.trim() }),
-      'text',
-    );
   };
 
   const handleManual = () => {
@@ -179,7 +172,7 @@ export default function OnboardingWizard({
     onComplete('profil');
   };
 
-  const analyzing = loading && step === 0 && (method === 'upload' || method === 'text');
+  const analyzing = loading && step === 0 && method === 'upload';
 
   return (
     <div className="onb-overlay" aria-busy={analyzing || undefined}>
@@ -214,32 +207,6 @@ export default function OnboardingWizard({
                 <span className="onb-method-title">Saisie manuelle</span>
                 <span className="onb-method-desc">Remplis ton profil étape par étape</span>
               </button>
-            </div>
-
-            <div className="onb-text-import">
-              <details>
-                <summary>Ou colle le texte de ton CV ici</summary>
-                <textarea
-                  className="onb-textarea"
-                  value={cvText}
-                  onChange={(e) => setCvText(e.target.value)}
-                  placeholder="Copie-colle le contenu de ton CV ici..."
-                  rows={6}
-                  disabled={loading}
-                  {...analyticsAttrs('onboarding-paste-input-text', 'paste', 'tertiary', 'input')}
-                />
-                <Button
-                  type="button"
-                  variant="primary"
-                  className="onb-btn-parse"
-                  onClick={handleTextImport}
-                  disabled={loading || !cvText.trim()}
-                  loading={loading && method === 'text'}
-                  {...analyticsAttrs('onboarding-paste-cta-parse', 'paste', 'secondary', 'cta')}
-                >
-                  {loading && method === 'text' ? 'Analyse en cours…' : 'Analyser mon CV'}
-                </Button>
-              </details>
             </div>
 
             <input

@@ -105,7 +105,8 @@ export default function SettingsView({
     }
   }, []);
 
-  const [localSummary, setLocalSummary] = useState(() => getLocalDataSummary());
+  const draftUserId = session?.user?.id || '';
+  const [localSummary, setLocalSummary] = useState(() => getLocalDataSummary(draftUserId));
 
   const [setPasswordOpen, setSetPasswordOpen] = useState(false);
   const [setPasswordNew, setSetPasswordNew] = useState('');
@@ -133,8 +134,12 @@ export default function SettingsView({
   );
 
   const refreshLocalSummary = useCallback(() => {
-    setLocalSummary(getLocalDataSummary());
-  }, []);
+    setLocalSummary(getLocalDataSummary(draftUserId));
+  }, [draftUserId]);
+
+  useEffect(() => {
+    setLocalSummary(getLocalDataSummary(draftUserId));
+  }, [draftUserId]);
 
   useEffect(() => {
     if (!navItems.length) return undefined;
@@ -513,7 +518,7 @@ export default function SettingsView({
                       await apiPost('/api/account/delete', {
                         cancel_subscription: Boolean(proSubscriptionActive && cancelSubAck),
                       });
-                      clearCanvasLayoutDrafts();
+                      clearCanvasLayoutDrafts(session?.user?.id);
                       clearLayoutProposals();
                       clearUserCanvasImageLibrary();
                       if (supabase) await supabase.auth.signOut();
@@ -645,7 +650,7 @@ export default function SettingsView({
               label="Brouillons canvas"
               detail={localSummary.draftCount ? `${localSummary.draftCount} brouillon(s)` : 'Vide'}
               disabled={!localSummary.draftCount}
-              onClear={() => runLocalClear('les brouillons canvas', clearCanvasLayoutDrafts)}
+              onClear={() => runLocalClear('les brouillons canvas', () => clearCanvasLayoutDrafts(draftUserId))}
             />
             <SettingsListRow
               label="Modèles canvas enregistrés"

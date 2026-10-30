@@ -22,8 +22,6 @@ const FROZEN_IDS = [
   'app-nav-input-promo',
   'onboarding-methods-cta-import',
   'onboarding-methods-cta-manual',
-  'onboarding-paste-input-text',
-  'onboarding-paste-cta-parse',
   'onboarding-review-cta-confirm',
   'onboarding-done-cta-launch',
   'onboarding-done-cta-profil',
@@ -83,8 +81,8 @@ function idsFromSource(text) {
   return [...fromHelper, ...fromAttr];
 }
 
-test('AXE-396 : 49 data-attr C.10–C.16 posés une fois via analyticsAttrs', async () => {
-  assert.equal(FROZEN_IDS.length, 49);
+test('AXE-396 : data-attr C.10–C.16 posés une fois via analyticsAttrs', async () => {
+  assert.equal(FROZEN_IDS.length, 47);
 
   const texts = {};
   for (const rel of SOURCE_FILES) {

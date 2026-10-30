@@ -5,6 +5,7 @@ import { HiChartBarSquare } from 'react-icons/hi2';
 import { analyticsAttrs } from '../lib/analyticsAttrs.js';
 import Button from './ui/Button.jsx';
 import InactivityReminders from './InactivityReminders.jsx';
+import MonitoringAccounts from './MonitoringAccounts.jsx';
 
 const DAY_OPTIONS = [7, 14, 30];
 
@@ -155,6 +156,7 @@ export default function MonitoringDashboard({ usage }) {
 
         {error && <p className="monitoring-error">{error}</p>}
 
+        <MonitoringAccounts />
         <InactivityReminders />
 
         {!loading && !error && summary && (

@@ -18,6 +18,7 @@ OWNED_ROW_DELETES: tuple[tuple[str, str, str], ...] = (
     ("user_plans", "user_id", "DELETE FROM public.user_plans WHERE user_id = %s"),
     ("gemini_usage", "user_id", "DELETE FROM public.gemini_usage WHERE user_id = %s"),
     ("cv_templates", "owner_user_id", "DELETE FROM public.cv_templates WHERE owner_user_id = %s"),
+    ("user_sign_ins", "user_id", "DELETE FROM public.user_sign_ins WHERE user_id = %s::uuid"),
 )
 
 

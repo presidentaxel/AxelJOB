@@ -1144,11 +1144,14 @@ def api_cv(request: Request, profile: bool = False):
     Si profile=1 (requête depuis l'onglet Profil) et qu'aucun CV n'est enregistré, on renvoie {} pour
     afficher un formulaire vide (données Supabase = rien), pas le CV d'exemple."""
     user_id = _get_user_id(request)
-    if USE_SUPABASE and user_id is None and _bearer_token_nonempty(request):
+    if USE_SUPABASE and user_id is None and (_bearer_token_nonempty(request) or profile):
         raise HTTPException(
             status_code=401,
             detail="Session invalide ou expirée (JWT). Reconnecte-toi ou vérifie l’heure de ton PC.",
         )
+    # Le formulaire profil ne doit jamais retomber sur la ligne partagée "default".
+    if profile and not user_id:
+        return {}
     try:
         cv = load_cv_base(user_id)
         if profile and cv.get("__example__"):
@@ -2968,6 +2971,87 @@ def api_admin_monitoring_news(request: Request):
             }
         )
     return {"items": safe}
+
+
+_SIGN_IN_MIGRATION_MESSAGE = (
+    "Migration user_sign_ins requise (backend/supabase_migration_user_sign_ins.sql)."
+)
+
+
+def _account_activity_http(_exc: Exception) -> HTTPException:
+    return HTTPException(status_code=503, detail="Suivi des connexions indisponible.")
+
+
+def _account_activity_result(exc) -> dict:
+    """Table absente : 200, pour ne pas déclencher la coupure globale des appels API."""
+    from backend.services.account_activity import SIGN_IN_RETENTION_MONTHS
+    from backend.services.account_activity_store import AccountActivityUnavailable
+
+    if isinstance(exc, AccountActivityUnavailable) and exc.code == "migration_required":
+        return {
+            "available": False,
+            "retention_months": SIGN_IN_RETENTION_MONTHS,
+            "message": _SIGN_IN_MIGRATION_MESSAGE,
+        }
+    raise _account_activity_http(exc) from exc
+
+
+@app.post("/api/account/sign-in")
+def api_account_sign_in(request: Request):
+    """Enregistre une connexion réussie. Pas d'e-mail dans la réponse ni dans les logs."""
+    user_id = _require_user_id(request)
+    if not user_id or user_id == "default":
+        return {"ok": False, "recorded": False}
+    from backend.services.account_activity_store import (
+        AccountActivityUnavailable,
+        record_user_sign_in,
+    )
+
+    try:
+        recorded = record_user_sign_in(user_id)
+    except (AccountActivityUnavailable, ValueError):
+        return {"ok": False, "recorded": False}
+    return {"ok": True, "recorded": recorded}
+
+
+@app.get("/api/admin/monitoring/accounts")
+def api_admin_monitoring_accounts(request: Request, paying_only: bool = True):
+    """Comptes avec dernière connexion et dernière action produit. Filtre payant par défaut."""
+    _require_support_admin(request)
+    from backend.services.account_activity_store import (
+        AccountActivityUnavailable,
+        list_account_activity,
+    )
+
+    try:
+        return list_account_activity(paying_only=paying_only)
+    except AccountActivityUnavailable as exc:
+        return {
+            **_account_activity_result(exc),
+            "paying_only": paying_only,
+            "accounts": [],
+        }
+
+
+@app.get("/api/admin/monitoring/accounts/{user_id}/sign-ins")
+def api_admin_monitoring_account_sign_ins(request: Request, user_id: str):
+    """Historique des connexions d'un compte (12 mois). Pas d'e-mail."""
+    _require_support_admin(request)
+    from backend.services.account_activity_store import (
+        AccountActivityUnavailable,
+        list_sign_ins,
+    )
+
+    try:
+        return list_sign_ins(user_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Identifiant de compte invalide.") from exc
+    except AccountActivityUnavailable as exc:
+        return {
+            **_account_activity_result(exc),
+            "user_id": user_id,
+            "sign_ins": [],
+        }
 
 
 def _reminder_days(days: int) -> int:

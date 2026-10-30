@@ -12,6 +12,7 @@ import {
   saveBlobWithPreferredMethod,
   trackEvent,
 } from '../api';
+import { CV_IMPORT_REQUEST_TIMEOUT_MS } from '../lib/fetchWithDeadline.js';
 import { supabase } from '../lib/supabase';
 import { defaultCv, newExpId, newFormId, newCertId, newProjId } from '../data/cvDefault';
 import TemplatePicker from './TemplatePicker';
@@ -897,7 +898,7 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
       if (importStepTimerRef.current) clearInterval(importStepTimerRef.current);
     }, IMPORT_PHASE_DURATION_MS);
     try {
-      const result = await apiPostFile('/api/cv/import', file);
+      const result = await apiPostFile('/api/cv/import', file, 'file', { timeoutMs: CV_IMPORT_REQUEST_TIMEOUT_MS });
       const parsed = result?.cv || result;
       if (parsed && typeof parsed === 'object') {
         const choices = {};

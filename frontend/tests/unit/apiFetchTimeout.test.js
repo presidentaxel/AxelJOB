@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { fetchWithDeadline } from '../../src/lib/fetchWithDeadline.js';
+import {
+  API_REQUEST_TIMEOUT_MS,
+  CV_IMPORT_REQUEST_TIMEOUT_MS,
+  fetchWithDeadline,
+} from '../../src/lib/fetchWithDeadline.js';
 
 function hangingFetch(_url, options) {
   return new Promise((_resolve, reject) => {
@@ -13,6 +17,11 @@ function hangingFetch(_url, options) {
     else options.signal?.addEventListener('abort', fail, { once: true });
   });
 }
+
+test('l’import CV attend plus longtemps qu’une lecture', () => {
+  assert.ok(CV_IMPORT_REQUEST_TIMEOUT_MS > API_REQUEST_TIMEOUT_MS);
+  assert.ok(CV_IMPORT_REQUEST_TIMEOUT_MS >= 60_000);
+});
 
 test('fetchWithDeadline abandonne une requête qui ne répond pas', async () => {
   const original = globalThis.fetch;

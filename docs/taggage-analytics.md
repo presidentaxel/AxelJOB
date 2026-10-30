@@ -117,7 +117,7 @@ Convention site-wide (hors ces 8 tickets) : [AXE-356](https://linear.app/axel-pr
 Backlog hors vague 1 :
 
 - `Improve: Un seul bouton primary visible par écran sur la landing`
-- Events orphelins produit + balisage `/app` : filles d’AXE-356 — [AXE-394](https://linear.app/axel-project/issue/AXE-394) (whitelist, mergé), [AXE-395](https://linear.app/axel-project/issue/AXE-395) (inventaire `/app` C.10–C.16, **49 IDs figés**), [AXE-396](https://linear.app/axel-project/issue/AXE-396) (balisage), [AXE-397](https://linear.app/axel-project/issue/AXE-397) (`login` produit). Contrat : [`docs/analytics-naming.md`](analytics-naming.md).
+- Events orphelins produit + balisage `/app` : filles d’AXE-356 — [AXE-394](https://linear.app/axel-project/issue/AXE-394) (whitelist, mergé), [AXE-395](https://linear.app/axel-project/issue/AXE-395) (inventaire `/app` C.10–C.16, **49 IDs figés**, puis 47 après retrait du collage CV, AXE-497), [AXE-396](https://linear.app/axel-project/issue/AXE-396) (balisage), [AXE-397](https://linear.app/axel-project/issue/AXE-397) (`login` produit). Contrat : [`docs/analytics-naming.md`](analytics-naming.md).
 
 ---
 
@@ -448,7 +448,7 @@ Globaux : **pas** de préfixe de page (`nav-`, `footer-`).
 | Surfaces A/B non-clic | Conservées dans le catalogue : `home-hero-title`, `home-pricing-card-free`, `home-pricing-card-pro`, `home-pricing-badge-popular` |
 | C.8 / v2 | Exclue de la vague 1 (drawer tertiaires, sources outbound FAQ, `faq_open`, cookie banner) |
 | C.9 candidatures | Hors vague 1 (déjà figé 2026-08-21) — ne pas retoucher |
-| C.10–C.16 `/app` hors candidatures | Figé 2026-08-25 ([AXE-395](https://linear.app/axel-project/issue/AXE-395)) : **49** IDs. Markup posé ([AXE-396](https://linear.app/axel-project/issue/AXE-396)). Préfixe topbar `app-nav-` (≠ `nav-` marketing). |
+| C.10–C.16 `/app` hors candidatures | Figé 2026-08-25 ([AXE-395](https://linear.app/axel-project/issue/AXE-395)) : **49** IDs, puis **47** après retrait du collage CV ([AXE-497](https://linear.app/axel-project/issue/AXE-497)). Markup posé ([AXE-396](https://linear.app/axel-project/issue/AXE-396)). Préfixe topbar `app-nav-` (≠ `nav-` marketing). |
 | AXE-356 | Convention site-wide : [`docs/analytics-naming.md`](analytics-naming.md) (figé 2026-08-25). 358 reste l’instance landing → signup |
 
 Attributs HTML types :
@@ -632,7 +632,7 @@ V2 candidatures (ne pas poser maintenant) : ouverture carte, archive, drag colon
 Même convention kebab `page-zone-type-intention`. Un ID = un élément. Jamais de doublon avec les 55 public ni C.9.  
 Transport : recette DOM seulement (`track.js` ignore `/app`). **Markup posé** ([AXE-396](https://linear.app/axel-project/issue/AXE-396)).
 
-**Total = 49** : 12 topbar + 8 onboarding + 11 cv + 6 profil + 5 settings + 6 support + 1 monitoring.
+**Total = 47** : 12 topbar + 6 onboarding + 11 cv + 6 profil + 5 settings + 6 support + 1 monitoring.
 
 `/app/linkedin` : pas de vue dédiée (`getViewFromPathname` → `profil`). Pas d’IDs `linkedin-*`.
 
@@ -657,14 +657,12 @@ Préfixe `app-nav-` (distinct de `nav-` marketing).
 
 Logo topbar = `<img>` non cliquable : ne pas inventer de clic.
 
-#### C.11 Onboarding (8)
+#### C.11 Onboarding (6)
 
 | data-attr | type | level | Où | Intention |
 |---|---|---|---|---|
 | `onboarding-methods-cta-import` | cta | primary | step 0 | Importer un CV (fichier) |
 | `onboarding-methods-cta-manual` | cta | secondary | step 0 | Saisie manuelle → profil |
-| `onboarding-paste-input-text` | input | tertiary | step 0 details | Texte collé. **Ne jamais** envoyer la valeur |
-| `onboarding-paste-cta-parse` | cta | secondary | step 0 details | Analyser mon CV |
 | `onboarding-review-cta-confirm` | cta | primary | step 1 | Confirmer le profil extrait |
 | `onboarding-done-cta-launch` | cta | primary | step 2 | C’est parti → candidatures |
 | `onboarding-done-cta-profil` | cta | secondary | step 2 | Aller au profil |
