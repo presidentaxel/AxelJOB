@@ -4,6 +4,40 @@ const DRAFTS_STORAGE_KEY = 'cv_canvas_layout_drafts_v1';
 const PREFS_STORAGE_KEY = 'cv_canvas_layout_draft_prefs_v1';
 const ACTIVE_CONTEXT_STORAGE_KEY = 'cv_canvas_layout_active_context_v1';
 
+/** Compte courant. Vide = clés legacy, jamais lues pour un autre compte. */
+let scopedUserId = '';
+
+export function setCanvasDraftUserId(userId) {
+  scopedUserId = String(userId || '').trim();
+}
+
+export function getCanvasDraftUserId() {
+  return scopedUserId;
+}
+
+function storageKeyFor(base, userId) {
+  const id = String(userId || '').trim();
+  return id ? `${base}::${id}` : base;
+}
+
+function scopedStorageKey(base) {
+  return storageKeyFor(base, scopedUserId);
+}
+
+/** Clés du compte donné, sans changer le compte courant du module. */
+export function canvasDraftStorageKeysFor(userId) {
+  const id = userId === undefined ? scopedUserId : userId;
+  return {
+    drafts: storageKeyFor(DRAFTS_STORAGE_KEY, id),
+    prefs: storageKeyFor(PREFS_STORAGE_KEY, id),
+    active: storageKeyFor(ACTIVE_CONTEXT_STORAGE_KEY, id),
+  };
+}
+
+export function canvasDraftStorageKeys() {
+  return canvasDraftStorageKeysFor(scopedUserId);
+}
+
 export const BLANK_CANVAS_CONTEXT_KEY = 'blank';
 /** Brouillon dédié au dernier import CV (ne remplace pas les brouillons template:*). */
 export const IMPORTED_CANVAS_CONTEXT_KEY = 'imported';
@@ -74,7 +108,7 @@ function pruneDrafts(drafts, keepKey, keepRecent = 2) {
 
 export function loadCanvasDraft(contextKey) {
   const key = String(contextKey || BLANK_CANVAS_CONTEXT_KEY);
-  const drafts = readJson(DRAFTS_STORAGE_KEY, {});
+  const drafts = readJson(scopedStorageKey(DRAFTS_STORAGE_KEY), {});
   const entry = drafts[key];
   if (!entry?.layout) return null;
   return {
@@ -87,7 +121,7 @@ export function loadCanvasDraft(contextKey) {
 export function saveCanvasDraft(contextKey, layout, meta = {}) {
   if (!layout) return null;
   const key = String(contextKey || BLANK_CANVAS_CONTEXT_KEY);
-  const drafts = readJson(DRAFTS_STORAGE_KEY, {});
+  const drafts = readJson(scopedStorageKey(DRAFTS_STORAGE_KEY), {});
   const entry = {
     contextKey: key,
     layout: stripHeavyFieldsForLocal(layout),
@@ -95,10 +129,11 @@ export function saveCanvasDraft(contextKey, layout, meta = {}) {
     updatedAt: Date.now(),
   };
   drafts[key] = entry;
-  if (!writeJson(DRAFTS_STORAGE_KEY, drafts)) {
+  const storageKey = scopedStorageKey(DRAFTS_STORAGE_KEY);
+  if (!writeJson(storageKey, drafts)) {
     // Quota dépassé : on purge les drafts les plus anciens et on retente une
     // fois avec uniquement le contexte courant + les plus récents.
-    writeJson(DRAFTS_STORAGE_KEY, pruneDrafts(drafts, key));
+    writeJson(storageKey, pruneDrafts(drafts, key));
   }
   return entry;
 }
@@ -106,15 +141,16 @@ export function saveCanvasDraft(contextKey, layout, meta = {}) {
 /** Supprime le brouillon local d’un contexte (reset Page blanche AXE-28). */
 export function clearCanvasDraft(contextKey) {
   const key = String(contextKey || BLANK_CANVAS_CONTEXT_KEY);
-  const drafts = readJson(DRAFTS_STORAGE_KEY, {});
+  const storageKey = scopedStorageKey(DRAFTS_STORAGE_KEY);
+  const drafts = readJson(storageKey, {});
   if (!(key in drafts)) return false;
   delete drafts[key];
-  writeJson(DRAFTS_STORAGE_KEY, drafts);
+  writeJson(storageKey, drafts);
   return true;
 }
 
 export function listCanvasDrafts(templatesList = []) {
-  const drafts = readJson(DRAFTS_STORAGE_KEY, {});
+  const drafts = readJson(scopedStorageKey(DRAFTS_STORAGE_KEY), {});
   return Object.values(drafts)
     .filter((entry) => entry?.contextKey && entry?.layout)
     .map((entry) => ({
@@ -126,7 +162,7 @@ export function listCanvasDrafts(templatesList = []) {
 }
 
 export function getCanvasDraftPrefs() {
-  const prefs = readJson(PREFS_STORAGE_KEY, {});
+  const prefs = readJson(scopedStorageKey(PREFS_STORAGE_KEY), {});
   return {
     showTransferPrompt: prefs.showTransferPrompt !== false,
   };
@@ -135,13 +171,13 @@ export function getCanvasDraftPrefs() {
 export function setCanvasDraftPrefs(nextPrefs) {
   const current = getCanvasDraftPrefs();
   const next = { ...current, ...(nextPrefs || {}) };
-  writeJson(PREFS_STORAGE_KEY, next);
+  writeJson(scopedStorageKey(PREFS_STORAGE_KEY), next);
   return next;
 }
 
 export function getActiveCanvasContext() {
   try {
-    return localStorage.getItem(ACTIVE_CONTEXT_STORAGE_KEY) || BLANK_CANVAS_CONTEXT_KEY;
+    return localStorage.getItem(scopedStorageKey(ACTIVE_CONTEXT_STORAGE_KEY)) || BLANK_CANVAS_CONTEXT_KEY;
   } catch {
     return BLANK_CANVAS_CONTEXT_KEY;
   }
@@ -149,6 +185,6 @@ export function getActiveCanvasContext() {
 
 export function setActiveCanvasContext(contextKey) {
   const key = String(contextKey || BLANK_CANVAS_CONTEXT_KEY);
-  localStorage.setItem(ACTIVE_CONTEXT_STORAGE_KEY, key);
+  localStorage.setItem(scopedStorageKey(ACTIVE_CONTEXT_STORAGE_KEY), key);
   return key;
 }

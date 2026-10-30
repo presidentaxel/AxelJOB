@@ -1144,11 +1144,14 @@ def api_cv(request: Request, profile: bool = False):
     Si profile=1 (requête depuis l'onglet Profil) et qu'aucun CV n'est enregistré, on renvoie {} pour
     afficher un formulaire vide (données Supabase = rien), pas le CV d'exemple."""
     user_id = _get_user_id(request)
-    if USE_SUPABASE and user_id is None and _bearer_token_nonempty(request):
+    if USE_SUPABASE and user_id is None and (_bearer_token_nonempty(request) or profile):
         raise HTTPException(
             status_code=401,
             detail="Session invalide ou expirée (JWT). Reconnecte-toi ou vérifie l’heure de ton PC.",
         )
+    # Le formulaire profil ne doit jamais retomber sur la ligne partagée "default".
+    if profile and not user_id:
+        return {}
     try:
         cv = load_cv_base(user_id)
         if profile and cv.get("__example__"):

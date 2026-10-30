@@ -81,6 +81,8 @@ export function createAutoSaveScheduler({
   /** Handle de timer en cours (debounce ou retry). */
   let timerHandle = null;
   let disposed = false;
+  /** Invalide une sauvegarde déjà partie : son retour ne relance pas un flush vide. */
+  let flightToken = 0;
 
   function clearTimer() {
     if (timerHandle !== null) {
@@ -129,6 +131,7 @@ export function createAutoSaveScheduler({
 
     clearTimer();
     const payload = state.pendingPayload;
+    const generation = ++flightToken;
     transition({ kind: 'saving' });
 
     let result;
@@ -136,6 +139,10 @@ export function createAutoSaveScheduler({
       result = await saveFn(payload);
     } catch (err) {
       if (disposed) return;
+      if (generation !== flightToken) {
+        settleAbandonedFlight();
+        return;
+      }
       const nextAttempt = state.attempt + 1;
       if (nextAttempt < maxRetries) {
         const retryDelay = baseRetryDelayMs * Math.pow(2, state.attempt);
@@ -154,6 +161,10 @@ export function createAutoSaveScheduler({
     }
 
     if (disposed) return;
+    if (generation !== flightToken) {
+      settleAbandonedFlight();
+      return;
+    }
     // Pendant que la requete tournait, l utilisateur a peut-etre soumis
     // un nouveau payload. On garde alors `hasPending=true` pour replanifier.
     const pendingChangedDuringSave = state.pendingPayload !== payload;
@@ -226,6 +237,46 @@ export function createAutoSaveScheduler({
     transition({ kind: 'disposed' });
   }
 
+  /**
+   * Une sauvegarde déjà partie continue (elle porte encore le jeton du compte
+   * qui l'a lancée). On n'en programme pas une autre, surtout pas vide.
+   */
+  function settleAbandonedFlight() {
+    if (disposed) return;
+    if (state.hasPending && state.pendingPayload !== undefined) {
+      transition({ kind: 'pending', attempt: 0, error: null, hasPending: true });
+      clearTimer();
+      timerHandle = setTimeoutFn(() => {
+        timerHandle = null;
+        flush();
+      }, delayMs);
+      return;
+    }
+    transition({
+      kind: 'idle',
+      attempt: 0,
+      error: null,
+      hasPending: false,
+      pendingPayload: undefined,
+    });
+  }
+
+  /** Annule un enregistrement pas encore parti, sans appeler saveFn. */
+  function dropPending() {
+    if (disposed) return;
+    clearTimer();
+    const inFlight = state.kind === 'saving';
+    if (inFlight) flightToken += 1;
+    state = {
+      ...state,
+      kind: inFlight ? 'saving' : 'idle',
+      hasPending: false,
+      pendingPayload: undefined,
+      error: null,
+    };
+    emit();
+  }
+
   // Etat initial emis immediatement pour que l UI puisse s aligner.
   emit();
 
@@ -234,6 +285,7 @@ export function createAutoSaveScheduler({
     flush,
     hasPendingChanges,
     dispose,
+    dropPending,
     getState: snapshot,
   };
 }
