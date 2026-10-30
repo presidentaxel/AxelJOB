@@ -131,7 +131,7 @@ SPA bundle (`entry-conditional.js`) seulement sur `/`, `/login`, `/app/*`. Le re
 
 | Event | Props typiques | Où |
 |---|---|---|
-| `onboarding_method_chosen` | `method` = `file_upload` \| `text_paste` \| `manual` | OnboardingWizard |
+| `onboarding_method_chosen` | `method` = `file_upload` \| `manual` | OnboardingWizard |
 | `onboarding_completed` | `method` | idem |
 | `onboarding_skipped` | — | idem |
 | `page_view` | `view`, `path`, `attribution?` (1× / session auth) | `useViewAnalytics` |
@@ -172,7 +172,7 @@ SPA bundle (`entry-conditional.js`) seulement sur `/`, `/login`, `/app/*`. Le re
 | `cta_zone` / `zone` | mkt | kebab |
 | `cta_level` | mkt | `primary` \| `secondary` \| `tertiary` |
 | `plan` / `plan_intent` | mkt | `free` \| `pro` |
-| `method` | les deux | auth : `form` \| `email` \| `google` \| `linkedin` ; onboarding : `file_upload` \| `text_paste` \| `manual` |
+| `method` | les deux | auth : `form` \| `email` \| `google` \| `linkedin` ; onboarding : `file_upload` \| `manual` |
 | `view` | produit | screen § 2.3 |
 | `path` | produit | pathname `/app/…` |
 | `template_id` | produit | id template canvas |
