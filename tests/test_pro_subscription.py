@@ -554,5 +554,46 @@ class TestAccountDeletionCancelsSubscriptions(unittest.TestCase):
         client.subscriptions.cancel.assert_called_once_with("sub_free")
 
 
+class TestStripePeriodEndOnItems(unittest.TestCase):
+    def tearDown(self):
+        main._STRIPE_SNAPSHOT_CACHE.clear()
+
+    def test_cancel_flag_is_kept_when_period_end_lives_on_the_item(self):
+        item = SimpleNamespace(current_period_end=1_800_000_000)
+        sub = SimpleNamespace(
+            current_period_end=None,
+            cancel_at_period_end=True,
+            status="active",
+            items=SimpleNamespace(data=[item]),
+        )
+        client = MagicMock()
+        client.subscriptions.retrieve.return_value = sub
+        snap = main._stripe_subscription_snapshot_dict(client, "sub_item_period")
+        self.assertTrue(snap["cancel_at_period_end"])
+        self.assertEqual(snap["current_period_end"], 1_800_000_000)
+        self.assertTrue(snap["current_period_end_label"])
+
+    def test_reminder_targets_stop_stripe_work_at_the_send_cap(self):
+        raw = [str(i) for i in range(150)]
+        seen: list[str] = []
+
+        def _keep(user_ids):
+            seen.extend(user_ids)
+            return list(user_ids)
+
+        with (
+            patch(
+                "backend.services.inactivity_reminder_store.eligible_user_ids",
+                return_value=raw,
+            ),
+            patch("backend.services.inactivity_reminder_store.send_cap", return_value=100),
+            patch.object(main, "_without_scheduled_cancel", side_effect=_keep),
+        ):
+            kept, truncated = main._reminder_targets(90)
+        self.assertEqual(len(seen), 100)
+        self.assertEqual(kept, raw[:100])
+        self.assertTrue(truncated)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -137,6 +137,55 @@ def send_subscription_cancelled_email(
         return False
 
 
+def html_inactivity_reminder(frontend_url: str | None) -> str:
+    """Mail de rappel. Le bouton ouvre le compte, jamais une session Stripe."""
+    base = primary_frontend_base_url(frontend_url).rstrip("/")
+    return render_email(
+        title="Tu n'es pas revenu depuis un moment",
+        highlight="moment",
+        preheader="Ton abonnement AxeL Job est toujours actif. Ce message ne résilie rien.",
+        body=[
+            paragraph(
+                "Ton abonnement est toujours actif. Si tu n'utilises plus AxeL Job, tu peux le résilier depuis ton compte."
+            ),
+            paragraph(
+                strong("Ce message ne résilie rien."),
+                " L'abonnement et les prélèvements continuent tant que tu ne le fais pas toi-même.",
+            ),
+            paragraph(
+                "Une fois connecté, le bouton déjà en place sur ton profil ouvre le portail pour résilier."
+            ),
+        ],
+        button=EmailButton("Ouvrir mon compte", f"{base}/app/profil"),
+        site_url=base,
+    )
+
+
+def send_inactivity_reminder_email(
+    to_email: str,
+    resend_api_key: str | None,
+    resend_from_email: str | None,
+    frontend_url: str | None,
+) -> bool:
+    if not resend_api_key or not to_email:
+        return False
+    try:
+        import resend
+
+        resend.api_key = resend_api_key
+        resend.Emails.send(
+            {
+                "from": resend_from_email,
+                "to": [to_email],
+                "subject": "Ton abonnement AxeL Job est toujours actif",
+                "html": html_inactivity_reminder(frontend_url),
+            }
+        )
+        return True
+    except Exception:
+        return False
+
+
 def stripe_client(stripe_secret_key: str):
     import stripe
 

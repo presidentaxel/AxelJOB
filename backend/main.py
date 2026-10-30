@@ -2173,6 +2173,20 @@ _STRIPE_SNAPSHOT_CACHE = _TTLCache(max_size=2000, ttl_sec=90.0)
 _STRIPE_SUB_RESOLVE_CACHE = _TTLCache(max_size=2000, ttl_sec=300.0)
 
 
+def _subscription_period_end(sub) -> int | None:
+    """Stripe 16 : la fin de période est sur l'article, plus sur l'abonnement."""
+    direct = _stripe_attr(sub, "current_period_end")
+    if direct is not None:
+        return int(direct)
+    items = _stripe_attr(sub, "items")
+    ends = []
+    for item in _stripe_attr(items, "data") or []:
+        end = _stripe_attr(item, "current_period_end")
+        if end is not None:
+            ends.append(int(end))
+    return min(ends) if ends else None
+
+
 def _stripe_subscription_snapshot_dict(client, subscription_id: str) -> dict | None:
     """Lecture seule : état affichage (fin de période, résiliation programmée). Cache TTL 90s."""
     cached = _STRIPE_SNAPSHOT_CACHE.get(subscription_id)
@@ -2180,20 +2194,19 @@ def _stripe_subscription_snapshot_dict(client, subscription_id: str) -> dict | N
         return cached or None
     try:
         sub = client.subscriptions.retrieve(subscription_id)
-        cpe = _stripe_attr(sub, "current_period_end")
+        cpe = _subscription_period_end(sub)
         catp = bool(_stripe_attr(sub, "cancel_at_period_end"))
         st = _stripe_attr(sub, "status") or ""
-        if cpe is None:
-            _STRIPE_SNAPSHOT_CACHE.set(subscription_id, "")
-            return None
-        cpe = int(cpe)
         snap = {
             "status": st,
             "cancel_at_period_end": catp,
-            "current_period_end": cpe,
-            "current_period_end_iso": datetime.fromtimestamp(cpe, tz=timezone.utc).isoformat(),
-            "current_period_end_label": _stripe_period_end_label_fr(cpe),
         }
+        if cpe is not None:
+            snap["current_period_end"] = cpe
+            snap["current_period_end_iso"] = datetime.fromtimestamp(
+                cpe, tz=timezone.utc
+            ).isoformat()
+            snap["current_period_end_label"] = _stripe_period_end_label_fr(cpe)
         _STRIPE_SNAPSHOT_CACHE.set(subscription_id, snap)
         return snap
     except Exception as e:
@@ -3052,6 +3065,164 @@ def api_admin_monitoring_account_sign_ins(request: Request, user_id: str):
             "user_id": user_id,
             "sign_ins": [],
         }
+
+
+def _without_scheduled_cancel(user_ids: list[str]) -> list[str]:
+    """Un abonnement déjà en fin de période ne reçoit pas le rappel."""
+    if not user_ids or not STRIPE_SECRET_KEY:
+        return user_ids
+    import stripe
+
+    from backend.db import get_user_stripe_ids
+
+    client = stripe.StripeClient(STRIPE_SECRET_KEY)
+    kept: list[str] = []
+    for user_id in user_ids:
+        _customer_id, subscription_id = get_user_stripe_ids(user_id)
+        if not subscription_id:
+            kept.append(user_id)
+            continue
+        snap = _stripe_subscription_snapshot_dict(client, subscription_id)
+        if snap and snap.get("cancel_at_period_end"):
+            continue
+        kept.append(user_id)
+    return kept
+
+
+def _reminder_targets(days: int) -> tuple[list[str], bool]:
+    """Au plus `send_cap` comptes, après exclusion des résiliations déjà programmées."""
+    from backend.services.inactivity_reminder_store import eligible_user_ids, send_cap
+
+    raw = eligible_user_ids(days=days)
+    cap = send_cap()
+    return _without_scheduled_cancel(raw[:cap]), len(raw) > cap
+
+
+def _reminder_days(days: int) -> int:
+    if int(days) not in (60, 90):
+        raise HTTPException(status_code=400, detail="Seuil 60 ou 90 jours.")
+    return int(days)
+
+
+def _reminder_unavailable(exc) -> HTTPException:
+    from backend.services.inactivity_reminder_store import InactivityReminderUnavailable
+
+    if isinstance(exc, InactivityReminderUnavailable) and exc.code == "migration_required":
+        return HTTPException(
+            status_code=503,
+            detail=(
+                "Migration inactivity_reminder_sends requise "
+                "(backend/supabase_migration_inactivity_reminders.sql)."
+            ),
+        )
+    return HTTPException(status_code=503, detail="Rappels d'inactivité indisponibles.")
+
+
+@app.get("/api/admin/inactivity-reminders")
+def api_admin_inactivity_reminders_preview(request: Request, days: int = 90):
+    """Comptes éligibles, sans adresse et sans envoi."""
+    _require_support_admin(request)
+    threshold = _reminder_days(days)
+    from backend.services.inactivity_reminder_store import InactivityReminderUnavailable
+
+    try:
+        user_ids, truncated = _reminder_targets(threshold)
+    except InactivityReminderUnavailable as exc:
+        raise _reminder_unavailable(exc) from exc
+    return {
+        "days": threshold,
+        "eligible_count": len(user_ids),
+        "user_ids": user_ids,
+        "truncated": truncated,
+    }
+
+
+@app.post("/api/admin/inactivity-reminders/send")
+def api_admin_inactivity_reminders_send(request: Request, days: int = 90):
+    """Envoie les rappels éligibles. La réponse ne contient pas d'adresse."""
+    _require_support_admin(request)
+    threshold = _reminder_days(days)
+    from backend.services import billing_notifications
+    from backend.services.inactivity_reminder_store import (
+        InactivityReminderUnavailable,
+        auth_email,
+        claim_reminder,
+        release_claim,
+    )
+
+    try:
+        user_ids, _truncated = _reminder_targets(threshold)
+    except InactivityReminderUnavailable as exc:
+        raise _reminder_unavailable(exc) from exc
+    sent: list[str] = []
+    for user_id in user_ids:
+        try:
+            claim_id = claim_reminder(user_id, days=threshold)
+        except InactivityReminderUnavailable as exc:
+            raise _reminder_unavailable(exc) from exc
+        if claim_id is None:
+            continue
+        address = auth_email(user_id)
+        ok = bool(address) and billing_notifications.send_inactivity_reminder_email(
+            address,
+            RESEND_API_KEY,
+            RESEND_FROM_EMAIL,
+            FRONTEND_URL,
+        )
+        if not ok:
+            try:
+                release_claim(claim_id)
+            except InactivityReminderUnavailable as exc:
+                raise _reminder_unavailable(exc) from exc
+            continue
+        sent.append(user_id)
+    return {"days": threshold, "sent_count": len(sent), "user_ids": sent}
+
+
+@app.post("/api/admin/inactivity-reminders/test")
+def api_admin_inactivity_reminders_test(request: Request):
+    """Envoie le mail à l'admin connecté, sans écrire aux abonnés."""
+    _require_support_admin(request)
+    admin_id = _require_user_id(request)
+    address = _get_user_email_from_jwt(request)
+    if not address:
+        raise HTTPException(status_code=400, detail="Aucune adresse sur la session admin.")
+    from backend.services import billing_notifications
+    from backend.services.inactivity_reminder_store import (
+        InactivityReminderUnavailable,
+        record_send,
+    )
+
+    ok = billing_notifications.send_inactivity_reminder_email(
+        address,
+        RESEND_API_KEY,
+        RESEND_FROM_EMAIL,
+        FRONTEND_URL,
+    )
+    if not ok:
+        raise HTTPException(status_code=502, detail="L'envoi de test a échoué.")
+    try:
+        record_send(admin_id, kind="test")
+    except (InactivityReminderUnavailable, ValueError) as exc:
+        if isinstance(exc, InactivityReminderUnavailable):
+            raise _reminder_unavailable(exc) from exc
+        raise HTTPException(status_code=400, detail="Identifiant admin invalide.") from exc
+    return {"ok": True, "user_id": admin_id}
+
+
+@app.get("/api/admin/inactivity-reminders/journal")
+def api_admin_inactivity_reminders_journal(request: Request):
+    """Dates d'envoi et comptes. Pas le contenu du mail."""
+    _require_support_admin(request)
+    from backend.services.inactivity_reminder_store import (
+        InactivityReminderUnavailable,
+        list_journal,
+    )
+
+    try:
+        return {"items": list_journal()}
+    except InactivityReminderUnavailable as exc:
+        raise _reminder_unavailable(exc) from exc
 
 
 ADAPT_TODO_DEFAULT_STEPS = [

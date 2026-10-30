@@ -9,6 +9,9 @@ export const API_REQUEST_TIMEOUT_MS = 12000;
  */
 export const CV_IMPORT_REQUEST_TIMEOUT_MS = 180000;
 
+/** Envoi des rappels : jusqu'à 100 mails, un par un. */
+export const REMINDER_SEND_TIMEOUT_MS = 180000;
+
 export async function fetchWithDeadline(url, options = {}, timeoutMs = API_REQUEST_TIMEOUT_MS) {
   const upstream = options.signal;
   const controller = new AbortController();
