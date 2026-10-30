@@ -2970,6 +2970,135 @@ def api_admin_monitoring_news(request: Request):
     return {"items": safe}
 
 
+def _reminder_days(days: int) -> int:
+    if int(days) not in (60, 90):
+        raise HTTPException(status_code=400, detail="Seuil 60 ou 90 jours.")
+    return int(days)
+
+
+def _reminder_unavailable(exc) -> HTTPException:
+    from backend.services.inactivity_reminder_store import InactivityReminderUnavailable
+
+    if isinstance(exc, InactivityReminderUnavailable) and exc.code == "migration_required":
+        return HTTPException(
+            status_code=503,
+            detail=(
+                "Migration inactivity_reminder_sends requise "
+                "(backend/supabase_migration_inactivity_reminders.sql)."
+            ),
+        )
+    return HTTPException(status_code=503, detail="Rappels d'inactivité indisponibles.")
+
+
+@app.get("/api/admin/inactivity-reminders")
+def api_admin_inactivity_reminders_preview(request: Request, days: int = 90):
+    """Comptes éligibles, sans adresse et sans envoi."""
+    _require_support_admin(request)
+    threshold = _reminder_days(days)
+    from backend.services.inactivity_reminder_store import (
+        InactivityReminderUnavailable,
+        eligible_user_ids,
+        send_cap,
+    )
+
+    try:
+        user_ids = eligible_user_ids(days=threshold)
+    except InactivityReminderUnavailable as exc:
+        raise _reminder_unavailable(exc) from exc
+    cap = send_cap()
+    return {
+        "days": threshold,
+        "eligible_count": len(user_ids),
+        "user_ids": user_ids[:cap],
+        "truncated": len(user_ids) > cap,
+    }
+
+
+@app.post("/api/admin/inactivity-reminders/send")
+def api_admin_inactivity_reminders_send(request: Request, days: int = 90):
+    """Envoie les rappels éligibles. La réponse ne contient pas d'adresse."""
+    _require_support_admin(request)
+    threshold = _reminder_days(days)
+    from backend.services import billing_notifications
+    from backend.services.inactivity_reminder_store import (
+        InactivityReminderUnavailable,
+        auth_email,
+        eligible_user_ids,
+        record_send,
+        send_cap,
+    )
+
+    try:
+        user_ids = eligible_user_ids(days=threshold)[: send_cap()]
+    except InactivityReminderUnavailable as exc:
+        raise _reminder_unavailable(exc) from exc
+    sent: list[str] = []
+    for user_id in user_ids:
+        address = auth_email(user_id)
+        if not address:
+            continue
+        ok = billing_notifications.send_inactivity_reminder_email(
+            address,
+            RESEND_API_KEY,
+            RESEND_FROM_EMAIL,
+            FRONTEND_URL,
+        )
+        if not ok:
+            continue
+        try:
+            record_send(user_id, kind="reminder")
+        except InactivityReminderUnavailable as exc:
+            raise _reminder_unavailable(exc) from exc
+        sent.append(user_id)
+    return {"days": threshold, "sent_count": len(sent), "user_ids": sent}
+
+
+@app.post("/api/admin/inactivity-reminders/test")
+def api_admin_inactivity_reminders_test(request: Request):
+    """Envoie le mail à l'admin connecté, sans écrire aux abonnés."""
+    _require_support_admin(request)
+    admin_id = _require_user_id(request)
+    address = _get_user_email_from_jwt(request)
+    if not address:
+        raise HTTPException(status_code=400, detail="Aucune adresse sur la session admin.")
+    from backend.services import billing_notifications
+    from backend.services.inactivity_reminder_store import (
+        InactivityReminderUnavailable,
+        record_send,
+    )
+
+    ok = billing_notifications.send_inactivity_reminder_email(
+        address,
+        RESEND_API_KEY,
+        RESEND_FROM_EMAIL,
+        FRONTEND_URL,
+    )
+    if not ok:
+        raise HTTPException(status_code=502, detail="L'envoi de test a échoué.")
+    try:
+        record_send(admin_id, kind="test")
+    except (InactivityReminderUnavailable, ValueError) as exc:
+        if isinstance(exc, InactivityReminderUnavailable):
+            raise _reminder_unavailable(exc) from exc
+        raise HTTPException(status_code=400, detail="Identifiant admin invalide.") from exc
+    return {"ok": True, "user_id": admin_id}
+
+
+@app.get("/api/admin/inactivity-reminders/journal")
+def api_admin_inactivity_reminders_journal(request: Request):
+    """Dates d'envoi et comptes. Pas le contenu du mail."""
+    _require_support_admin(request)
+    from backend.services.inactivity_reminder_store import (
+        InactivityReminderUnavailable,
+        list_journal,
+    )
+
+    try:
+        return {"items": list_journal()}
+    except InactivityReminderUnavailable as exc:
+        raise _reminder_unavailable(exc) from exc
+
+
 ADAPT_TODO_DEFAULT_STEPS = [
     {
         "id": "rewrite_resume",
