@@ -2970,6 +2970,67 @@ def api_admin_monitoring_news(request: Request):
     return {"items": safe}
 
 
+def _account_activity_http(exc) -> HTTPException:
+    from backend.services.account_activity_store import AccountActivityUnavailable
+
+    if isinstance(exc, AccountActivityUnavailable) and exc.code == "migration_required":
+        return HTTPException(
+            status_code=503,
+            detail="Migration user_sign_ins requise (backend/supabase_migration_user_sign_ins.sql).",
+        )
+    return HTTPException(status_code=503, detail="Suivi des connexions indisponible.")
+
+
+@app.post("/api/account/sign-in")
+def api_account_sign_in(request: Request):
+    """Enregistre une connexion réussie. Pas d'e-mail dans la réponse ni dans les logs."""
+    user_id = _require_user_id(request)
+    if not user_id or user_id == "default":
+        return {"ok": False, "recorded": False}
+    from backend.services.account_activity_store import (
+        AccountActivityUnavailable,
+        record_user_sign_in,
+    )
+
+    try:
+        recorded = record_user_sign_in(user_id)
+    except (AccountActivityUnavailable, ValueError):
+        return {"ok": False, "recorded": False}
+    return {"ok": True, "recorded": recorded}
+
+
+@app.get("/api/admin/monitoring/accounts")
+def api_admin_monitoring_accounts(request: Request, paying_only: bool = True):
+    """Comptes avec dernière connexion et dernière action produit. Filtre payant par défaut."""
+    _require_support_admin(request)
+    from backend.services.account_activity_store import (
+        AccountActivityUnavailable,
+        list_account_activity,
+    )
+
+    try:
+        return list_account_activity(paying_only=paying_only)
+    except AccountActivityUnavailable as exc:
+        raise _account_activity_http(exc) from exc
+
+
+@app.get("/api/admin/monitoring/accounts/{user_id}/sign-ins")
+def api_admin_monitoring_account_sign_ins(request: Request, user_id: str):
+    """Historique des connexions d'un compte (12 mois). Pas d'e-mail."""
+    _require_support_admin(request)
+    from backend.services.account_activity_store import (
+        AccountActivityUnavailable,
+        list_sign_ins,
+    )
+
+    try:
+        return list_sign_ins(user_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Identifiant de compte invalide.") from exc
+    except AccountActivityUnavailable as exc:
+        raise _account_activity_http(exc) from exc
+
+
 ADAPT_TODO_DEFAULT_STEPS = [
     {
         "id": "rewrite_resume",
