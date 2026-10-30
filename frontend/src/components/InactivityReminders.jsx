@@ -43,7 +43,9 @@ export default function InactivityReminders() {
     setError('');
     setInfo('');
     try {
-      const data = await apiGet(`/api/admin/inactivity-reminders?days=${days}`);
+      const data = await apiGet(`/api/admin/inactivity-reminders?days=${days}`, {
+        timeoutMs: REMINDER_SEND_TIMEOUT_MS,
+      });
       setPreview(data);
     } catch (err) {
       setPreview(null);

@@ -115,8 +115,8 @@ export function apiUrl(path) {
   return base ? `${base.replace(/\/$/, '')}${p}` : p;
 }
 
-export async function apiGet(path, { signal } = {}) {
-  const r = await fetchApi(apiUrl(path), { headers: getHeaders(), signal });
+export async function apiGet(path, { signal, timeoutMs } = {}) {
+  const r = await fetchApi(apiUrl(path), { headers: getHeaders(), signal, timeoutMs });
   const ct = r.headers.get('content-type');
   const isJson = ct && ct.includes('application/json');
   const text = await r.text();
