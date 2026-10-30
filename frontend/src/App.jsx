@@ -1155,6 +1155,7 @@ export default function App() {
       if (event === 'SIGNED_IN' && s?.user) {
         maybeEmitSignUpForSession(s.user);
         maybeEmitProductLogin(s.user, trackEvent);
+        apiPost('/api/account/sign-in', {}).catch(() => {});
       }
       if (event === 'SIGNED_OUT') clearProductLoginSent();
     });

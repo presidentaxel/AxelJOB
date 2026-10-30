@@ -22,6 +22,7 @@ def test_statements_are_scoped_to_the_jwt_user() -> None:
         assert params == (_UID,)
         assert _OTHER not in sql
         assert "default" not in sql
+    assert any("user_sign_ins" in sql and "::uuid" in sql for sql, _params in statements)
 
 
 def test_default_profile_is_refused() -> None:
