@@ -71,8 +71,11 @@ function checkUnauthorized(r) {
 
 async function fetchApi(url, options) {
   if (Date.now() < apiOutageUntil) throw apiOutageError();
+  const timeoutMs = options?.timeoutMs;
+  const fetchOptions = { ...(options || {}) };
+  delete fetchOptions.timeoutMs;
   try {
-    const response = await fetchWithDeadline(url, options);
+    const response = await fetchWithDeadline(url, fetchOptions, timeoutMs);
     if (response.status >= 500) noteApiOutage();
     return response;
   } catch (error) {
@@ -276,18 +279,19 @@ export async function apiPut(path, body, { keepalive = false } = {}) {
 }
 
 /** POST multipart/form-data avec un fichier (ex. upload photo). Ne pas passer Content-Type pour laisser le navigateur définir le boundary. */
-export async function apiPostFile(path, file, fieldName = 'file') {
+export async function apiPostFile(path, file, fieldName = 'file', options = {}) {
   const form = new FormData();
   form.append(fieldName, file);
-  return apiPostFormData(path, form);
+  return apiPostFormData(path, form, options);
 }
 
 /** POST FormData (ex. type + file pour upload-doc). */
-export async function apiPostFormData(path, formData) {
+export async function apiPostFormData(path, formData, options = {}) {
   const r = await fetchApi(apiUrl(path), {
     method: 'POST',
     headers: getHeaders(),
     body: formData,
+    timeoutMs: options.timeoutMs,
   });
   if (!r.ok) {
     checkUnauthorized(r);

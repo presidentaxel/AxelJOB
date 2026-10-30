@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { apiGet, apiPostFile, apiPut, trackEvent } from '../api';
+import { CV_IMPORT_REQUEST_TIMEOUT_MS } from '../lib/fetchWithDeadline.js';
 import { analyticsAttrs } from '../lib/analyticsAttrs.js';
 import {
   finishImportLoadingAnimation,
@@ -112,7 +113,10 @@ export default function OnboardingWizard({
     setMethod('upload');
     trackEvent('onboarding_method_chosen', { method: 'file_upload' });
     try {
-      await runCvAnalysis(() => apiPostFile('/api/cv/import', file), 'upload');
+      await runCvAnalysis(
+        () => apiPostFile('/api/cv/import', file, 'file', { timeoutMs: CV_IMPORT_REQUEST_TIMEOUT_MS }),
+        'upload',
+      );
     } finally {
       if (fileRef.current) fileRef.current.value = '';
     }

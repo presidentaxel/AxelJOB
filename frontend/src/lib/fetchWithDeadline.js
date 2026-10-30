@@ -3,6 +3,12 @@ import { TIMEOUT_MESSAGE } from './userFacingError.js';
 /** Un reload local laisse sinon les fetch en pending et l'écran « Chargement… » ne part plus. */
 export const API_REQUEST_TIMEOUT_MS = 12000;
 
+/**
+ * Import CV : plusieurs appels au modèle après la lecture du fichier.
+ * Le délai court des lectures couperait la requête avant la réponse.
+ */
+export const CV_IMPORT_REQUEST_TIMEOUT_MS = 180000;
+
 export async function fetchWithDeadline(url, options = {}, timeoutMs = API_REQUEST_TIMEOUT_MS) {
   const upstream = options.signal;
   const controller = new AbortController();
