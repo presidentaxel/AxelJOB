@@ -112,7 +112,7 @@ cv-bot/
 
 ### Prerequis
 
-- Python 3.10+
+- Python 3.12+
 - Node.js 18+
 - Un projet [Supabase](https://supabase.com) (gratuit) pour l'auth et le stockage
 - Une cle API [Google Gemini](https://aistudio.google.com/app/apikey) (gratuite)
