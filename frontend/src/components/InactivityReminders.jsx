@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { apiGet, apiPost } from '../api';
+import { REMINDER_SEND_TIMEOUT_MS } from '../lib/fetchWithDeadline.js';
 import Button from './ui/Button.jsx';
 
 function formatWhen(iso) {
@@ -61,7 +62,11 @@ export default function InactivityReminders() {
     setError('');
     setInfo('');
     try {
-      const data = await apiPost(`/api/admin/inactivity-reminders/send?days=${days}`, {});
+      const data = await apiPost(
+        `/api/admin/inactivity-reminders/send?days=${days}`,
+        {},
+        { timeoutMs: REMINDER_SEND_TIMEOUT_MS },
+      );
       setInfo(`${data?.sent_count || 0} mail${data?.sent_count === 1 ? '' : 's'} envoyé${data?.sent_count === 1 ? '' : 's'}.`);
       setPreview(null);
       await loadJournal();
@@ -99,7 +104,10 @@ export default function InactivityReminders() {
         <select
           className="input-field monitoring-days-select"
           value={days}
-          onChange={(event) => setDays(Number(event.target.value))}
+          onChange={(event) => {
+            setDays(Number(event.target.value));
+            setPreview(null);
+          }}
         >
           <option value={90}>90 jours</option>
           <option value={60}>60 jours</option>
@@ -121,7 +129,7 @@ export default function InactivityReminders() {
       {preview && (
         <p className="monitoring-muted">
           {preview.eligible_count} compte{preview.eligible_count === 1 ? '' : 's'} éligible
-          {preview.eligible_count === 1 ? '' : 's'}
+          {preview.eligible_count === 1 ? '' : 's'} depuis {preview.days} jours
           {preview.truncated ? ' (envoi plafonné)' : ''}.
         </p>
       )}

@@ -135,11 +135,12 @@ export async function apiGet(path, { signal } = {}) {
   return isJson ? JSON.parse(text) : text;
 }
 
-export async function apiPost(path, body) {
+export async function apiPost(path, body, options = {}) {
   const r = await fetchApi(apiUrl(path), {
     method: 'POST',
     headers: getHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify(body),
+    timeoutMs: options.timeoutMs,
   });
   if (!r.ok) {
     checkUnauthorized(r);

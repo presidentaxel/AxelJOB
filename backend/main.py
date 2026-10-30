@@ -3054,6 +3054,28 @@ def api_admin_monitoring_account_sign_ins(request: Request, user_id: str):
         }
 
 
+def _without_scheduled_cancel(user_ids: list[str]) -> list[str]:
+    """Un abonnement déjà en fin de période ne reçoit pas le rappel."""
+    if not user_ids or not STRIPE_SECRET_KEY:
+        return user_ids
+    import stripe
+
+    from backend.db import get_user_stripe_ids
+
+    client = stripe.StripeClient(STRIPE_SECRET_KEY)
+    kept: list[str] = []
+    for user_id in user_ids:
+        _customer_id, subscription_id = get_user_stripe_ids(user_id)
+        if not subscription_id:
+            kept.append(user_id)
+            continue
+        snap = _stripe_subscription_snapshot_dict(client, subscription_id)
+        if snap and snap.get("cancel_at_period_end"):
+            continue
+        kept.append(user_id)
+    return kept
+
+
 def _reminder_days(days: int) -> int:
     if int(days) not in (60, 90):
         raise HTTPException(status_code=400, detail="Seuil 60 ou 90 jours.")
@@ -3086,7 +3108,7 @@ def api_admin_inactivity_reminders_preview(request: Request, days: int = 90):
     )
 
     try:
-        user_ids = eligible_user_ids(days=threshold)
+        user_ids = _without_scheduled_cancel(eligible_user_ids(days=threshold))
     except InactivityReminderUnavailable as exc:
         raise _reminder_unavailable(exc) from exc
     cap = send_cap()
@@ -3107,32 +3129,37 @@ def api_admin_inactivity_reminders_send(request: Request, days: int = 90):
     from backend.services.inactivity_reminder_store import (
         InactivityReminderUnavailable,
         auth_email,
+        claim_reminder,
         eligible_user_ids,
-        record_send,
+        release_claim,
         send_cap,
     )
 
     try:
-        user_ids = eligible_user_ids(days=threshold)[: send_cap()]
+        user_ids = _without_scheduled_cancel(eligible_user_ids(days=threshold))[: send_cap()]
     except InactivityReminderUnavailable as exc:
         raise _reminder_unavailable(exc) from exc
     sent: list[str] = []
     for user_id in user_ids:
-        address = auth_email(user_id)
-        if not address:
+        try:
+            claim_id = claim_reminder(user_id, days=threshold)
+        except InactivityReminderUnavailable as exc:
+            raise _reminder_unavailable(exc) from exc
+        if claim_id is None:
             continue
-        ok = billing_notifications.send_inactivity_reminder_email(
+        address = auth_email(user_id)
+        ok = bool(address) and billing_notifications.send_inactivity_reminder_email(
             address,
             RESEND_API_KEY,
             RESEND_FROM_EMAIL,
             FRONTEND_URL,
         )
         if not ok:
+            try:
+                release_claim(claim_id)
+            except InactivityReminderUnavailable as exc:
+                raise _reminder_unavailable(exc) from exc
             continue
-        try:
-            record_send(user_id, kind="reminder")
-        except InactivityReminderUnavailable as exc:
-            raise _reminder_unavailable(exc) from exc
         sent.append(user_id)
     return {"days": threshold, "sent_count": len(sent), "user_ids": sent}
 

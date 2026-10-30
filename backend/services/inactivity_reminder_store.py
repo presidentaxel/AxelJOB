@@ -37,37 +37,40 @@ def _missing_table(exc: Exception) -> bool:
     return "inactivity_reminder_sends" in text and "does not exist" in text
 
 
-def _load_rows() -> list[dict]:
+_ROWS_SQL = """
+    SELECT
+      u.id::text AS user_id,
+      (
+        COALESCE(p.plan, 'free') = 'pro'
+        AND NULLIF(btrim(COALESCE(p.stripe_subscription_id, '')), '') IS NOT NULL
+      ) AS paying,
+      u.last_sign_in_at AS last_sign_in_at,
+      GREATEST(cv.updated_at, apps.last_app) AS last_product_at,
+      rem.last_reminder_at AS last_reminder_at
+    FROM auth.users u
+    LEFT JOIN public.user_plans p ON p.user_id = u.id::text
+    LEFT JOIN public.cv_base cv ON cv.id = u.id::text
+    LEFT JOIN LATERAL (
+      SELECT max(a.updated_at) AS last_app
+      FROM public.applications a
+      WHERE a.user_id = u.id::text
+    ) apps ON true
+    LEFT JOIN LATERAL (
+      SELECT max(r.sent_at) AS last_reminder_at
+      FROM public.inactivity_reminder_sends r
+      WHERE r.user_id = u.id::text AND r.kind = 'reminder'
+    ) rem ON true
+    WHERE (%s::uuid IS NULL OR u.id = %s::uuid)
+"""
+
+
+def _load_rows(user_id: str | None = None) -> list[dict]:
     pool = _pool()
-    sql = """
-        SELECT
-          u.id::text AS user_id,
-          (
-            COALESCE(p.plan, 'free') = 'pro'
-            AND NULLIF(btrim(COALESCE(p.stripe_subscription_id, '')), '') IS NOT NULL
-          ) AS paying,
-          u.last_sign_in_at AS last_sign_in_at,
-          GREATEST(cv.updated_at, apps.last_app) AS last_product_at,
-          rem.last_reminder_at AS last_reminder_at
-        FROM auth.users u
-        LEFT JOIN public.user_plans p ON p.user_id = u.id::text
-        LEFT JOIN public.cv_base cv ON cv.id = u.id::text
-        LEFT JOIN LATERAL (
-          SELECT max(a.updated_at) AS last_app
-          FROM public.applications a
-          WHERE a.user_id = u.id::text
-        ) apps ON true
-        LEFT JOIN LATERAL (
-          SELECT max(r.sent_at) AS last_reminder_at
-          FROM public.inactivity_reminder_sends r
-          WHERE r.user_id = u.id::text AND r.kind = 'reminder'
-        ) rem ON true
-    """
     try:
         from psycopg.rows import dict_row
 
         with pool.connection() as conn, conn.cursor(row_factory=dict_row) as cur:
-            cur.execute(sql)
+            cur.execute(_ROWS_SQL, (user_id, user_id))
             return list(cur.fetchall() or [])
     except Exception as exc:
         if _missing_table(exc):
@@ -92,6 +95,71 @@ def eligible_user_ids(*, days: int, now: datetime | None = None) -> list[str]:
             if _USER_ID.match(user_id):
                 chosen.append(user_id)
     return chosen
+
+
+def claim_reminder(user_id: str, *, days: int, now: datetime | None = None) -> int | None:
+    """Réserve l'envoi avant Resend. None si un autre envoi a déjà pris ce compte."""
+    uid = (user_id or "").strip()
+    if not _USER_ID.match(uid):
+        raise ValueError("identifiant de compte invalide")
+    moment = as_utc(now or datetime.now(timezone.utc))
+    pool = _pool()
+    try:
+        with pool.connection() as conn:
+            with conn.transaction():
+                from psycopg.rows import dict_row
+
+                with conn.cursor(row_factory=dict_row) as cur:
+                    cur.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", (uid,))
+                    cur.fetchone()
+                    cur.execute(_ROWS_SQL, (uid, uid))
+                    row = cur.fetchone()
+                    if row is None or not should_send_reminder(
+                        paying=bool(row.get("paying")),
+                        last_sign_in=row.get("last_sign_in_at"),
+                        last_product=row.get("last_product_at"),
+                        last_reminder_at=row.get("last_reminder_at"),
+                        now=moment,
+                        days=days,
+                    ):
+                        return None
+                    cur.execute(
+                        """
+                        INSERT INTO public.inactivity_reminder_sends (user_id, kind)
+                        VALUES (%s, 'reminder')
+                        RETURNING id
+                        """,
+                        (uid,),
+                    )
+                    claimed = cur.fetchone()
+                return int(claimed["id"]) if claimed else None
+    except InactivityReminderUnavailable:
+        raise
+    except Exception as exc:
+        if _missing_table(exc):
+            raise InactivityReminderUnavailable("migration_required") from exc
+        logger.info("inactivity reminder claim failed: %s", type(exc).__name__)
+        raise InactivityReminderUnavailable("unavailable") from exc
+
+
+def release_claim(claim_id: int) -> None:
+    """Retire une réservation si l'envoi n'a pas abouti."""
+    pool = _pool()
+    try:
+        with pool.connection() as conn, conn.cursor() as cur:
+            cur.execute(
+                """
+                DELETE FROM public.inactivity_reminder_sends
+                WHERE id = %s AND kind = 'reminder'
+                """,
+                (int(claim_id),),
+            )
+            conn.commit()
+    except Exception as exc:
+        if _missing_table(exc):
+            raise InactivityReminderUnavailable("migration_required") from exc
+        logger.info("inactivity reminder release failed: %s", type(exc).__name__)
+        raise InactivityReminderUnavailable("unavailable") from exc
 
 
 def record_send(user_id: str, *, kind: str) -> None:
