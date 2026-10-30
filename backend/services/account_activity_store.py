@@ -92,45 +92,70 @@ def record_user_sign_in(user_id: str, *, now: datetime | None = None) -> bool:
         raise AccountActivityUnavailable("unavailable") from exc
 
 
+_ACCOUNTS_SQL = """
+    SELECT
+      u.id::text AS user_id,
+      COALESCE(p.plan, 'free') AS plan,
+      (
+        COALESCE(p.plan, 'free') = 'pro'
+        AND NULLIF(btrim(COALESCE(p.stripe_subscription_id, '')), '') IS NOT NULL
+      ) AS paying,
+      GREATEST(u.last_sign_in_at, signs.last_sign_in) AS last_sign_in_at,
+      GREATEST(cv.updated_at, apps.last_app) AS last_product_at
+    FROM auth.users u
+    LEFT JOIN public.user_plans p ON p.user_id = u.id::text
+    LEFT JOIN public.cv_base cv ON cv.id = u.id::text
+    LEFT JOIN LATERAL (
+      SELECT max(s.signed_in_at) AS last_sign_in
+      FROM public.user_sign_ins s
+      WHERE s.user_id = u.id
+    ) signs ON true
+    LEFT JOIN LATERAL (
+      SELECT max(a.updated_at) AS last_app
+      FROM public.applications a
+      WHERE a.user_id = u.id::text
+    ) apps ON true
+    WHERE true
+    ORDER BY last_sign_in_at NULLS FIRST
+    LIMIT %s
+"""
+
+_PAYING_ACCOUNTS_SQL = """
+    SELECT
+      u.id::text AS user_id,
+      COALESCE(p.plan, 'free') AS plan,
+      (
+        COALESCE(p.plan, 'free') = 'pro'
+        AND NULLIF(btrim(COALESCE(p.stripe_subscription_id, '')), '') IS NOT NULL
+      ) AS paying,
+      GREATEST(u.last_sign_in_at, signs.last_sign_in) AS last_sign_in_at,
+      GREATEST(cv.updated_at, apps.last_app) AS last_product_at
+    FROM auth.users u
+    LEFT JOIN public.user_plans p ON p.user_id = u.id::text
+    LEFT JOIN public.cv_base cv ON cv.id = u.id::text
+    LEFT JOIN LATERAL (
+      SELECT max(s.signed_in_at) AS last_sign_in
+      FROM public.user_sign_ins s
+      WHERE s.user_id = u.id
+    ) signs ON true
+    LEFT JOIN LATERAL (
+      SELECT max(a.updated_at) AS last_app
+      FROM public.applications a
+      WHERE a.user_id = u.id::text
+    ) apps ON true
+    WHERE COALESCE(p.plan, 'free') = 'pro'
+      AND NULLIF(btrim(COALESCE(p.stripe_subscription_id, '')), '') IS NOT NULL
+    ORDER BY last_sign_in_at NULLS FIRST
+    LIMIT %s
+"""
+
+
 def list_account_activity(*, paying_only: bool, limit: int = 200) -> dict:
     """Liste admin : dernière connexion, dernière action produit, repères 60/90 jours."""
     cap = max(1, min(int(limit), 200))
     pool = _pool()
     now = datetime.now(timezone.utc)
-    paying_clause = ""
-    if paying_only:
-        paying_clause = """
-          AND COALESCE(p.plan, 'free') = 'pro'
-          AND NULLIF(btrim(COALESCE(p.stripe_subscription_id, '')), '') IS NOT NULL
-        """
-    sql = f"""
-        SELECT
-          u.id::text AS user_id,
-          COALESCE(p.plan, 'free') AS plan,
-          (
-            COALESCE(p.plan, 'free') = 'pro'
-            AND NULLIF(btrim(COALESCE(p.stripe_subscription_id, '')), '') IS NOT NULL
-          ) AS paying,
-          GREATEST(u.last_sign_in_at, signs.last_sign_in) AS last_sign_in_at,
-          GREATEST(cv.updated_at, apps.last_app) AS last_product_at
-        FROM auth.users u
-        LEFT JOIN public.user_plans p ON p.user_id = u.id::text
-        LEFT JOIN public.cv_base cv ON cv.id = u.id::text
-        LEFT JOIN LATERAL (
-          SELECT max(s.signed_in_at) AS last_sign_in
-          FROM public.user_sign_ins s
-          WHERE s.user_id = u.id
-        ) signs ON true
-        LEFT JOIN LATERAL (
-          SELECT max(a.updated_at) AS last_app
-          FROM public.applications a
-          WHERE a.user_id = u.id::text
-        ) apps ON true
-        WHERE true
-        {paying_clause}
-        ORDER BY last_sign_in_at NULLS FIRST
-        LIMIT %s
-    """
+    sql = _PAYING_ACCOUNTS_SQL if paying_only else _ACCOUNTS_SQL
     try:
         from psycopg.rows import dict_row
 
