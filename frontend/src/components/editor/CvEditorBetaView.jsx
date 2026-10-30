@@ -11,6 +11,7 @@ import {
   prepareAppleDownloadWindow,
   saveBlobWithPreferredMethod,
 } from '../../api';
+import { CV_IMPORT_REQUEST_TIMEOUT_MS } from '../../lib/fetchWithDeadline.js';
 import CvImportLoadingOverlay from '../CvImportLoadingOverlay.jsx';
 import {
   cvFromImportPayload,
@@ -972,7 +973,7 @@ function CvEditorBeta({
 
   const handleImportFile = useCallback((file) => {
     if (!file) return;
-    runCvImport(() => apiPostFile('/api/cv/import', file));
+    runCvImport(() => apiPostFile('/api/cv/import', file, 'file', { timeoutMs: CV_IMPORT_REQUEST_TIMEOUT_MS }));
   }, [runCvImport]);
 
   useEffect(() => {

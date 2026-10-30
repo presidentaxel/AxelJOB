@@ -189,47 +189,6 @@
   line-height: 1.4;
 }
 
-/* Text import */
-.onb-text-import {
-  margin-top: 0.25rem;
-}
-
-.onb-text-import summary {
-  cursor: pointer;
-  color: var(--muted);
-  font-size: 0.8rem;
-  user-select: none;
-  font-weight: 500;
-}
-
-.onb-text-import summary:hover {
-  color: var(--accent);
-}
-
-.onb-textarea {
-  width: 100%;
-  margin-top: 0.75rem;
-  padding: 0.65rem 0.75rem;
-  border-radius: var(--radius-xs, 6px);
-  border: 1px solid var(--border, #e2e8f0);
-  background: var(--bg, #fff);
-  color: var(--text);
-  font-size: 0.85rem;
-  resize: vertical;
-  font-family: inherit;
-  transition: border-color 0.15s;
-}
-
-.onb-textarea:focus {
-  outline: none;
-  border-color: var(--accent);
-  box-shadow: var(--shadow-focus, 0 0 0 3px rgba(79, 70, 229, 0.12));
-}
-
-.onb-btn-parse {
-  margin-top: 0.5rem;
-}
-
 .onb-file-hidden {
   display: none;
 }
