@@ -890,6 +890,7 @@ export default function App() {
   const [addManualPdfFiche, setAddManualPdfFiche] = useState(null);
   const [justAddedAppId, setJustAddedAppId] = useState(null);
   const [needsOnboarding, setNeedsOnboarding] = useState(false);
+  const welcomeExitRef = useRef(null);
   const [onboardingChecked, setOnboardingChecked] = useState(false);
   /** Erreur réseau/API sur GET /api/cv?profile=1 - ne pas confondre avec « profil vide ». */
   const [profileCvLoadError, setProfileCvLoadError] = useState(null);
@@ -1379,6 +1380,22 @@ export default function App() {
     if (!pathname.startsWith('/app')) return;
     if (!isKnownAppPathname(pathname)) navigate(APP_DEFAULT_ROUTE, { replace: true });
   }, [session, authLoading, pathname, navigate]);
+
+  /* AXE-500 : l'écran Bienvenue a sa route. /app/cv ne l'affiche pas. */
+  useEffect(() => {
+    if (!session || authLoading || !onboardingChecked) return;
+    if (!pathname.startsWith('/app')) return;
+    const onWelcome = pathname.startsWith(APP_ROUTES.bienvenue);
+    if (needsOnboarding && !onWelcome) {
+      navigate(APP_ROUTES.bienvenue, { replace: true });
+      return;
+    }
+    if (!needsOnboarding && onWelcome) {
+      const dest = welcomeExitRef.current || APP_DEFAULT_ROUTE;
+      welcomeExitRef.current = null;
+      navigate(dest, { replace: true });
+    }
+  }, [session, authLoading, onboardingChecked, needsOnboarding, pathname, navigate]);
 
   const setPreviewHtml = (html) => {
     const s = typeof html === 'string' ? html : '';
@@ -3686,12 +3703,14 @@ export default function App() {
       />
 
       <main className="app-main" id="main-content">
-        {needsOnboarding && onboardingChecked && (
+        {needsOnboarding && onboardingChecked && view === 'bienvenue' && (
           <OnboardingWizard
             session={session}
             templatesList={templatesList}
             onImportedTemplate={handleUserPickTemplate}
             onComplete={(target) => {
+              const dest = target === 'profil' ? '/app/profil' : '/app/cv';
+              welcomeExitRef.current = dest;
               setNeedsOnboarding(false);
               setOnboardingChecked(true);
               setProfileRefreshKey((k) => k + 1);
@@ -3700,8 +3719,7 @@ export default function App() {
                   localStorage.removeItem(`cv_bot_tour_done_main_phase1_${session.user.id}`);
                 } catch (_) { /* ignore */ }
               }
-              if (target === 'profil') navigate('/app/profil');
-              else navigate('/app/cv');
+              navigate(dest);
             }}
           />
         )}
