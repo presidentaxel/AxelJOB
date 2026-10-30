@@ -15,16 +15,27 @@ export function getCanvasDraftUserId() {
   return scopedUserId;
 }
 
+function storageKeyFor(base, userId) {
+  const id = String(userId || '').trim();
+  return id ? `${base}::${id}` : base;
+}
+
 function scopedStorageKey(base) {
-  return scopedUserId ? `${base}::${scopedUserId}` : base;
+  return storageKeyFor(base, scopedUserId);
+}
+
+/** Clés du compte donné, sans changer le compte courant du module. */
+export function canvasDraftStorageKeysFor(userId) {
+  const id = userId === undefined ? scopedUserId : userId;
+  return {
+    drafts: storageKeyFor(DRAFTS_STORAGE_KEY, id),
+    prefs: storageKeyFor(PREFS_STORAGE_KEY, id),
+    active: storageKeyFor(ACTIVE_CONTEXT_STORAGE_KEY, id),
+  };
 }
 
 export function canvasDraftStorageKeys() {
-  return {
-    drafts: scopedStorageKey(DRAFTS_STORAGE_KEY),
-    prefs: scopedStorageKey(PREFS_STORAGE_KEY),
-    active: scopedStorageKey(ACTIVE_CONTEXT_STORAGE_KEY),
-  };
+  return canvasDraftStorageKeysFor(scopedUserId);
 }
 
 export const BLANK_CANVAS_CONTEXT_KEY = 'blank';

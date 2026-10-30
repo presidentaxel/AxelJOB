@@ -56,6 +56,7 @@ import {
   saveCanvasDraft,
   setActiveCanvasContext,
   setCanvasDraftPrefs,
+  getCanvasDraftUserId,
   setCanvasDraftUserId,
   templateCanvasContextKey,
 } from '../../lib/canvasLayoutDrafts.js';
@@ -368,8 +369,15 @@ function CvEditorBeta({
 
   const accountId = session?.user?.id || '';
   const prevAccountIdRef = useRef(accountId);
+  const loadedForAccountRef = useRef('');
+  const draftSaveTimerRef = useRef(null);
   useLayoutEffect(() => {
     if (prevAccountIdRef.current !== accountId) {
+      if (draftSaveTimerRef.current) {
+        clearTimeout(draftSaveTimerRef.current);
+        draftSaveTimerRef.current = null;
+      }
+      loadedForAccountRef.current = '';
       autoSaveRef.current?.discard?.();
       prevAccountIdRef.current = accountId;
     }
@@ -405,14 +413,21 @@ function CvEditorBeta({
 
   useEffect(() => {
     if (!layout || !cv || profileLoadError) return undefined;
+    if (loadedForAccountRef.current !== accountId) return undefined;
+    const ownerId = accountId;
     const id = setTimeout(() => {
+      if (getCanvasDraftUserId() !== ownerId || loadedForAccountRef.current !== ownerId) return;
       saveCanvasDraft(activeLayoutContextKey, layout, {
         label: canvasContextLabel(activeLayoutContextKey, templatesList),
       });
       refreshCanvasDrafts();
     }, 250);
-    return () => clearTimeout(id);
-  }, [layout, activeLayoutContextKey, templatesList, refreshCanvasDrafts, cv, profileLoadError]);
+    draftSaveTimerRef.current = id;
+    return () => {
+      clearTimeout(id);
+      if (draftSaveTimerRef.current === id) draftSaveTimerRef.current = null;
+    };
+  }, [layout, activeLayoutContextKey, templatesList, refreshCanvasDrafts, cv, profileLoadError, accountId]);
 
   const openCanvasContext = useCallback((contextKey, nextLayout, persistExtras = {}) => {
     const hydrated = cleanupCanvasHeaderOverlays(
@@ -457,6 +472,7 @@ function CvEditorBeta({
     apiGet('/api/cv?profile=1')
       .then((data) => {
         if (aborted) return;
+        loadedForAccountRef.current = accountId;
         const incoming = data && typeof data === 'object' ? data : {};
         const { layout: rawLayout, ...cvPayload } = incoming;
         const baseCv = typeof defaultCv === 'function' ? defaultCv() : defaultCv;
@@ -498,7 +514,10 @@ function CvEditorBeta({
         setCv(null);
         setLoading(false);
       });
-    return () => { aborted = true; };
+    return () => {
+      aborted = true;
+      if (loadedForAccountRef.current === accountId) loadedForAccountRef.current = '';
+    };
   }, [resetLayout, refreshKey, profileLoadAttempt, accountId]);
 
   // Libellés des brouillons locaux quand la liste templates arrive (async) -
