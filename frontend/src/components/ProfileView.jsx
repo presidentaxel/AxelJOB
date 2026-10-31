@@ -37,7 +37,7 @@ import {
   profilePutShouldKeepalive,
 } from '../lib/profileAutoSaveGate.js';
 import Button from './ui/Button.jsx';
-import Input from './ui/Input.jsx';
+import InlineEdit from './profile/InlineEdit.jsx';
 import '../styles/ProfileView.css';
 import '../styles/TemplatePicker.css';
 import '../styles/DesignModeBridgeModal.css';
@@ -156,13 +156,6 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
   const setTemplateId = onTemplateIdChange ?? ((id) => { setLocalTemplateId(id); localStorage.setItem('cv_template_id', id); });
   const templateOptions = templateOptionsProp ?? localTemplateOptions;
   const setTemplateOptions = onTemplateOptionsChange ?? ((opts) => { setLocalTemplateOptions(opts); localStorage.setItem('cv_template_options', JSON.stringify(opts)); });
-  const [surface, setSurface] = useState(() => {
-    try {
-      return sessionStorage.getItem('profile_stable_surface') === 'lecture' ? 'lecture' : 'saisie';
-    } catch {
-      return 'saisie';
-    }
-  });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -984,38 +977,8 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
   if (loading) return <div className="profile-loading">Chargement du profil…</div>;
 
   return (
-    <div className={`profile-view profile-view-with-preview ${surface === 'lecture' ? 'profile-view--lecture' : 'profile-view--saisie'}`}>
-      <div className="profile-surface-bar">
-        <div className="profile-surface-switch" role="tablist" aria-label="Affichage du profil">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={surface === 'saisie'}
-            className="profile-surface-switch-btn"
-            onClick={() => {
-              setSurface('saisie');
-              try { sessionStorage.setItem('profile_stable_surface', 'saisie'); } catch { /* ignore */ }
-            }}
-            {...analyticsAttrs('profil-surface-saisie', 'header', 'secondary', 'cta')}
-          >
-            Saisie
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={surface === 'lecture'}
-            className="profile-surface-switch-btn"
-            onClick={() => {
-              setSurface('lecture');
-              try { sessionStorage.setItem('profile_stable_surface', 'lecture'); } catch { /* ignore */ }
-            }}
-            {...analyticsAttrs('profil-surface-lecture', 'header', 'secondary', 'cta')}
-          >
-            Lecture
-          </button>
-        </div>
-      </div>
-      <div className="profile-form-pane" hidden={surface === 'lecture'}>
+    <div className="profile-view profile-view-with-preview">
+      <div className="profile-form-pane">
       <div className="profile-header">
         <div className="profile-header-copy">
           <h1 className="ds-heading-md">Mon profil CV</h1>
@@ -1149,15 +1112,15 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
           </div>
         )}
         <div className="profile-grid profile-grid-identity">
-          <label>Prénom <Input type="text" value={cv.prenom || ''} onChange={(e) => update('prenom', e.target.value)} /></label>
-          <label>Nom <Input type="text" value={cv.nom || ''} onChange={(e) => update('nom', e.target.value)} /></label>
-          <label>Email <Input type="email" value={cv.email || ''} onChange={(e) => update('email', e.target.value)} /></label>
-          <label>Téléphone <Input type="text" value={cv.telephone || ''} onChange={(e) => update('telephone', e.target.value)} /></label>
-          <label>LinkedIn <Input type="text" value={cv.linkedin || ''} onChange={(e) => update('linkedin', e.target.value)} placeholder="URL" /></label>
-          <label>Ville <Input type="text" value={cv.ville || ''} onChange={(e) => update('ville', e.target.value)} /></label>
+          <InlineEdit label="Prénom" value={cv.prenom || ''} onChange={(v) => update('prenom', v)} />
+          <InlineEdit label="Nom" value={cv.nom || ''} onChange={(v) => update('nom', v)} />
+          <InlineEdit label="Email" type="email" value={cv.email || ''} onChange={(v) => update('email', v)} />
+          <InlineEdit label="Téléphone" value={cv.telephone || ''} onChange={(v) => update('telephone', v)} />
+          <InlineEdit label="LinkedIn" value={cv.linkedin || ''} onChange={(v) => update('linkedin', v)} placeholder="URL" />
+          <InlineEdit label="Ville" value={cv.ville || ''} onChange={(v) => update('ville', v)} />
         </div>
-        <label className="profile-full">Titre professionnel <Input type="text" value={cv.titre_professionnel || ''} onChange={(e) => update('titre_professionnel', e.target.value)} placeholder="ex. Étudiant HEC - Data Analyst ou Data Analyst" /></label>
-        <label className="profile-full">Résumé / Accroche <textarea value={cv.resume || ''} onChange={(e) => update('resume', e.target.value)} rows={3} placeholder="Quelques lignes pour te présenter" /></label>
+        <InlineEdit className="profile-full" label="Titre professionnel" value={cv.titre_professionnel || ''} onChange={(v) => update('titre_professionnel', v)} placeholder="ex. Étudiant HEC - Data Analyst ou Data Analyst" />
+        <InlineEdit className="profile-full" label="Résumé / Accroche" multiline rows={3} value={cv.resume || ''} onChange={(v) => update('resume', v)} placeholder="Quelques lignes pour te présenter" />
       </CollapsibleSection>
 
       <CollapsibleSection title="Expériences professionnelles" defaultOpen={true}>
@@ -1171,14 +1134,14 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
               <button type="button" className="btn btn-remove" onClick={() => removeExp(i)} title="Supprimer">×</button>
             </div>
             <div className="profile-grid">
-              <label>Poste <Input type="text" value={exp.poste || ''} onChange={(e) => updateExp(i, 'poste', e.target.value)} /></label>
-              <label>Organisation <Input type="text" value={exp.entreprise || ''} onChange={(e) => updateExp(i, 'entreprise', e.target.value)} placeholder="Entreprise, association, administration…" /></label>
-              <label>Secteur <Input type="text" value={exp.secteur || ''} onChange={(e) => updateExp(i, 'secteur', e.target.value)} /></label>
-              <label>Date début <Input type="text" value={exp.date_debut || ''} onChange={(e) => updateExp(i, 'date_debut', e.target.value)} placeholder="ex. 2022, 01/2024" title="Année ou mois (vide = pas affiché sur le CV)" /></label>
-              <label>Date fin <Input type="text" value={exp.date_fin || ''} onChange={(e) => updateExp(i, 'date_fin', e.target.value)} placeholder="ex. Aujourd'hui, 08/2024" title="Année, mois ou Aujourd'hui (vide = pas affiché)" /></label>
-              <label>Lieu <Input type="text" value={exp.lieu || ''} onChange={(e) => updateExp(i, 'lieu', e.target.value)} /></label>
+              <InlineEdit label="Poste" value={exp.poste || ''} onChange={(v) => updateExp(i, 'poste', v)} />
+              <InlineEdit label="Organisation" value={exp.entreprise || ''} onChange={(v) => updateExp(i, 'entreprise', v)} placeholder="Entreprise, association, administration…" />
+              <InlineEdit label="Secteur" value={exp.secteur || ''} onChange={(v) => updateExp(i, 'secteur', v)} />
+              <InlineEdit label="Date début" value={exp.date_debut || ''} onChange={(v) => updateExp(i, 'date_debut', v)} placeholder="ex. 2022, 01/2024" title="Année ou mois (vide = pas affiché sur le CV)" />
+              <InlineEdit label="Date fin" value={exp.date_fin || ''} onChange={(v) => updateExp(i, 'date_fin', v)} placeholder="ex. Aujourd'hui, 08/2024" title="Année, mois ou Aujourd'hui (vide = pas affiché)" />
+              <InlineEdit label="Lieu" value={exp.lieu || ''} onChange={(v) => updateExp(i, 'lieu', v)} />
             </div>
-            <label className="profile-full">Contexte <Input type="text" value={exp.contexte || ''} onChange={(e) => updateExp(i, 'contexte', e.target.value)} /></label>
+            <InlineEdit className="profile-full" label="Contexte" value={exp.contexte || ''} onChange={(v) => updateExp(i, 'contexte', v)} />
             <div className="profile-bullets">
               <div className="profile-bullets-head">
                 <span>Bullet points</span>
@@ -1186,12 +1149,12 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
               </div>
               {(exp.bullet_points || ['', '']).map((b, j) => (
                 <div key={j} className="profile-bullet-row">
-                  <textarea value={b} onChange={(e) => updateExpBullet(i, j, e.target.value)} rows={2} placeholder={`Point ${j + 1}`} />
+                  <InlineEdit multiline rows={2} value={b} onChange={(v) => updateExpBullet(i, j, v)} placeholder={`Point ${j + 1}`} />
                   <button type="button" className="btn btn-remove" onClick={() => removeExpBullet(i, j)} title="Supprimer ce point">×</button>
                 </div>
               ))}
             </div>
-            <label className="profile-full">Clients <Input type="text" value={exp.clients || ''} onChange={(e) => updateExp(i, 'clients', e.target.value)} placeholder="ex. L'Oréal, Charal, Herta (vide = pas affiché sur le CV)" title="Liste de clients ou types de clients (vide = pas affiché)" /></label>
+            <InlineEdit className="profile-full" label="Clients" value={exp.clients || ''} onChange={(v) => updateExp(i, 'clients', v)} placeholder="ex. L'Oréal, Charal, Herta (vide = pas affiché sur le CV)" title="Liste de clients ou types de clients (vide = pas affiché)" />
           </div>
         ))}
       </CollapsibleSection>
@@ -1207,10 +1170,10 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
               <button type="button" className="btn btn-remove" onClick={() => removeFormation(i)}>×</button>
             </div>
             <div className="profile-grid">
-              <label>Diplôme <Input type="text" value={form.diplome || ''} onChange={(e) => updateFormation(i, 'diplome', e.target.value)} /></label>
-              <label>Établissement <Input type="text" value={form.etablissement || ''} onChange={(e) => updateFormation(i, 'etablissement', e.target.value)} /></label>
-              <label>Date <Input type="text" value={form.date || ''} onChange={(e) => updateFormation(i, 'date', e.target.value)} placeholder="ex. 2024, 06/2023" title="Année ou mois (vide = pas affiché sur le CV)" /></label>
-              <label className="profile-full">Description <textarea className="profile-mention-field" value={form.mention || ''} onChange={(e) => updateFormation(i, 'mention', e.target.value)} rows={4} placeholder="ex. Mention Bien, Félicitations du jury" /></label>
+              <InlineEdit label="Diplôme" value={form.diplome || ''} onChange={(v) => updateFormation(i, 'diplome', v)} />
+              <InlineEdit label="Établissement" value={form.etablissement || ''} onChange={(v) => updateFormation(i, 'etablissement', v)} />
+              <InlineEdit label="Date" value={form.date || ''} onChange={(v) => updateFormation(i, 'date', v)} placeholder="ex. 2024, 06/2023" title="Année ou mois (vide = pas affiché sur le CV)" />
+              <InlineEdit className="profile-full" label="Description" multiline rows={4} value={form.mention || ''} onChange={(v) => updateFormation(i, 'mention', v)} placeholder="ex. Mention Bien, Félicitations du jury" />
             </div>
           </div>
         ))}
@@ -1228,9 +1191,9 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
               <button type="button" className="btn btn-remove" onClick={() => removeCertification(i)}>×</button>
             </div>
             <div className="profile-grid">
-              <label>Intitulé <Input type="text" value={cert.nom || ''} onChange={(e) => updateCertification(i, 'nom', e.target.value)} placeholder="ex. PMP, AWS Solutions Architect" /></label>
-              <label>Organisme <Input type="text" value={cert.organisme || ''} onChange={(e) => updateCertification(i, 'organisme', e.target.value)} placeholder="ex. PMI, Amazon" /></label>
-              <label>Date <Input type="text" value={cert.date || ''} onChange={(e) => updateCertification(i, 'date', e.target.value)} placeholder="ex. 2024, 06/2023" /></label>
+              <InlineEdit label="Intitulé" value={cert.nom || ''} onChange={(v) => updateCertification(i, 'nom', v)} placeholder="ex. PMP, AWS Solutions Architect" />
+              <InlineEdit label="Organisme" value={cert.organisme || ''} onChange={(v) => updateCertification(i, 'organisme', v)} placeholder="ex. PMI, Amazon" />
+              <InlineEdit label="Date" value={cert.date || ''} onChange={(v) => updateCertification(i, 'date', v)} placeholder="ex. 2024, 06/2023" />
             </div>
           </div>
         ))}
@@ -1246,8 +1209,8 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
               <span>Projet {i + 1}</span>
               <button type="button" className="btn btn-remove" onClick={() => removeProjet(i)}>×</button>
             </div>
-            <label>Nom <Input type="text" value={proj.nom || ''} onChange={(e) => updateProjet(i, 'nom', e.target.value)} /></label>
-            <label className="profile-full">Description <textarea value={proj.description || ''} onChange={(e) => updateProjet(i, 'description', e.target.value)} rows={2} /></label>
+            <InlineEdit label="Nom" value={proj.nom || ''} onChange={(v) => updateProjet(i, 'nom', v)} />
+            <InlineEdit className="profile-full" label="Description" multiline rows={2} value={proj.description || ''} onChange={(v) => updateProjet(i, 'description', v)} />
           </div>
         ))}
       </CollapsibleSection>
@@ -1257,7 +1220,7 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
           <h3 className="sidebar-category">Compétences techniques</h3>
           {(comp.techniques || []).map((item, i) => (
             <div key={i} className="profile-comp-row">
-              <Input type="text" value={typeof item === 'string' ? item : ''} onChange={(e) => updateCompList('techniques', i, e.target.value)} placeholder="ex. Python, Gestion de projet" />
+              <InlineEdit value={typeof item === 'string' ? item : ''} onChange={(v) => updateCompList('techniques', i, v)} placeholder="ex. Python, Gestion de projet" />
               <button type="button" className="btn btn-remove" onClick={() => removeCompList('techniques', i)} title="Supprimer">×</button>
             </div>
           ))}
@@ -1267,7 +1230,7 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
           <h3 className="sidebar-category">Logiciels & outils</h3>
           {(comp.logiciels || []).map((item, i) => (
             <div key={i} className="profile-comp-row">
-              <Input type="text" value={typeof item === 'string' ? item : ''} onChange={(e) => updateCompList('logiciels', i, e.target.value)} placeholder="ex. Excel, React, Git" />
+              <InlineEdit value={typeof item === 'string' ? item : ''} onChange={(v) => updateCompList('logiciels', i, v)} placeholder="ex. Excel, React, Git" />
               <button type="button" className="btn btn-remove" onClick={() => removeCompList('logiciels', i)} title="Supprimer">×</button>
             </div>
           ))}
@@ -1277,8 +1240,8 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
           <h3 className="sidebar-category">Langues</h3>
           {(comp.langues || []).map((l, i) => (
             <div key={i} className="profile-langue-row">
-              <Input type="text" value={l?.langue || ''} onChange={(e) => updateCompList('langues', i, { ...l, langue: e.target.value })} placeholder="Langue" />
-              <Input type="text" value={l?.niveau || ''} onChange={(e) => updateCompList('langues', i, { ...l, niveau: e.target.value })} placeholder="ex. Natif, Courant (C1)" />
+              <InlineEdit value={l?.langue || ''} onChange={(v) => updateCompList('langues', i, { ...l, langue: v })} placeholder="Langue" />
+              <InlineEdit value={l?.niveau || ''} onChange={(v) => updateCompList('langues', i, { ...l, niveau: v })} placeholder="ex. Natif, Courant (C1)" />
               <button type="button" className="btn btn-remove" onClick={() => removeCompList('langues', i)} title="Supprimer">×</button>
             </div>
           ))}
@@ -1288,7 +1251,7 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
           <h3 className="sidebar-category">Autres</h3>
           {(comp.autres || []).map((item, i) => (
             <div key={i} className="profile-comp-row">
-              <Input type="text" value={typeof item === 'string' ? item : ''} onChange={(e) => updateCompList('autres', i, e.target.value)} placeholder="ex. Permis B, Piano" />
+              <InlineEdit value={typeof item === 'string' ? item : ''} onChange={(v) => updateCompList('autres', i, v)} placeholder="ex. Permis B, Piano" />
               <button type="button" className="btn btn-remove" onClick={() => removeCompList('autres', i)} title="Supprimer">×</button>
             </div>
           ))}
@@ -1412,9 +1375,7 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
 
       <div className="profile-preview-pane">
         <div className="profile-preview-pane-top">
-          {surface === 'saisie' ? (
-            <h2 className="profile-preview-title ds-label-sm">Aperçu du CV</h2>
-          ) : null}
+          <h2 className="profile-preview-title ds-label-sm">Aperçu du CV</h2>
           <TemplatePicker
             templates={templatesList}
             templateId={templateId}
@@ -1454,7 +1415,7 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
             )}
             {!profilePreviewLoading && !profilePreviewHtml && (
               <p className="profile-preview-empty">
-                {surface === 'lecture' ? 'Rien à afficher pour l’instant.' : 'Complète la saisie pour voir le CV.'}
+                Complète ton profil pour voir le CV.
               </p>
             )}
             {profilePreviewHtml && (

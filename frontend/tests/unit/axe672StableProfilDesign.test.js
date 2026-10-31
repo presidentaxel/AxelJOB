@@ -18,11 +18,13 @@ test('l’en-tête Stable utilise Button et les rôles typo', () => {
   assert.doesNotMatch(src, /btn btn-import-cv/);
 });
 
-test('le profil Stable bascule entre Saisie et Lecture', () => {
-  assert.match(src, /Saisie/);
-  assert.match(src, /Lecture/);
-  assert.match(src, /profile-view--lecture/);
-  assert.match(src, /hidden=\{surface === 'lecture'\}/);
+test('chaque champ du profil s’ouvre seul, sans mode Saisie ou Lecture', () => {
+  assert.match(src, /InlineEdit/);
+  assert.doesNotMatch(src, /profile-surface-switch/);
+  assert.doesNotMatch(src, /profile_stable_surface/);
+  const inline = readFileSync(new URL('../../src/components/profile/InlineEdit.jsx', import.meta.url), 'utf8');
+  assert.match(inline, /HiPencil/);
+  assert.match(inline, /setEditing\(true\)/);
 });
 
 test('l’aperçu A4 tient dans la largeur de sa zone', () => {

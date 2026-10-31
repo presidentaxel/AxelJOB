@@ -17,54 +17,6 @@
   height: 100%;
 }
 
-.profile-view--lecture {
-  grid-template-columns: minmax(0, 1fr);
-}
-
-.profile-surface-bar {
-  grid-column: 1 / -1;
-  display: flex;
-  align-items: center;
-  min-height: 0;
-}
-
-.profile-surface-switch {
-  display: inline-flex;
-  gap: 2px;
-  padding: 2px;
-  border-radius: var(--ds-radius-action);
-  background: var(--ds-color-bg-subtle);
-}
-
-.profile-surface-switch-btn {
-  border: none;
-  background: transparent;
-  min-height: var(--ds-size-button-md);
-  padding: 0 0.9rem;
-  border-radius: var(--ds-radius-action);
-  color: var(--ds-color-text-muted);
-  font: inherit;
-  font-size: 0.875rem;
-  font-weight: 500;
-  cursor: pointer;
-}
-
-.profile-surface-switch-btn[aria-selected="true"] {
-  background: var(--ds-color-bg-default);
-  color: var(--ds-color-text-default);
-}
-
-.profile-view--lecture .profile-preview-pane {
-  max-width: 210mm;
-  width: 100%;
-  margin: 0 auto;
-}
-
-.profile-view--lecture .profile-preview-pane-scroll {
-  display: flex;
-  justify-content: center;
-}
-
 /* Desktop 2 colonnes : une ligne dont la hauteur suit le parent flex, pas le contenu (iframe 2+ pages).
    Sinon la grille dépasse le viewport et .view-profil .page-content (overflow:hidden) coupe le scroll. */
 @media (min-width: 901px) {
@@ -119,9 +71,6 @@
   .profile-header-actions .btn {
     width: 100%;
     justify-content: center;
-  }
-  .profile-surface-switch-btn {
-    min-height: var(--ds-size-touch-min);
   }
   .profile-completion {
     padding: 0;
@@ -459,6 +408,108 @@
 
 .profile-section-body {
   padding: 0 0 1rem;
+}
+
+/* Champ : texte + crayon, trait en dessous. La saisie ne s’ouvre que sur ce champ. */
+.profile-inline {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.profile-inline-label {
+  color: var(--ds-color-text-muted);
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.profile-inline-line {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+  border-bottom: 1px solid var(--ds-color-border-default);
+}
+
+.profile-inline-line:focus-within {
+  border-bottom-color: var(--ds-color-border-input-focus);
+}
+
+.profile-inline-display,
+.profile-inline-input {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  padding: 0.2rem 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: var(--ds-color-text-default);
+  font: inherit;
+  font-size: 0.875rem;
+  line-height: 1.35;
+  text-align: left;
+}
+
+.profile-inline-display {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  width: 100%;
+  min-height: 1.6rem;
+  appearance: none;
+  cursor: pointer;
+}
+
+.profile-inline-display:focus-visible {
+  outline: 2px solid var(--ds-color-border-focus);
+  outline-offset: 2px;
+}
+
+.profile-inline-input {
+  min-height: 1.6rem;
+  resize: vertical;
+}
+
+.profile-inline-input:focus {
+  outline: none;
+}
+
+.profile-inline-value,
+.profile-inline-placeholder {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-inline--multi .profile-inline-value,
+.profile-inline--multi .profile-inline-placeholder {
+  white-space: pre-wrap;
+}
+
+.profile-inline-placeholder {
+  color: var(--ds-color-text-muted);
+}
+
+.profile-inline-pencil {
+  flex-shrink: 0;
+  width: 0.9rem;
+  height: 0.9rem;
+  color: var(--ds-color-text-muted);
+}
+
+.profile-inline.profile-full {
+  margin-top: 0.45rem;
+}
+
+.profile-bullet-row .profile-inline,
+.profile-comp-row .profile-inline,
+.profile-langue-row .profile-inline {
+  flex: 1;
+  min-width: 0;
 }
 
 /* Form fields inside profile */
