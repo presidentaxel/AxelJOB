@@ -383,10 +383,14 @@
 }
 
 /* Champ : texte + crayon, trait en dessous. La saisie ne s’ouvre que sur ce champ. */
+.profile-section-panel {
+  --profile-label: 9.5rem;
+}
+
 .profile-inline {
   display: grid;
-  grid-template-columns: var(--profile-label, 8.75rem) minmax(0, 1fr);
-  align-items: center;
+  grid-template-columns: var(--profile-label, 9.5rem) minmax(0, 1fr);
+  align-items: start;
   column-gap: var(--ds-space-sm);
   min-width: 0;
 }
@@ -395,25 +399,37 @@
   grid-template-columns: minmax(0, 1fr);
 }
 
-.profile-inline--multi {
-  align-items: start;
-}
-
 .profile-inline-label {
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+  height: 1.75rem;
+  border-bottom: 1px solid transparent;
   color: var(--ds-color-text-muted);
   font-size: 0.75rem;
   font-weight: 500;
-  line-height: 1.2;
-  white-space: normal;
+  line-height: 1;
+  white-space: nowrap;
 }
 
 .profile-inline-line {
   display: flex;
   align-items: center;
+  box-sizing: border-box;
   gap: 0.35rem;
   min-width: 0;
+  height: 1.75rem;
   min-height: 1.75rem;
   border-bottom: 1px solid var(--ds-color-border-default);
+}
+
+.profile-inline--multi .profile-inline-line {
+  height: auto;
+  align-items: flex-start;
+}
+
+.profile-inline--multi .profile-inline-pencil-btn {
+  height: 1.75rem;
 }
 
 .profile-inline-line:focus-within {
@@ -424,10 +440,10 @@
   flex: 1;
   width: 100%;
   min-width: 0;
-  min-height: 1.6rem;
-  height: 1.6rem;
+  min-height: 0;
+  height: auto;
   margin: 0;
-  padding: 0.2rem 0;
+  padding: 0;
   border: none;
   border-radius: 0;
   background: transparent;
@@ -436,7 +452,7 @@
   font: inherit;
   font-size: 0.875rem;
   font-weight: 400;
-  line-height: 1.35;
+  line-height: calc(1.75rem - 1px);
   text-align: left;
   resize: none;
   overflow: hidden;
@@ -445,6 +461,8 @@
 
 .profile-form-pane .profile-inline--multi .profile-inline-input {
   height: auto;
+  line-height: 1.35;
+  padding: 0.28rem 0;
   field-sizing: content;
 }
 
@@ -490,7 +508,7 @@
 }
 
 .profile-bullet-row .profile-inline-line {
-  margin-left: calc(var(--profile-label, 8.75rem) + var(--ds-space-sm));
+  margin-left: calc(var(--profile-label, 9.5rem) + var(--ds-space-sm));
 }
 
 .profile-section-nav {
@@ -526,7 +544,7 @@
 }
 
 .profile-section-panel {
-  --profile-label: 8.75rem;
+  --profile-label: 9.5rem;
 }
 
 .profile-section-panel > h2 {
@@ -665,7 +683,7 @@
 
 .profile-bullets-head {
   display: grid;
-  grid-template-columns: var(--profile-label, 8.75rem) minmax(0, 1fr);
+  grid-template-columns: var(--profile-label, 9.5rem) minmax(0, 1fr);
   column-gap: var(--ds-space-sm);
   align-items: center;
   font-size: 0.8rem;
