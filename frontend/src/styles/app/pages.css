@@ -141,11 +141,16 @@
   padding: 0;
 }
 
+.view-profil .page-header {
+  padding-left: var(--ds-space-md);
+  padding-right: var(--ds-space-md);
+}
+
 .view-profil .page-content {
   overflow: hidden;
   flex: 1;
   min-height: 0;
-  padding-bottom: 2rem;
+  padding: var(--ds-space-md) var(--ds-space-md) 1rem;
   display: flex;
   flex-direction: column;
 }

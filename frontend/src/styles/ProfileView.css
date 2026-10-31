@@ -1,18 +1,18 @@
 .profile-view {
-  max-width: 1400px;
+  max-width: none;
   width: 100%;
-  margin: 0 auto;
+  margin: 0;
   box-sizing: border-box;
   font-family: var(--app-font-family);
 }
 
 .profile-view-with-preview {
   display: grid;
-  justify-items: end;
-  grid-template-columns: minmax(320px, 530px) 1fr;
-  gap: 0;
+  justify-items: stretch;
+  grid-template-columns: minmax(0, 1.15fr) minmax(280px, 0.85fr);
+  gap: var(--ds-space-md);
   align-items: stretch;
-  max-width: 1400px;
+  max-width: none;
   min-height: 0;
   height: 100%;
 }
@@ -26,8 +26,9 @@
 }
 
 .profile-form-pane {
-  border-right: 1px solid var(--border);
-  padding-right: 1.5rem;
+  border-right: 1px solid var(--ds-color-border-default);
+  padding-right: 0;
+  width: 100%;
 }
 
 @media (max-width: 900px) {
@@ -72,7 +73,7 @@
     justify-content: center;
   }
   .profile-completion {
-    padding: 0.75rem 0.85rem;
+    padding: 0;
   }
   .profile-completion-checks {
     gap: 0.35rem 0.65rem;
@@ -81,11 +82,11 @@
     padding: 0.75rem 0 1.5rem;
   }
   .profile-section-toggle {
-    padding: 0.65rem 0.85rem;
+    padding: 0.65rem 0;
   }
   .profile-section-body {
-    padding-left: 0.85rem;
-    padding-right: 0.85rem;
+    padding-left: 0;
+    padding-right: 0;
   }
   .profile-form-pane input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="hidden"]),
   .profile-form-pane textarea,
@@ -150,14 +151,14 @@
   width: 100%;
   max-height: calc(100vh - 140px);
   overflow: hidden;
-  padding: 1rem 1rem 2rem;
+  padding: 0;
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
   min-height: 0;
   box-sizing: border-box;
-  background: var(--ds-color-bg-subtle);
-  border-radius: var(--ds-radius-md);
+  background: transparent;
+  border-radius: 0;
 }
 
 /* Titre + barre template : fixes ; pas de scroll ici */
@@ -186,9 +187,9 @@
   min-height: 297mm;
   overflow-x: hidden;
   overflow-y: visible;
-  border: 1px solid var(--ds-color-border-default);
-  border-radius: var(--ds-radius-md);
-  background: var(--ds-color-bg-default);
+  border: none;
+  border-radius: 0;
+  background: transparent;
 }
 
 .profile-preview-iframe {
@@ -216,12 +217,12 @@
   align-items: flex-start;
   justify-content: space-between;
   flex-wrap: wrap;
-  gap: 0.75rem 1rem;
-  margin-bottom: 1rem;
-  padding: 1rem 1rem 0.9rem;
-  background: var(--ds-color-bg-default);
-  border: 1px solid var(--ds-color-border-default);
-  border-radius: var(--ds-radius-md);
+  gap: 0.5rem 1rem;
+  margin-bottom: 0.75rem;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 0;
 }
 
 .profile-header-copy {
@@ -279,11 +280,11 @@
 
 /* Profile completion bar */
 .profile-completion {
-  margin-bottom: 1.25rem;
-  padding: 0.85rem 1rem;
-  border-radius: var(--ds-radius-md);
-  background: var(--ds-color-bg-default);
-  border: 1px solid var(--ds-color-border-default);
+  margin-bottom: 1rem;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
 }
 
 .profile-completion-bar {
@@ -334,11 +335,12 @@
 
 /* Collapsible sections */
 .profile-section--collapsible {
-  border: 1px solid var(--ds-color-border-default);
-  border-radius: var(--ds-radius-md);
-  overflow: hidden;
-  margin-bottom: 0.75rem;
-  background: var(--ds-color-bg-default);
+  border: none;
+  border-bottom: 1px solid var(--ds-color-border-default);
+  border-radius: 0;
+  overflow: visible;
+  margin-bottom: 0;
+  background: transparent;
 }
 
 .profile-section-toggle {
@@ -347,7 +349,7 @@
   justify-content: space-between;
   width: 100%;
   min-height: var(--ds-size-touch-min, 44px);
-  padding: 0.75rem 1rem;
+  padding: 0.65rem 0;
   background: transparent;
   border: none;
   cursor: pointer;
@@ -355,7 +357,8 @@
 }
 
 .profile-section-toggle:hover {
-  background: var(--ds-color-bg-subtle);
+  background: transparent;
+  color: var(--ds-color-text-default);
 }
 
 .profile-section-toggle-text {
@@ -391,7 +394,7 @@
 }
 
 .profile-section-body {
-  padding: 0.25rem 1rem 1rem;
+  padding: 0 0 1rem;
 }
 
 /* Form fields inside profile */
@@ -444,11 +447,16 @@
 
 /* Profile cards (experience, formation, projet) */
 .profile-card {
-  border: 1px solid var(--ds-color-border-default);
-  border-radius: var(--ds-radius-md);
-  padding: 0.85rem;
-  margin-bottom: 0.5rem;
-  background: var(--ds-color-bg-subtle);
+  border: none;
+  border-radius: 0;
+  padding: 0;
+  margin: 0 0 1.25rem;
+  background: transparent;
+}
+
+.profile-card + .profile-card {
+  padding-top: 1rem;
+  border-top: 1px solid var(--ds-color-border-default);
 }
 
 .profile-card-head {
