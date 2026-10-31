@@ -11,7 +11,8 @@ const src = readFileSync(new URL('../../src/components/ProfileView.jsx', import.
 test('l’en-tête Stable utilise Button et les rôles typo', () => {
   const start = src.indexOf('className="profile-header"');
   const header = src.slice(start, start + 1400);
-  assert.match(header, /ds-heading-md/);
+  assert.match(header, /ds-label-md/);
+  assert.match(header, /size="sm"/);
   assert.match(header, /variant="secondary"/);
   assert.match(header, /variant="primary"/);
   assert.doesNotMatch(header, /btn-import-cv/);

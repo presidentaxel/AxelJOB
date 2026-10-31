@@ -61,16 +61,15 @@
     grid-template-columns: 1fr;
   }
   .profile-header {
-    flex-direction: column;
-    align-items: stretch;
+    flex-direction: row;
+    align-items: center;
   }
   .profile-header-actions {
-    flex-direction: column;
+    flex-direction: row;
   }
   .profile-header-actions .ds-button,
   .profile-header-actions .btn {
-    width: 100%;
-    justify-content: center;
+    width: auto;
   }
   .profile-completion {
     padding: 0;
@@ -211,20 +210,14 @@
 
 .profile-header {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 0.5rem 1rem;
-  margin-bottom: 0.75rem;
+  gap: var(--ds-space-sm);
+  margin-bottom: var(--ds-space-sm);
   padding: 0;
   background: transparent;
   border: none;
   border-radius: 0;
-}
-
-.profile-header-copy {
-  min-width: 0;
-  flex: 1 1 12rem;
 }
 
 .profile-header h1 {
@@ -232,15 +225,10 @@
   color: var(--ds-color-text-default);
 }
 
-.profile-subtitle {
-  margin: 0.25rem 0 0;
-  color: var(--ds-color-text-muted);
-}
-
 .profile-header-actions {
   display: flex;
-  gap: 0.5rem;
-  flex-wrap: wrap;
+  gap: var(--ds-space-sm);
+  flex-shrink: 0;
 }
 
 .profile-toast {
@@ -397,7 +385,7 @@
 /* Champ : texte + crayon, trait en dessous. La saisie ne s’ouvre que sur ce champ. */
 .profile-inline {
   display: grid;
-  grid-template-columns: 6.75rem minmax(0, 1fr);
+  grid-template-columns: var(--profile-label, 8.75rem) minmax(0, 1fr);
   align-items: center;
   column-gap: var(--ds-space-sm);
   min-width: 0;
@@ -415,13 +403,16 @@
   color: var(--ds-color-text-muted);
   font-size: 0.75rem;
   font-weight: 500;
+  line-height: 1.2;
+  white-space: nowrap;
 }
 
 .profile-inline-line {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 0.35rem;
   min-width: 0;
+  min-height: 1.75rem;
   border-bottom: 1px solid var(--ds-color-border-default);
 }
 
@@ -475,7 +466,6 @@
   background: transparent;
   color: var(--ds-color-text-muted);
   cursor: pointer;
-  margin-top: 0.2rem;
 }
 
 .profile-inline-pencil-btn:focus-visible {
@@ -489,7 +479,11 @@
 }
 
 .profile-inline.profile-full {
-  margin-top: 0.35rem;
+  margin-top: 0;
+}
+
+.profile-bullet-row .profile-inline-line {
+  margin-left: calc(var(--profile-label, 8.75rem) + var(--ds-space-sm));
 }
 
 .profile-section-nav {
@@ -524,8 +518,20 @@
   outline-offset: 2px;
 }
 
+.profile-section-panel {
+  --profile-label: 8.75rem;
+}
+
 .profile-section-panel > h2 {
-  margin: 0 0 0.75rem;
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .profile-bullet-row .profile-inline,
@@ -582,6 +588,9 @@
 
 /* Profile cards (experience, formation, projet) */
 .profile-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
   border: none;
   border-radius: 0;
   padding: 0;
@@ -617,13 +626,18 @@
 }
 
 .profile-bullets-head {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: var(--profile-label, 8.75rem) minmax(0, 1fr);
+  column-gap: var(--ds-space-sm);
   align-items: center;
   font-size: 0.8rem;
   font-weight: 500;
   color: var(--muted);
   margin-bottom: 0.35rem;
+}
+
+.profile-bullets-head button {
+  justify-self: end;
 }
 
 .profile-bullet-row {

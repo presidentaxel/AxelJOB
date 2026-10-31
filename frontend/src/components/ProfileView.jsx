@@ -965,17 +965,14 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
     <div className="profile-view profile-view-with-preview">
       <div className="profile-form-pane">
       <div className="profile-header">
-        <div className="profile-header-copy">
-          <h1 className="ds-heading-md">Mon profil CV</h1>
-          <p className="profile-subtitle ds-body-md">Complète tes informations. Le CV est généré à partir de ces données.</p>
-        </div>
+        <h1 className="ds-label-md">Profil</h1>
         <div className="profile-header-actions">
           <input ref={importFileRef} type="file" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" style={{ display: 'none' }} onChange={handleImportCv} />
-          <Button type="button" variant="secondary" onClick={() => importFileRef.current?.click()} disabled={importLoading} loading={importLoading} {...analyticsAttrs('profil-header-cta-import', 'header', 'secondary', 'cta')}>
-            {importLoading ? 'Import…' : 'Importer un CV'}
+          <Button type="button" variant="secondary" size="sm" title="Importer un CV" onClick={() => importFileRef.current?.click()} disabled={importLoading} loading={importLoading} {...analyticsAttrs('profil-header-cta-import', 'header', 'secondary', 'cta')}>
+            {importLoading ? 'Import…' : 'Importer'}
           </Button>
-          <Button type="button" variant="primary" className="profile-save-btn" onClick={handleSave} disabled={saving} loading={saving} {...analyticsAttrs('profil-header-cta-save', 'header', 'primary', 'cta')}>
-            {saving ? 'Enregistrement…' : 'Enregistrer les modifications'}
+          <Button type="button" variant="primary" size="sm" className="profile-save-btn" title="Enregistrer les modifications" onClick={handleSave} disabled={saving} loading={saving} {...analyticsAttrs('profil-header-cta-save', 'header', 'primary', 'cta')}>
+            {saving ? 'Enregistrement…' : 'Enregistrer'}
           </Button>
         </div>
       </div>
@@ -1126,9 +1123,9 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
           <InlineEdit label="Téléphone" value={cv.telephone || ''} onChange={(v) => update('telephone', v)} />
           <InlineEdit label="LinkedIn" value={cv.linkedin || ''} onChange={(v) => update('linkedin', v)} placeholder="URL" />
           <InlineEdit label="Ville" value={cv.ville || ''} onChange={(v) => update('ville', v)} />
+          <InlineEdit className="profile-full" label="Titre professionnel" value={cv.titre_professionnel || ''} onChange={(v) => update('titre_professionnel', v)} placeholder="ex. Étudiant HEC - Data Analyst ou Data Analyst" />
+          <InlineEdit className="profile-full" label="Résumé / Accroche" multiline value={cv.resume || ''} onChange={(v) => update('resume', v)} placeholder="Quelques lignes pour te présenter" />
         </div>
-        <InlineEdit className="profile-full" label="Titre professionnel" value={cv.titre_professionnel || ''} onChange={(v) => update('titre_professionnel', v)} placeholder="ex. Étudiant HEC - Data Analyst ou Data Analyst" />
-        <InlineEdit className="profile-full" label="Résumé / Accroche" multiline value={cv.resume || ''} onChange={(v) => update('resume', v)} placeholder="Quelques lignes pour te présenter" />
       </section>
       )}
 
