@@ -4708,7 +4708,7 @@ export default function App() {
                   type="button"
                   variant="primary"
                   size="lg"
-                  onClick={() => setSetupModalOpen(true)}
+                  onClick={() => navigate('/app/cv')}
                   data-attr="candidatures-empty-cta-start"
                   data-track="cta"
                   data-zone="empty"
