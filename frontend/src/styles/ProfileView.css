@@ -435,6 +435,7 @@
   color: var(--ds-color-text-default);
   font: inherit;
   font-size: 0.875rem;
+  font-weight: 400;
   line-height: 1.35;
   text-align: left;
   resize: none;
@@ -750,16 +751,16 @@
 .profile-photo-row-simple {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  margin-bottom: 0.75rem;
+  gap: var(--ds-space-sm);
+  margin-bottom: var(--ds-space-md);
 }
 
 .profile-photo-preview {
-  width: 56px;
-  height: 56px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
   overflow: hidden;
-  background: var(--border);
+  background: var(--ds-color-bg-subtle);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -773,9 +774,15 @@
 }
 
 .profile-photo-placeholder {
-  font-size: 0.7rem;
-  color: var(--muted);
-  text-align: center;
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 /* Photo modal */

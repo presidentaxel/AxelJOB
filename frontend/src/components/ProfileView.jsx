@@ -1099,8 +1099,8 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
               <span className="profile-photo-placeholder">Aucune photo</span>
             )}
           </div>
-          <Button type="button" variant="secondary" className="profile-photo-edit-btn" onClick={() => setPhotoModalOpen(true)}>
-            Modifier la photo
+          <Button type="button" variant="tertiary" size="sm" className="profile-photo-edit-btn" onClick={() => setPhotoModalOpen(true)}>
+            Modifier
           </Button>
         </div>
         {photoModalOpen && (
@@ -1171,8 +1171,8 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
           <InlineEdit label="Téléphone" value={cv.telephone || ''} onChange={(v) => update('telephone', v)} />
           <InlineEdit label="LinkedIn" value={cv.linkedin || ''} onChange={(v) => update('linkedin', v)} placeholder="URL" />
           <InlineEdit label="Ville" value={cv.ville || ''} onChange={(v) => update('ville', v)} />
-          <InlineEdit className="profile-full" label="Titre professionnel" value={cv.titre_professionnel || ''} onChange={(v) => update('titre_professionnel', v)} placeholder="ex. Étudiant HEC - Data Analyst ou Data Analyst" />
-          <InlineEdit className="profile-full" label="Résumé / Accroche" multiline value={cv.resume || ''} onChange={(v) => update('resume', v)} placeholder="Quelques lignes pour te présenter" />
+          <InlineEdit label="Titre professionnel" value={cv.titre_professionnel || ''} onChange={(v) => update('titre_professionnel', v)} placeholder="ex. Étudiant HEC - Data Analyst ou Data Analyst" />
+          <InlineEdit label="Résumé / Accroche" multiline value={cv.resume || ''} onChange={(v) => update('resume', v)} placeholder="Quelques lignes pour te présenter" />
         </div>
       </section>
       )}
@@ -1200,7 +1200,7 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
               <InlineEdit label="Date fin" value={exp.date_fin || ''} onChange={(v) => updateExp(i, 'date_fin', v)} placeholder="ex. Aujourd'hui, 08/2024" title="Année, mois ou Aujourd'hui (vide = pas affiché)" />
               <InlineEdit label="Lieu" value={exp.lieu || ''} onChange={(v) => updateExp(i, 'lieu', v)} />
             </div>
-            <InlineEdit className="profile-full" label="Contexte" value={exp.contexte || ''} onChange={(v) => updateExp(i, 'contexte', v)} />
+            <InlineEdit label="Contexte" value={exp.contexte || ''} onChange={(v) => updateExp(i, 'contexte', v)} />
             <div className="profile-bullets">
               <div className="profile-bullets-head">
                 <span>Bullet points</span>
@@ -1214,7 +1214,7 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
                 </div>
               ))}
             </div>
-            <InlineEdit className="profile-full" label="Clients" value={exp.clients || ''} onChange={(v) => updateExp(i, 'clients', v)} placeholder="ex. L'Oréal, Charal, Herta" title="Liste de clients ou types de clients (vide = pas affiché)" />
+            <InlineEdit label="Clients" value={exp.clients || ''} onChange={(v) => updateExp(i, 'clients', v)} placeholder="ex. L'Oréal, Charal, Herta" title="Liste de clients ou types de clients (vide = pas affiché)" />
           </div>
         ))}
       </section>
@@ -1239,7 +1239,7 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
               <InlineEdit label="Diplôme" value={form.diplome || ''} onChange={(v) => updateFormation(i, 'diplome', v)} />
               <InlineEdit label="Établissement" value={form.etablissement || ''} onChange={(v) => updateFormation(i, 'etablissement', v)} />
               <InlineEdit label="Date" value={form.date || ''} onChange={(v) => updateFormation(i, 'date', v)} placeholder="ex. 2024, 06/2023" title="Année ou mois (vide = pas affiché sur le CV)" />
-              <InlineEdit className="profile-full" label="Description" multiline value={form.mention || ''} onChange={(v) => updateFormation(i, 'mention', v)} placeholder="ex. Mention Bien, Félicitations du jury" />
+              <InlineEdit label="Description" multiline value={form.mention || ''} onChange={(v) => updateFormation(i, 'mention', v)} placeholder="ex. Mention Bien, Félicitations du jury" />
             </div>
           </div>
         ))}
@@ -1287,7 +1287,7 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
               </div>
             </div>
             <InlineEdit label="Nom" value={proj.nom || ''} onChange={(v) => updateProjet(i, 'nom', v)} />
-            <InlineEdit className="profile-full" label="Description" multiline value={proj.description || ''} onChange={(v) => updateProjet(i, 'description', v)} />
+            <InlineEdit label="Description" multiline value={proj.description || ''} onChange={(v) => updateProjet(i, 'description', v)} />
           </div>
         ))}
       </section>
