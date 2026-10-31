@@ -684,15 +684,12 @@ Logo topbar = `<img>` non cliquable : ne pas inventer de clic.
 | `cv-nudge-cta-go` | cta | primary | modal 1ʳᵉ offre | Coller une offre → `/app/cv` |
 | `cv-nudge-cta-dismiss` | cta | secondary | modal 1ʳᵉ offre | Plus tard |
 
-#### C.13 Profil `/app/profil` (6)
-
-Deux boutons Enregistrer → **deux IDs** (comme `nav-cta-signup` / `nav-cta-start`).
+#### C.13 Profil `/app/profil` (5)
 
 | data-attr | type | level | Où | Intention |
 |---|---|---|---|---|
 | `profil-header-cta-import` | cta | secondary | header | Importer un CV |
 | `profil-header-cta-save` | cta | primary | header | Enregistrer |
-| `profil-footer-cta-save` | cta | primary | footer formulaire | Enregistrer (distinct du header) |
 | `profil-preview-cta-pdf` | cta | secondary | barre template | Exporter le CV de profil |
 | `profil-billing-cta-cancel` | cta | tertiary | abonnement | Résilier |
 | `profil-billing-cta-portal` | cta | tertiary | abonnement | Portail Stripe |

@@ -21,7 +21,7 @@ import DesignModeBridgeModal from './editor/DesignModeBridgeModal.jsx';
 import { applyA4PageFramesToDocument, syncCvPreviewIframeHeight } from '../lib/cvPreviewA4Pages';
 import { buildBetaToStableOffer } from '../lib/designModeBridge.js';
 import { betaCanvasRenderFields } from '../lib/betaCanvasTemplate.js';
-import { HiArrowDownTray } from 'react-icons/hi2';
+import { HiArrowDownTray, HiChevronDown, HiChevronUp } from 'react-icons/hi2';
 import { analyticsAttrs } from '../lib/analyticsAttrs.js';
 import {
   buildProfileCvPutPayload,
@@ -110,6 +110,29 @@ function ProfileCompletion({ cv }) {
         ))}
       </div>
     </div>
+  );
+}
+
+function moveListItem(list, index, direction) {
+  const items = list || [];
+  const target = index + direction;
+  if (target < 0 || target >= items.length) return items;
+  const next = items.slice();
+  const [item] = next.splice(index, 1);
+  next.splice(target, 0, item);
+  return next;
+}
+
+function OrderButtons({ index, total, onMove, label }) {
+  return (
+    <>
+      <button type="button" className="profile-card-move" disabled={index === 0} aria-label={`Monter ${label}`} title="Monter" onClick={() => onMove(index, -1)}>
+        <HiChevronUp aria-hidden />
+      </button>
+      <button type="button" className="profile-card-move" disabled={index >= total - 1} aria-label={`Descendre ${label}`} title="Descendre" onClick={() => onMove(index, 1)}>
+        <HiChevronDown aria-hidden />
+      </button>
+    </>
   );
 }
 
@@ -594,8 +617,8 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
     setCv((prev) => ({
       ...prev,
       experiences: [
-        ...(prev.experiences || []),
         { id: newExpId(), poste: '', entreprise: '', secteur: '', date_debut: '', date_fin: '', lieu: '', contexte: '', bullet_points: ['', ''], mots_cles: [], clients: '' },
+        ...(prev.experiences || []),
       ],
     }));
   };
@@ -605,6 +628,10 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
       ...prev,
       experiences: prev.experiences.filter((_, i) => i !== index),
     }));
+  };
+
+  const moveExp = (index, direction) => {
+    setCv((prev) => ({ ...prev, experiences: moveListItem(prev.experiences, index, direction) }));
   };
 
   const updateExpBullet = (expIndex, bulletIndex, value) => {
@@ -627,6 +654,15 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
     });
   };
 
+  const moveExpBullet = (expIndex, bulletIndex, direction) => {
+    setCv((prev) => {
+      const next = [...(prev.experiences || [])];
+      const bullets = moveListItem(next[expIndex].bullet_points || [''], bulletIndex, direction);
+      next[expIndex] = { ...next[expIndex], bullet_points: bullets };
+      return { ...prev, experiences: next };
+    });
+  };
+
   const removeExpBullet = (expIndex, bulletIndex) => {
     setCv((prev) => {
       const next = [...(prev.experiences || [])];
@@ -640,12 +676,16 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
   const addFormation = () => {
     setCv((prev) => ({
       ...prev,
-      formations: [...(prev.formations || []), { id: newFormId(), diplome: '', etablissement: '', date: '', mention: '' }],
+      formations: [{ id: newFormId(), diplome: '', etablissement: '', date: '', mention: '' }, ...(prev.formations || [])],
     }));
   };
 
   const removeFormation = (index) => {
     setCv((prev) => ({ ...prev, formations: prev.formations.filter((_, i) => i !== index) }));
+  };
+
+  const moveFormation = (index, direction) => {
+    setCv((prev) => ({ ...prev, formations: moveListItem(prev.formations, index, direction) }));
   };
 
   const updateFormation = (index, field, value) => {
@@ -659,12 +699,16 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
   const addCertification = () => {
     setCv((prev) => ({
       ...prev,
-      certifications: [...(prev.certifications || []), { id: newCertId(), nom: '', organisme: '', date: '' }],
+      certifications: [{ id: newCertId(), nom: '', organisme: '', date: '' }, ...(prev.certifications || [])],
     }));
   };
 
   const removeCertification = (index) => {
     setCv((prev) => ({ ...prev, certifications: (prev.certifications || []).filter((_, i) => i !== index) }));
+  };
+
+  const moveCertification = (index, direction) => {
+    setCv((prev) => ({ ...prev, certifications: moveListItem(prev.certifications, index, direction) }));
   };
 
   const updateCertification = (index, field, value) => {
@@ -678,12 +722,16 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
   const addProjet = () => {
     setCv((prev) => ({
       ...prev,
-      projets: [...(prev.projets || []), { id: newProjId(), nom: '', description: '', mots_cles: [] }],
+      projets: [{ id: newProjId(), nom: '', description: '', mots_cles: [] }, ...(prev.projets || [])],
     }));
   };
 
   const removeProjet = (index) => {
     setCv((prev) => ({ ...prev, projets: prev.projets.filter((_, i) => i !== index) }));
+  };
+
+  const moveProjet = (index, direction) => {
+    setCv((prev) => ({ ...prev, projets: moveListItem(prev.projets, index, direction) }));
   };
 
   const updateProjet = (index, field, value) => {
@@ -1139,7 +1187,10 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
           <div key={exp.id} className="profile-card">
             <div className="profile-card-head">
               <span>{exp.poste || exp.entreprise || `Expérience ${i + 1}`}</span>
-              <button type="button" className="btn btn-remove" onClick={() => removeExp(i)} title="Supprimer">×</button>
+              <div className="profile-card-actions">
+                <OrderButtons index={i} total={(cv.experiences || []).length} onMove={moveExp} label="cette expérience" />
+                <button type="button" className="btn btn-remove" onClick={() => removeExp(i)} title="Supprimer">×</button>
+              </div>
             </div>
             <div className="profile-grid">
               <InlineEdit label="Poste" value={exp.poste || ''} onChange={(v) => updateExp(i, 'poste', v)} />
@@ -1157,7 +1208,8 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
               </div>
               {(exp.bullet_points || ['', '']).map((b, j) => (
                 <div key={j} className="profile-bullet-row">
-                  <InlineEdit multiline rows={2} value={b} onChange={(v) => updateExpBullet(i, j, v)} placeholder={`Point ${j + 1}`} />
+                  <InlineEdit multiline value={b} onChange={(v) => updateExpBullet(i, j, v)} placeholder={`Point ${j + 1}`} />
+                  <OrderButtons index={j} total={(exp.bullet_points || []).length} onMove={(idx, dir) => moveExpBullet(i, idx, dir)} label="ce point" />
                   <button type="button" className="btn btn-remove" onClick={() => removeExpBullet(i, j)} title="Supprimer ce point">×</button>
                 </div>
               ))}
@@ -1178,7 +1230,10 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
           <div key={form.id} className="profile-card">
             <div className="profile-card-head">
               <span>{form.diplome || form.etablissement || `Formation ${i + 1}`}</span>
-              <button type="button" className="btn btn-remove" onClick={() => removeFormation(i)}>×</button>
+              <div className="profile-card-actions">
+                <OrderButtons index={i} total={(cv.formations || []).length} onMove={moveFormation} label="cette formation" />
+                <button type="button" className="btn btn-remove" onClick={() => removeFormation(i)}>×</button>
+              </div>
             </div>
             <div className="profile-grid">
               <InlineEdit label="Diplôme" value={form.diplome || ''} onChange={(v) => updateFormation(i, 'diplome', v)} />
@@ -1194,7 +1249,6 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
       {profileSection === 'certifications' && (
       <section className="profile-section-panel">
         <h2 className="ds-label-md">Certifications</h2>
-        <p className="profile-subtitle" style={{ marginTop: 0, marginBottom: '0.75rem' }}>Tu pourras les ajouter au CV plus tard.</p>
         <div className="profile-section-head">
           <button type="button" className="btn btn-add" onClick={addCertification}>+ Ajouter</button>
         </div>
@@ -1202,7 +1256,10 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
           <div key={cert.id} className="profile-card">
             <div className="profile-card-head">
               <span>{cert.nom || `Certification ${i + 1}`}</span>
-              <button type="button" className="btn btn-remove" onClick={() => removeCertification(i)}>×</button>
+              <div className="profile-card-actions">
+                <OrderButtons index={i} total={(cv.certifications || []).length} onMove={moveCertification} label="cette certification" />
+                <button type="button" className="btn btn-remove" onClick={() => removeCertification(i)}>×</button>
+              </div>
             </div>
             <div className="profile-grid">
               <InlineEdit label="Intitulé" value={cert.nom || ''} onChange={(v) => updateCertification(i, 'nom', v)} placeholder="ex. PMP, AWS Solutions Architect" />
@@ -1224,7 +1281,10 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
           <div key={proj.id} className="profile-card">
             <div className="profile-card-head">
               <span>{proj.nom || `Projet ${i + 1}`}</span>
-              <button type="button" className="btn btn-remove" onClick={() => removeProjet(i)}>×</button>
+              <div className="profile-card-actions">
+                <OrderButtons index={i} total={(cv.projets || []).length} onMove={moveProjet} label="ce projet" />
+                <button type="button" className="btn btn-remove" onClick={() => removeProjet(i)}>×</button>
+              </div>
             </div>
             <InlineEdit label="Nom" value={proj.nom || ''} onChange={(v) => updateProjet(i, 'nom', v)} />
             <InlineEdit className="profile-full" label="Description" multiline value={proj.description || ''} onChange={(v) => updateProjet(i, 'description', v)} />
@@ -1388,11 +1448,6 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
         </div>
       )}
 
-      <div className="profile-footer">
-        <Button type="button" variant="primary" onClick={handleSave} disabled={saving} loading={saving} {...analyticsAttrs('profil-footer-cta-save', 'footer', 'primary', 'cta')}>
-          {saving ? 'Enregistrement…' : 'Enregistrer le CV'}
-        </Button>
-      </div>
       </div>
 
       <div className="profile-preview-pane">

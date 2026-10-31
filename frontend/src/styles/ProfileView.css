@@ -404,7 +404,7 @@
   font-size: 0.75rem;
   font-weight: 500;
   line-height: 1.2;
-  white-space: nowrap;
+  white-space: normal;
 }
 
 .profile-inline-line {
@@ -479,7 +479,13 @@
 }
 
 .profile-inline.profile-full {
+  display: grid;
+  align-items: center;
   margin-top: 0;
+}
+
+.profile-form-pane .profile-inline--multi.profile-full {
+  align-items: start;
 }
 
 .profile-bullet-row .profile-inline-line {
@@ -611,6 +617,37 @@
   font-size: 0.85rem;
   margin-bottom: 0.5rem;
   color: var(--text);
+}
+
+.profile-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.1rem;
+  flex-shrink: 0;
+}
+
+.profile-card-move {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--ds-color-text-muted);
+  cursor: pointer;
+}
+
+.profile-card-move:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.profile-card-move:focus-visible {
+  outline: 2px solid var(--ds-color-border-focus);
+  outline-offset: 2px;
 }
 
 .profile-section-head {
