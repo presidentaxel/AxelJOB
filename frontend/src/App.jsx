@@ -62,8 +62,10 @@ import { computeApplicationMetrics, isApplicationToFollowUp } from './lib/applic
 import { applyA4PageFramesToDocument, syncCvPreviewIframeHeight } from './lib/cvPreviewA4Pages';
 import {
   betaCanvasRenderFields,
+  resolveBetaCanvasPreview,
   withBetaCanvasTemplate,
 } from './lib/betaCanvasTemplate.js';
+import { useBetaMode } from './lib/useBetaMode.js';
 
 const ProfileView = lazyWithChunkReload(() => import('./components/editor/ProfileViewSwitcher'));
 const SettingsView = lazyWithChunkReload(() => import('./components/SettingsView'));
@@ -75,6 +77,7 @@ const ArticlesPages = lazyWithChunkReload(() => import('./components/ArticlesPag
 const FaqPage = lazyWithChunkReload(() => import('./components/FaqPage'));
 const OnboardingWizard = lazyWithChunkReload(() => import('./components/OnboardingWizard'));
 const CvEditablePreview = lazyWithChunkReload(() => import('./components/CvEditablePreview'));
+const FreeCanvas = lazyWithChunkReload(() => import('./components/editor/FreeCanvas.jsx'));
 const ApplicationDetailModal = lazyWithChunkReload(() => import('./components/ApplicationDetailModal'));
 const TemplatePicker = lazyWithChunkReload(() => import('./components/TemplatePicker'));
 const GuidedTour = lazyWithChunkReload(() => import('./components/GuidedTour'));
@@ -900,6 +903,7 @@ export default function App() {
   const [recoveryMode, setRecoveryMode] = useState(false);
   const [mfaChallengeRequired, setMfaChallengeRequired] = useState(false);
   const [mfaChallengeChecked, setMfaChallengeChecked] = useState(false);
+  const [betaMode] = useBetaMode();
   const [templateId, setTemplateId] = useState(() => localStorage.getItem('cv_template_id') || 'minimal');
   const [templateOptions, setTemplateOptions] = useState(() => {
     try { return JSON.parse(localStorage.getItem('cv_template_options') || '{}'); } catch { return {}; }
@@ -4214,7 +4218,28 @@ export default function App() {
               })() : null}
               <div className="preview-wrap" ref={previewWrapRef}>
                 <div className="preview-a4-sheet">
-                {previewVariant === 'modified' && lastAdaptedCv && !(templateId || '').startsWith('custom_') && ['classic', 'minimal', 'modern', 'bold', 'creative', 'elegant', 'executive'].includes((templateId || '').trim()) ? (
+                {(() => {
+                  const betaPreviewCv = previewVariant === 'modified' && lastAdaptedCv ? lastAdaptedCv : lastBaseCv;
+                  const betaCanvas = resolveBetaCanvasPreview({
+                    betaMode,
+                    templateId,
+                    profileLayout,
+                    cv: betaPreviewCv,
+                  });
+                  if (!betaCanvas) return null;
+                  return (
+                    <div className="cv-beta-live-preview" data-testid="cv-beta-live-preview">
+                      <Suspense fallback={<p className="ds-body-md">Chargement de l’aperçu Beta…</p>}>
+                        <FreeCanvas
+                          layout={betaCanvas.layout}
+                          cv={betaCanvas.cv}
+                          interactable={false}
+                          hideEmptyState
+                        />
+                      </Suspense>
+                    </div>
+                  );
+                })() || (previewVariant === 'modified' && lastAdaptedCv && !(templateId || '').startsWith('custom_') && ['classic', 'minimal', 'modern', 'bold', 'creative', 'elegant', 'executive'].includes((templateId || '').trim()) ? (
                   <CvEditablePreview
                     cv={{
                       ...lastAdaptedCv,
@@ -4260,7 +4285,7 @@ export default function App() {
                       </div>
                     ) : null}
                   </div>
-                )}
+                ))}
                 </div>
               </div>
               {exportBlockVisible && lastAdaptedCv && (
