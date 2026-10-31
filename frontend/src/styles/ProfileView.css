@@ -9,7 +9,7 @@
 .profile-view-with-preview {
   display: grid;
   justify-items: stretch;
-  grid-template-columns: minmax(0, 1.4fr) minmax(220px, 0.8fr);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: var(--ds-space-md);
   align-items: stretch;
   max-width: none;
@@ -396,10 +396,19 @@
 
 /* Champ : texte + crayon, trait en dessous. La saisie ne s’ouvre que sur ce champ. */
 .profile-inline {
-  display: flex;
-  flex-direction: column;
-  gap: 0.15rem;
+  display: grid;
+  grid-template-columns: 6.75rem minmax(0, 1fr);
+  align-items: center;
+  column-gap: var(--ds-space-sm);
   min-width: 0;
+}
+
+.profile-inline:not(:has(.profile-inline-label)) {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.profile-inline--multi {
+  align-items: start;
 }
 
 .profile-inline-label {
@@ -480,7 +489,43 @@
 }
 
 .profile-inline.profile-full {
-  margin-top: 0.45rem;
+  margin-top: 0.35rem;
+}
+
+.profile-section-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.15rem 0.85rem;
+  margin: 0 0 var(--ds-space-md);
+  padding-bottom: 0;
+  border-bottom: 1px solid var(--ds-color-border-default);
+}
+
+.profile-section-nav button {
+  margin: 0 0 -1px;
+  padding: 0.35rem 0;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--ds-color-text-muted);
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.profile-section-nav button[aria-current="page"] {
+  color: var(--ds-color-text-default);
+  border-bottom-color: var(--ds-color-text-default);
+}
+
+.profile-section-nav button:focus-visible {
+  outline: 2px solid var(--ds-color-border-focus);
+  outline-offset: 2px;
+}
+
+.profile-section-panel > h2 {
+  margin: 0 0 0.75rem;
 }
 
 .profile-bullet-row .profile-inline,
@@ -491,14 +536,11 @@
 }
 
 /* Form fields inside profile */
-.profile-grid {
+.profile-grid,
+.profile-grid-identity {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 0.65rem;
-}
-
-.profile-grid-identity {
-  grid-template-columns: 1fr 1fr;
+  gap: 0.35rem 0.75rem;
 }
 
 .profile-grid label,

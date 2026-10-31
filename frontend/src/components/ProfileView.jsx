@@ -113,22 +113,6 @@ function ProfileCompletion({ cv }) {
   );
 }
 
-function CollapsibleSection({ title, defaultOpen = true, required, children }) {
-  const [open, setOpen] = useState(defaultOpen);
-  return (
-    <section className={`profile-section profile-section--collapsible ${open ? 'open' : 'closed'}`}>
-      <button type="button" className="profile-section-toggle" onClick={() => setOpen(v => !v)}>
-        <span className="profile-section-toggle-text">
-          <h2 className="ds-label-md">{title}</h2>
-          {required && <span className="profile-required-badge">requis</span>}
-        </span>
-        <svg className={`profile-chevron ${open ? 'profile-chevron--open' : ''}`} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 12 15 18 9"/></svg>
-      </button>
-      {open && <div className="profile-section-body">{children}</div>}
-    </section>
-  );
-}
-
 function isSupabaseSignedPhotoUrl(url) {
   return typeof url === 'string' && url.includes('supabase.co/storage') && url.includes('/object/sign');
 }
@@ -156,6 +140,7 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
   const setTemplateId = onTemplateIdChange ?? ((id) => { setLocalTemplateId(id); localStorage.setItem('cv_template_id', id); });
   const templateOptions = templateOptionsProp ?? localTemplateOptions;
   const setTemplateOptions = onTemplateOptionsChange ?? ((opts) => { setLocalTemplateOptions(opts); localStorage.setItem('cv_template_options', JSON.stringify(opts)); });
+  const [profileSection, setProfileSection] = useState('identite');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -1025,7 +1010,30 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
 
       <ProfileCompletion cv={cv} />
 
-      <CollapsibleSection title="Identité" defaultOpen={true}>
+      <nav className="profile-section-nav" aria-label="Rubriques du profil">
+        {[
+          { id: 'identite', label: 'Identité' },
+          { id: 'experiences', label: 'Expériences' },
+          { id: 'formations', label: 'Formations' },
+          { id: 'certifications', label: 'Certifications' },
+          { id: 'projets', label: 'Projets' },
+          { id: 'competences', label: 'Compétences' },
+          ...(usage?.plan === 'pro' && !usage?.paywall_disabled ? [{ id: 'abonnement', label: 'Abonnement' }] : []),
+        ].map((section) => (
+          <button
+            key={section.id}
+            type="button"
+            aria-current={profileSection === section.id ? 'page' : undefined}
+            onClick={() => setProfileSection(section.id)}
+          >
+            {section.label}
+          </button>
+        ))}
+      </nav>
+
+      {profileSection === 'identite' && (
+      <section className="profile-section-panel">
+        <h2 className="ds-label-md">Identité</h2>
         <div className="profile-photo-row profile-photo-row-simple">
           <div className="profile-photo-preview">
             {(cv.photo_url || '').trim() ? (
@@ -1120,17 +1128,20 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
           <InlineEdit label="Ville" value={cv.ville || ''} onChange={(v) => update('ville', v)} />
         </div>
         <InlineEdit className="profile-full" label="Titre professionnel" value={cv.titre_professionnel || ''} onChange={(v) => update('titre_professionnel', v)} placeholder="ex. Étudiant HEC - Data Analyst ou Data Analyst" />
-        <InlineEdit className="profile-full" label="Résumé / Accroche" multiline rows={3} value={cv.resume || ''} onChange={(v) => update('resume', v)} placeholder="Quelques lignes pour te présenter" />
-      </CollapsibleSection>
+        <InlineEdit className="profile-full" label="Résumé / Accroche" multiline value={cv.resume || ''} onChange={(v) => update('resume', v)} placeholder="Quelques lignes pour te présenter" />
+      </section>
+      )}
 
-      <CollapsibleSection title="Expériences professionnelles" defaultOpen={true}>
+      {profileSection === 'experiences' && (
+      <section className="profile-section-panel">
+        <h2 className="ds-label-md">Expériences</h2>
         <div className="profile-section-head">
           <button type="button" className="btn btn-add" onClick={addExp}>+ Ajouter une expérience</button>
         </div>
         {(cv.experiences || []).map((exp, i) => (
           <div key={exp.id} className="profile-card">
             <div className="profile-card-head">
-              <span>Expérience {i + 1}</span>
+              <span>{exp.poste || exp.entreprise || `Expérience ${i + 1}`}</span>
               <button type="button" className="btn btn-remove" onClick={() => removeExp(i)} title="Supprimer">×</button>
             </div>
             <div className="profile-grid">
@@ -1154,32 +1165,38 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
                 </div>
               ))}
             </div>
-            <InlineEdit className="profile-full" label="Clients" value={exp.clients || ''} onChange={(v) => updateExp(i, 'clients', v)} placeholder="ex. L'Oréal, Charal, Herta (vide = pas affiché sur le CV)" title="Liste de clients ou types de clients (vide = pas affiché)" />
+            <InlineEdit className="profile-full" label="Clients" value={exp.clients || ''} onChange={(v) => updateExp(i, 'clients', v)} placeholder="ex. L'Oréal, Charal, Herta" title="Liste de clients ou types de clients (vide = pas affiché)" />
           </div>
         ))}
-      </CollapsibleSection>
+      </section>
+      )}
 
-      <CollapsibleSection title="Formations" defaultOpen={true}>
+      {profileSection === 'formations' && (
+      <section className="profile-section-panel">
+        <h2 className="ds-label-md">Formations</h2>
         <div className="profile-section-head">
           <button type="button" className="btn btn-add" onClick={addFormation}>+ Ajouter</button>
         </div>
         {(cv.formations || []).map((form, i) => (
           <div key={form.id} className="profile-card">
             <div className="profile-card-head">
-              <span>Formation {i + 1}</span>
+              <span>{form.diplome || form.etablissement || `Formation ${i + 1}`}</span>
               <button type="button" className="btn btn-remove" onClick={() => removeFormation(i)}>×</button>
             </div>
             <div className="profile-grid">
               <InlineEdit label="Diplôme" value={form.diplome || ''} onChange={(v) => updateFormation(i, 'diplome', v)} />
               <InlineEdit label="Établissement" value={form.etablissement || ''} onChange={(v) => updateFormation(i, 'etablissement', v)} />
               <InlineEdit label="Date" value={form.date || ''} onChange={(v) => updateFormation(i, 'date', v)} placeholder="ex. 2024, 06/2023" title="Année ou mois (vide = pas affiché sur le CV)" />
-              <InlineEdit className="profile-full" label="Description" multiline rows={4} value={form.mention || ''} onChange={(v) => updateFormation(i, 'mention', v)} placeholder="ex. Mention Bien, Félicitations du jury" />
+              <InlineEdit className="profile-full" label="Description" multiline value={form.mention || ''} onChange={(v) => updateFormation(i, 'mention', v)} placeholder="ex. Mention Bien, Félicitations du jury" />
             </div>
           </div>
         ))}
-      </CollapsibleSection>
+      </section>
+      )}
 
-      <CollapsibleSection title="Certifications" defaultOpen={false}>
+      {profileSection === 'certifications' && (
+      <section className="profile-section-panel">
+        <h2 className="ds-label-md">Certifications</h2>
         <p className="profile-subtitle" style={{ marginTop: 0, marginBottom: '0.75rem' }}>Tu pourras les ajouter au CV plus tard.</p>
         <div className="profile-section-head">
           <button type="button" className="btn btn-add" onClick={addCertification}>+ Ajouter</button>
@@ -1187,7 +1204,7 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
         {(cv.certifications || []).map((cert, i) => (
           <div key={cert.id} className="profile-card">
             <div className="profile-card-head">
-              <span>Certification {i + 1}</span>
+              <span>{cert.nom || `Certification ${i + 1}`}</span>
               <button type="button" className="btn btn-remove" onClick={() => removeCertification(i)}>×</button>
             </div>
             <div className="profile-grid">
@@ -1197,25 +1214,31 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
             </div>
           </div>
         ))}
-      </CollapsibleSection>
+      </section>
+      )}
 
-      <CollapsibleSection title="Projets" defaultOpen={false}>
+      {profileSection === 'projets' && (
+      <section className="profile-section-panel">
+        <h2 className="ds-label-md">Projets</h2>
         <div className="profile-section-head">
           <button type="button" className="btn btn-add" onClick={addProjet}>+ Ajouter</button>
         </div>
         {(cv.projets || []).map((proj, i) => (
           <div key={proj.id} className="profile-card">
             <div className="profile-card-head">
-              <span>Projet {i + 1}</span>
+              <span>{proj.nom || `Projet ${i + 1}`}</span>
               <button type="button" className="btn btn-remove" onClick={() => removeProjet(i)}>×</button>
             </div>
             <InlineEdit label="Nom" value={proj.nom || ''} onChange={(v) => updateProjet(i, 'nom', v)} />
-            <InlineEdit className="profile-full" label="Description" multiline rows={2} value={proj.description || ''} onChange={(v) => updateProjet(i, 'description', v)} />
+            <InlineEdit className="profile-full" label="Description" multiline value={proj.description || ''} onChange={(v) => updateProjet(i, 'description', v)} />
           </div>
         ))}
-      </CollapsibleSection>
+      </section>
+      )}
 
-      <CollapsibleSection title="Compétences, langues & autres" defaultOpen={false}>
+      {profileSection === 'competences' && (
+      <section className="profile-section-panel">
+        <h2 className="ds-label-md">Compétences</h2>
         <div className="profile-card">
           <h3 className="sidebar-category">Compétences techniques</h3>
           {(comp.techniques || []).map((item, i) => (
@@ -1257,10 +1280,12 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
           ))}
           <button type="button" className="btn btn-add" onClick={() => addCompList('autres', '')}>+ Ajouter</button>
         </div>
-      </CollapsibleSection>
+      </section>
+      )}
 
-      {usage?.plan === 'pro' && !usage?.paywall_disabled && (
-        <CollapsibleSection title="Abonnement" defaultOpen={true}>
+      {profileSection === 'abonnement' && usage?.plan === 'pro' && !usage?.paywall_disabled && (
+        <section className="profile-section-panel">
+          <h2 className="ds-label-md">Abonnement</h2>
           <p className="profile-section-desc">Gère la résiliation depuis ici (exigence légale). La facturation détaillée reste disponible sur le portail sécurisé Stripe si besoin.</p>
           {usage.stripe_subscription ? (
             <>
@@ -1314,7 +1339,7 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
               )}
             </div>
           )}
-        </CollapsibleSection>
+        </section>
       )}
 
       {cancelSubModalOpen && (
