@@ -4,13 +4,13 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 6px;
-  padding: 6px 10px;
+  gap: var(--ds-space-sm);
+  padding: var(--ds-space-sm) 0;
   flex-shrink: 0;
-  border-bottom: 1px solid var(--border);
-  background: var(--bg);
+  border-bottom: 1px solid var(--ds-color-border-default);
+  background: transparent;
   flex-wrap: wrap;
-  row-gap: 8px;
+  row-gap: var(--ds-space-sm);
 }
 
 .tpl-bar-left {
@@ -144,20 +144,24 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 6px;
-  border: none;
+  width: var(--ds-size-button-sm);
+  height: var(--ds-size-button-sm);
+  border-radius: var(--ds-radius-action);
+  border: 1px solid transparent;
   background: transparent;
-  color: var(--text-secondary);
+  color: var(--ds-color-text-muted);
   cursor: pointer;
-  transition: all 0.15s;
 }
 
 .tpl-gear:hover,
 .tpl-gear--open {
-  background: var(--bg-secondary);
-  color: var(--accent);
+  background: var(--ds-color-bg-subtle);
+  color: var(--ds-color-text-default);
+}
+
+.tpl-gear:focus-visible {
+  outline: 2px solid var(--ds-color-border-focus);
+  outline-offset: 2px;
 }
 
 /* Popover */
@@ -458,38 +462,42 @@
 .tpl-btn-open-modal {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 10px 6px 8px;
-  border: 1.5px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--bg);
-  color: var(--text-primary);
-  font-size: 12px;
+  gap: var(--ds-space-sm);
+  min-height: var(--ds-size-button-sm);
+  padding: 0 var(--ds-space-md);
+  border: 1px solid var(--ds-color-action-secondary-border);
+  border-radius: var(--ds-radius-action);
+  background: var(--ds-color-action-secondary-bg);
+  color: var(--ds-color-action-secondary-fg);
+  font-size: 0.8125rem;
   font-weight: 500;
   cursor: pointer;
-  transition: border-color 0.15s, background 0.15s;
 }
 
 .tpl-btn-open-modal:hover {
-  background: var(--bg-secondary);
-  border-color: var(--accent);
+  background: var(--ds-color-action-secondary-bg-hover);
+}
+
+.tpl-btn-open-modal:focus-visible {
+  outline: 2px solid var(--ds-color-border-focus);
+  outline-offset: 2px;
 }
 
 .tpl-btn-open-modal-icon {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--text-secondary);
+  color: var(--ds-color-text-muted);
 }
 
 .tpl-btn-open-modal-label {
-  color: var(--text-secondary);
+  color: var(--ds-color-text-muted);
 }
 
 .tpl-btn-open-modal-current {
-  color: var(--accent);
-  font-weight: 600;
-  max-width: 100px;
+  color: var(--ds-color-text-default);
+  font-weight: 500;
+  max-width: 8rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -497,8 +505,7 @@
 
 .tpl-btn-open-modal-chevron {
   flex-shrink: 0;
-  color: var(--text-muted, #94a3b8);
-  transition: transform 0.2s;
+  color: var(--ds-color-text-muted);
 }
 
 .tpl-btn-open-modal:hover .tpl-btn-open-modal-chevron {
@@ -509,22 +516,26 @@
 .tpl-btn-bar-extra {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 6px 10px;
-  border: 1.5px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--bg);
-  color: var(--text-primary);
-  font-size: 12px;
+  gap: var(--ds-space-sm);
+  min-height: var(--ds-size-button-sm);
+  padding: 0 var(--ds-space-md);
+  border: 1px solid var(--ds-color-action-secondary-border);
+  border-radius: var(--ds-radius-action);
+  background: var(--ds-color-action-secondary-bg);
+  color: var(--ds-color-action-secondary-fg);
+  font-size: 0.8125rem;
   font-weight: 500;
   cursor: pointer;
-  transition: border-color 0.15s, background 0.15s, opacity 0.15s;
   white-space: nowrap;
 }
 
 .tpl-btn-bar-extra:hover:not(:disabled) {
-  background: var(--bg-secondary);
-  border-color: var(--accent);
+  background: var(--ds-color-action-secondary-bg-hover);
+}
+
+.tpl-btn-bar-extra:focus-visible {
+  outline: 2px solid var(--ds-color-border-focus);
+  outline-offset: 2px;
 }
 
 .tpl-btn-bar-extra:disabled {
@@ -534,7 +545,7 @@
 
 .tpl-btn-bar-extra-icon {
   display: flex;
-  color: var(--text-secondary);
+  color: var(--ds-color-text-muted);
 }
 
 /* --- Modale templates --- */
