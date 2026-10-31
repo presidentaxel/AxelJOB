@@ -9,12 +9,60 @@
 .profile-view-with-preview {
   display: grid;
   justify-items: stretch;
-  grid-template-columns: minmax(0, 1.15fr) minmax(280px, 0.85fr);
+  grid-template-columns: minmax(280px, 0.72fr) minmax(0, 1.28fr);
   gap: var(--ds-space-md);
   align-items: stretch;
   max-width: none;
   min-height: 0;
   height: 100%;
+}
+
+.profile-view--lecture {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.profile-surface-bar {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  min-height: 0;
+}
+
+.profile-surface-switch {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--ds-radius-action);
+  background: var(--ds-color-bg-subtle);
+}
+
+.profile-surface-switch-btn {
+  border: none;
+  background: transparent;
+  min-height: var(--ds-size-button-md);
+  padding: 0 0.9rem;
+  border-radius: var(--ds-radius-action);
+  color: var(--ds-color-text-muted);
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.profile-surface-switch-btn[aria-selected="true"] {
+  background: var(--ds-color-bg-default);
+  color: var(--ds-color-text-default);
+}
+
+.profile-view--lecture .profile-preview-pane {
+  max-width: 210mm;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.profile-view--lecture .profile-preview-pane-scroll {
+  display: flex;
+  justify-content: center;
 }
 
 /* Desktop 2 colonnes : une ligne dont la hauteur suit le parent flex, pas le contenu (iframe 2+ pages).
@@ -67,10 +115,12 @@
     flex-direction: column;
   }
   .profile-header-actions .ds-button,
-  .profile-header-actions .btn,
-  .profile-header-actions .btn-import-cv {
+  .profile-header-actions .btn {
     width: 100%;
     justify-content: center;
+  }
+  .profile-surface-switch-btn {
+    min-height: var(--ds-size-touch-min);
   }
   .profile-completion {
     padding: 0;

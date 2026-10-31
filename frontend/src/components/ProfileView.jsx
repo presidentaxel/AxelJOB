@@ -156,6 +156,13 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
   const setTemplateId = onTemplateIdChange ?? ((id) => { setLocalTemplateId(id); localStorage.setItem('cv_template_id', id); });
   const templateOptions = templateOptionsProp ?? localTemplateOptions;
   const setTemplateOptions = onTemplateOptionsChange ?? ((opts) => { setLocalTemplateOptions(opts); localStorage.setItem('cv_template_options', JSON.stringify(opts)); });
+  const [surface, setSurface] = useState(() => {
+    try {
+      return sessionStorage.getItem('profile_stable_surface') === 'lecture' ? 'lecture' : 'saisie';
+    } catch {
+      return 'saisie';
+    }
+  });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -977,8 +984,38 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
   if (loading) return <div className="profile-loading">Chargement du profil…</div>;
 
   return (
-    <div className="profile-view profile-view-with-preview">
-      <div className="profile-form-pane">
+    <div className={`profile-view profile-view-with-preview ${surface === 'lecture' ? 'profile-view--lecture' : 'profile-view--saisie'}`}>
+      <div className="profile-surface-bar">
+        <div className="profile-surface-switch" role="tablist" aria-label="Affichage du profil">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={surface === 'saisie'}
+            className="profile-surface-switch-btn"
+            onClick={() => {
+              setSurface('saisie');
+              try { sessionStorage.setItem('profile_stable_surface', 'saisie'); } catch { /* ignore */ }
+            }}
+            {...analyticsAttrs('profil-surface-saisie', 'header', 'secondary', 'cta')}
+          >
+            Saisie
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={surface === 'lecture'}
+            className="profile-surface-switch-btn"
+            onClick={() => {
+              setSurface('lecture');
+              try { sessionStorage.setItem('profile_stable_surface', 'lecture'); } catch { /* ignore */ }
+            }}
+            {...analyticsAttrs('profil-surface-lecture', 'header', 'secondary', 'cta')}
+          >
+            Lecture
+          </button>
+        </div>
+      </div>
+      <div className="profile-form-pane" hidden={surface === 'lecture'}>
       <div className="profile-header">
         <div className="profile-header-copy">
           <h1 className="ds-heading-md">Mon profil CV</h1>
@@ -1375,7 +1412,9 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
 
       <div className="profile-preview-pane">
         <div className="profile-preview-pane-top">
-          <h2 className="profile-preview-title ds-label-sm">Aperçu du CV</h2>
+          {surface === 'saisie' ? (
+            <h2 className="profile-preview-title ds-label-sm">Aperçu du CV</h2>
+          ) : null}
           <TemplatePicker
             templates={templatesList}
             templateId={templateId}
@@ -1413,7 +1452,9 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
               <p className="profile-preview-empty">Génération de l&apos;aperçu…</p>
             )}
             {!profilePreviewLoading && !profilePreviewHtml && (
-              <p className="profile-preview-empty">Modifiez le formulaire pour voir l&apos;aperçu.</p>
+              <p className="profile-preview-empty">
+                {surface === 'lecture' ? 'Rien à afficher pour l’instant.' : 'Complète la saisie pour voir le CV.'}
+              </p>
             )}
             {profilePreviewHtml && (
               <iframe

@@ -17,3 +17,10 @@ test('l’en-tête Stable utilise Button et les rôles typo', () => {
   assert.doesNotMatch(header, /btn-import-cv/);
   assert.doesNotMatch(src, /btn btn-import-cv/);
 });
+
+test('le profil Stable bascule entre Saisie et Lecture', () => {
+  assert.match(src, /Saisie/);
+  assert.match(src, /Lecture/);
+  assert.match(src, /profile-view--lecture/);
+  assert.match(src, /hidden=\{surface === 'lecture'\}/);
+});
