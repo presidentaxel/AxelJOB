@@ -60,6 +60,8 @@ export function syncCvPreviewIframeHeight(iframe) {
       iframe.setAttribute('data-cv-preview-sync-h', String(h));
       iframe.style.height = `${h}px`;
     }
+    const fit = iframe.closest?.('.profile-preview-fit');
+    if (fit) fit.style.setProperty('--cv-doc-h', `${h}px`);
     suppressCvPreviewIframeInnerScroll(doc);
   } catch (_) {
     /* ignore */

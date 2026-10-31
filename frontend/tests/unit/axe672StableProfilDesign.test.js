@@ -24,3 +24,10 @@ test('le profil Stable bascule entre Saisie et Lecture', () => {
   assert.match(src, /profile-view--lecture/);
   assert.match(src, /hidden=\{surface === 'lecture'\}/);
 });
+
+test('l’aperçu A4 tient dans la largeur de sa zone', () => {
+  const css = readFileSync(new URL('../../src/styles/ProfileView.css', import.meta.url), 'utf8');
+  assert.match(css, /grid-template-columns:\s*minmax\(0,\s*1fr\)\s*minmax\(0,\s*1fr\)/);
+  assert.match(css, /transform:\s*scale\(calc\(100cqw\s*\/\s*210mm\)\)/);
+  assert.match(src, /profile-preview-fit/);
+});

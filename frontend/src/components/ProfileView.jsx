@@ -1447,6 +1447,7 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
           />
         </div>
         <div className="profile-preview-pane-scroll">
+          <div className="profile-preview-fit">
           <div className="profile-preview-wrap profile-preview-a4">
             {profilePreviewLoading && !profilePreviewHtml && (
               <p className="profile-preview-empty">Génération de l&apos;aperçu…</p>
@@ -1467,6 +1468,7 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
                 onLoad={(e) => resizeProfilePreviewIframe(e.target)}
               />
             )}
+          </div>
           </div>
         </div>
       </div>

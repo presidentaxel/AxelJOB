@@ -9,7 +9,7 @@
 .profile-view-with-preview {
   display: grid;
   justify-items: stretch;
-  grid-template-columns: minmax(280px, 0.72fr) minmax(0, 1.28fr);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: var(--ds-space-md);
   align-items: stretch;
   max-width: none;
@@ -77,6 +77,7 @@
   border-right: 1px solid var(--ds-color-border-default);
   padding-right: 0;
   width: 100%;
+  min-width: 0;
 }
 
 @media (max-width: 900px) {
@@ -199,6 +200,7 @@
   position: sticky;
   top: 0;
   width: 100%;
+  min-width: 0;
   max-height: calc(100vh - 140px);
   overflow: hidden;
   padding: 0;
@@ -220,9 +222,19 @@
 .profile-preview-pane-scroll {
   flex: 1;
   min-height: 0;
+  min-width: 0;
   overflow-y: auto;
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
+  container-type: inline-size;
+  container-name: profile-preview;
+}
+
+/* La feuille A4 (210 mm) est mise à l’échelle pour occuper exactement la largeur de la zone. */
+.profile-preview-fit {
+  width: 100%;
+  height: calc(var(--cv-doc-h, 297mm) * 100cqw / 210mm);
+  overflow: hidden;
 }
 
 .profile-preview-title {
@@ -233,18 +245,20 @@
 .profile-preview-wrap.profile-preview-a4,
 .profile-preview-wrap {
   width: 210mm;
-  max-width: 100%;
-  min-height: 297mm;
+  max-width: none;
+  min-height: 0;
   overflow-x: hidden;
   overflow-y: visible;
   border: none;
   border-radius: 0;
   background: transparent;
+  transform: scale(calc(100cqw / 210mm));
+  transform-origin: top left;
 }
 
 .profile-preview-iframe {
   border: none;
-  width: 100%;
+  width: 210mm;
   min-height: 297mm;
   display: block;
   overflow: hidden;
