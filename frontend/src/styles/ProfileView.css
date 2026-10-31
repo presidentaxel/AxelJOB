@@ -156,6 +156,8 @@
   gap: 0.5rem;
   min-height: 0;
   box-sizing: border-box;
+  background: var(--ds-color-bg-subtle);
+  border-radius: var(--ds-radius-md);
 }
 
 /* Titre + barre template : fixes ; pas de scroll ici */
@@ -173,35 +175,20 @@
 }
 
 .profile-preview-title {
-  font-size: 0.85rem;
-  font-weight: 600;
-  letter-spacing: -0.01em;
   margin: 0 0 0.75rem;
-  color: var(--muted);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  font-size: 0.7rem;
+  color: var(--ds-color-text-muted);
 }
 
-/* Format A4 exact (210mm x 297mm) comme l'export PDF - pas de scroll ici, seul le pane scroll */
-.profile-preview-wrap.profile-preview-a4 {
+.profile-preview-wrap.profile-preview-a4,
+.profile-preview-wrap {
   width: 210mm;
   max-width: 100%;
   min-height: 297mm;
   overflow-x: hidden;
   overflow-y: visible;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--bg);
-  box-shadow: var(--shadow-sm);
-}
-
-.profile-preview-wrap {
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  overflow: visible;
-  background: var(--bg);
-  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--ds-color-border-default);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-color-bg-default);
 }
 
 .profile-preview-iframe {
@@ -229,21 +216,27 @@
   align-items: flex-start;
   justify-content: space-between;
   flex-wrap: wrap;
-  gap: 0.75rem;
+  gap: 0.75rem 1rem;
   margin-bottom: 1rem;
+  padding: 1rem 1rem 0.9rem;
+  background: var(--ds-color-bg-default);
+  border: 1px solid var(--ds-color-border-default);
+  border-radius: var(--ds-radius-md);
+}
+
+.profile-header-copy {
+  min-width: 0;
+  flex: 1 1 12rem;
 }
 
 .profile-header h1 {
-  font-size: 1.1rem;
-  font-weight: 700;
   margin: 0;
-  letter-spacing: -0.02em;
+  color: var(--ds-color-text-default);
 }
 
 .profile-subtitle {
-  font-size: 0.85rem;
-  color: var(--muted);
-  margin: 0.15rem 0 0;
+  margin: 0.25rem 0 0;
+  color: var(--ds-color-text-muted);
 }
 
 .profile-header-actions {
@@ -267,15 +260,15 @@
 }
 
 .profile-toast--success {
-  background: var(--success-light, #ecfdf5);
-  color: var(--success);
-  border: 1px solid rgba(5, 150, 105, 0.15);
+  background: var(--ds-color-feedback-success-subtle);
+  color: var(--ds-color-feedback-success);
+  border: 1px solid var(--ds-color-border-default);
 }
 
 .profile-toast--error {
-  background: var(--danger-light, #fef2f2);
-  color: var(--danger);
-  border: 1px solid rgba(220, 38, 38, 0.15);
+  background: var(--ds-color-feedback-error-subtle);
+  color: var(--ds-color-feedback-error);
+  border: 1px solid var(--ds-color-border-default);
 }
 
 .profile-loading {
@@ -288,31 +281,30 @@
 .profile-completion {
   margin-bottom: 1.25rem;
   padding: 0.85rem 1rem;
-  border-radius: var(--radius);
-  background: var(--bg);
-  border: 1px solid var(--border);
-  box-shadow: var(--shadow-sm);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-color-bg-default);
+  border: 1px solid var(--ds-color-border-default);
 }
 
 .profile-completion-bar {
   height: 4px;
-  background: var(--border);
-  border-radius: 2px;
+  background: var(--ds-color-border-default);
+  border-radius: var(--ds-radius-sm, 4px);
   overflow: hidden;
   margin-bottom: 0.5rem;
 }
 
 .profile-completion-fill {
   height: 100%;
-  background: var(--accent);
-  border-radius: 2px;
+  background: var(--ds-color-action-primary-bg);
+  border-radius: var(--ds-radius-sm, 4px);
   transition: width 0.4s ease;
 }
 
 .profile-completion-text {
   font-size: 0.8rem;
-  font-weight: 600;
-  color: var(--text);
+  font-weight: 500;
+  color: var(--ds-color-text-default);
   display: block;
   margin-bottom: 0.4rem;
 }
@@ -325,14 +317,14 @@
 
 .profile-check {
   font-size: 0.75rem;
-  color: var(--muted);
+  color: var(--ds-color-text-muted);
   display: inline-flex;
   align-items: center;
   gap: 0.2rem;
 }
 
 .profile-check--done {
-  color: var(--success);
+  color: var(--ds-color-feedback-success);
 }
 
 .profile-check-icon {
@@ -342,12 +334,11 @@
 
 /* Collapsible sections */
 .profile-section--collapsible {
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border: 1px solid var(--ds-color-border-default);
+  border-radius: var(--ds-radius-md);
   overflow: hidden;
   margin-bottom: 0.75rem;
-  background: var(--bg);
-  box-shadow: var(--shadow-sm);
+  background: var(--ds-color-bg-default);
 }
 
 .profile-section-toggle {
@@ -355,16 +346,16 @@
   align-items: center;
   justify-content: space-between;
   width: 100%;
+  min-height: var(--ds-size-touch-min, 44px);
   padding: 0.75rem 1rem;
   background: transparent;
   border: none;
   cursor: pointer;
   text-align: left;
-  transition: background var(--transition, 0.15s ease);
 }
 
 .profile-section-toggle:hover {
-  background: var(--accent-subtle, rgba(79, 70, 229, 0.03));
+  background: var(--ds-color-bg-subtle);
 }
 
 .profile-section-toggle-text {
@@ -375,26 +366,23 @@
 
 .profile-section-toggle-text h2 {
   margin: 0;
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: var(--text);
-  letter-spacing: -0.01em;
+  color: var(--ds-color-text-default);
 }
 
 .profile-required-badge {
   font-size: 0.65rem;
-  font-weight: 700;
+  font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: var(--accent);
-  background: var(--accent-light, #eef2ff);
+  color: var(--ds-color-accent-editorial);
+  background: var(--ds-color-bg-subtle);
   padding: 0.15rem 0.4rem;
-  border-radius: 4px;
+  border-radius: var(--ds-radius-sm, 4px);
 }
 
 .profile-chevron {
   transition: transform 0.2s;
-  color: var(--muted);
+  color: var(--ds-color-text-muted);
   flex-shrink: 0;
 }
 
@@ -423,7 +411,7 @@
   flex-direction: column;
   font-size: 0.8rem;
   font-weight: 500;
-  color: var(--text-secondary, var(--muted));
+  color: var(--ds-color-text-muted);
   gap: 0.2rem;
 }
 
@@ -438,29 +426,29 @@
   font-family: var(--app-font-family);
   font-size: 0.875rem;
   padding: 0.45rem 0.65rem;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-xs, 6px);
-  background: var(--bg);
-  color: var(--text);
-  transition: border-color 0.15s, box-shadow 0.15s;
+  border: 1px solid var(--ds-color-border-default);
+  border-radius: var(--ds-radius-sm, 6px);
+  background: var(--ds-color-bg-default);
+  color: var(--ds-color-text-default);
+  transition: border-color 0.15s;
 }
 
 .profile-grid input:focus,
 .profile-grid textarea:focus,
 .profile-full input:focus,
 .profile-full textarea:focus {
-  outline: none;
-  border-color: var(--accent);
-  box-shadow: var(--shadow-focus, 0 0 0 3px rgba(79, 70, 229, 0.12));
+  outline: 2px solid var(--ds-color-border-input-focus, var(--ds-color-border-focus));
+  outline-offset: 1px;
+  border-color: var(--ds-color-border-input-focus, var(--ds-color-border-focus));
 }
 
 /* Profile cards (experience, formation, projet) */
 .profile-card {
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  border: 1px solid var(--ds-color-border-default);
+  border-radius: var(--ds-radius-md);
   padding: 0.85rem;
   margin-bottom: 0.5rem;
-  background: var(--bg-page, #f8fafc);
+  background: var(--ds-color-bg-subtle);
 }
 
 .profile-card-head {

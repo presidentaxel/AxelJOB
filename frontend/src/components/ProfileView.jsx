@@ -119,7 +119,7 @@ function CollapsibleSection({ title, defaultOpen = true, required, children }) {
     <section className={`profile-section profile-section--collapsible ${open ? 'open' : 'closed'}`}>
       <button type="button" className="profile-section-toggle" onClick={() => setOpen(v => !v)}>
         <span className="profile-section-toggle-text">
-          <h2>{title}</h2>
+          <h2 className="ds-label-md">{title}</h2>
           {required && <span className="profile-required-badge">requis</span>}
         </span>
         <svg className={`profile-chevron ${open ? 'profile-chevron--open' : ''}`} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 12 15 18 9"/></svg>
@@ -980,14 +980,15 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
     <div className="profile-view profile-view-with-preview">
       <div className="profile-form-pane">
       <div className="profile-header">
-        <h1>Mon profil CV</h1>
-        <p className="profile-subtitle">Complète tes informations. Le CV est généré à partir de ces données.</p>
+        <div className="profile-header-copy">
+          <h1 className="ds-heading-md">Mon profil CV</h1>
+          <p className="profile-subtitle ds-body-md">Complète tes informations. Le CV est généré à partir de ces données.</p>
+        </div>
         <div className="profile-header-actions">
           <input ref={importFileRef} type="file" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" style={{ display: 'none' }} onChange={handleImportCv} />
-          <button type="button" className="btn btn-import-cv" onClick={() => importFileRef.current?.click()} disabled={importLoading} {...analyticsAttrs('profil-header-cta-import', 'header', 'secondary', 'cta')}>
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          <Button type="button" variant="secondary" onClick={() => importFileRef.current?.click()} disabled={importLoading} loading={importLoading} {...analyticsAttrs('profil-header-cta-import', 'header', 'secondary', 'cta')}>
             {importLoading ? 'Import…' : 'Importer un CV'}
-          </button>
+          </Button>
           <Button type="button" variant="primary" className="profile-save-btn" onClick={handleSave} disabled={saving} loading={saving} {...analyticsAttrs('profil-header-cta-save', 'header', 'primary', 'cta')}>
             {saving ? 'Enregistrement…' : 'Enregistrer les modifications'}
           </Button>
@@ -1374,7 +1375,7 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
 
       <div className="profile-preview-pane">
         <div className="profile-preview-pane-top">
-          <h2 className="profile-preview-title">Aperçu du CV</h2>
+          <h2 className="profile-preview-title ds-label-sm">Aperçu du CV</h2>
           <TemplatePicker
             templates={templatesList}
             templateId={templateId}
