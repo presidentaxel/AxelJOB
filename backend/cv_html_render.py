@@ -196,12 +196,11 @@ def render_cv_html(
     max_proj = 10 if use_selection else 5
 
     by_id = {e.get("id"): e for e in (base_doc.get("experiences") or []) if e.get("id")}
-    experiences_raw = (cv.get("experiences") or [])[:max_exp]
     experiences_with_content = [
         exp
-        for exp in experiences_raw
+        for exp in (cv.get("experiences") or [])
         if (exp.get("poste") or exp.get("entreprise") or any(exp.get("bullet_points") or []))
-    ]
+    ][:max_exp]
     experiences_for_display = []
     for exp in experiences_with_content:
         base_exp = by_id.get(exp.get("id")) or {}
@@ -246,9 +245,9 @@ def render_cv_html(
     formations_all = cv.get("formations") or []
     ctx["formations_for_display"] = [
         f
-        for f in formations_all[:max_form]
+        for f in formations_all
         if (f.get("diplome") or f.get("etablissement") or f.get("date") or f.get("mention"))
-    ]
+    ][:max_form]
 
     certs_all = cv.get("certifications") or []
     ctx["certifications_for_display"] = [
@@ -256,8 +255,8 @@ def render_cv_html(
     ]
 
     projs_all = cv.get("projets") or []
-    ctx["projets_for_display"] = [
-        p for p in projs_all[:max_proj] if (p.get("nom") or p.get("description"))
+    ctx["projets_for_display"] = [p for p in projs_all if (p.get("nom") or p.get("description"))][
+        :max_proj
     ]
 
     comp = cv.get("competences") or {}
@@ -357,19 +356,19 @@ def render_cv_html(
         _ref = base_cv if base_cv else cv
         _exp_ref = [
             e
-            for e in (_ref.get("experiences") or [])[:6]
+            for e in (_ref.get("experiences") or [])
             if (e.get("poste") or e.get("entreprise") or any(e.get("bullet_points") or []))
-        ]
+        ][:6]
         _bullet_ref = sum(len(e.get("bullet_points") or []) for e in _exp_ref)
         _form_ref = len(
             [
                 f
-                for f in (_ref.get("formations") or [])[:5]
+                for f in (_ref.get("formations") or [])
                 if (f.get("diplome") or f.get("etablissement") or f.get("date") or f.get("mention"))
-            ]
+            ][:5]
         )
         _proj_ref = len(
-            [p for p in (_ref.get("projets") or [])[:5] if (p.get("nom") or p.get("description"))]
+            [p for p in (_ref.get("projets") or []) if (p.get("nom") or p.get("description"))][:5]
         )
         content_score = len(_exp_ref) * 3 + _bullet_ref + _form_ref + _proj_ref
         if content_score <= 6:

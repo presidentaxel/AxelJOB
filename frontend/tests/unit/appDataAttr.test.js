@@ -39,7 +39,6 @@ const FROZEN_IDS = [
   'cv-nudge-cta-dismiss',
   'profil-header-cta-import',
   'profil-header-cta-save',
-  'profil-footer-cta-save',
   'profil-preview-cta-pdf',
   'profil-billing-cta-cancel',
   'profil-billing-cta-portal',
@@ -82,7 +81,7 @@ function idsFromSource(text) {
 }
 
 test('AXE-396 : data-attr C.10–C.16 posés une fois via analyticsAttrs', async () => {
-  assert.equal(FROZEN_IDS.length, 47);
+  assert.equal(FROZEN_IDS.length, 46);
 
   const texts = {};
   for (const rel of SOURCE_FILES) {

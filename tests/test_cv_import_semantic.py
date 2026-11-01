@@ -423,6 +423,67 @@ Built early algorithms
     assert len(cv.get("experiences") or []) >= 1
 
 
+def test_dated_jobs_without_experience_heading_trigger_fallback_full():
+    """Timeline sans titre Expériences : compétences/langues ne doivent pas court-circuiter les postes."""
+    text = """Louis Vedovato
+louis@example.com
+
+Harris Interactive | Mai 2024 - Août 2024
+Chargé d'étude junior
+Conception de questionnaires
+
+Compétences
+Techniques & Outils
+
+Langues
+Français : natif
+
+Formations
+ESSEC 2024
+"""
+    fallback_calls: list[str] = []
+
+    def fake_generate(prompt: str, _uid: str | None) -> dict:
+        low = prompt.lower()
+        if "mise en page" in low:
+            return {}
+        if "identité" in low or "contact" in low:
+            return {"prenom": "Louis", "nom": "Vedovato", "email": "louis@example.com"}
+        if "formations" in low:
+            return {"formations": [{"id": "form_1", "diplome": "ESSEC", "etablissement": "ESSEC"}]}
+        if "compétences" in low or "competences" in low:
+            if "français" in low or "francais" in low:
+                return {"competences": {"langues": [{"langue": "Français", "niveau": "natif"}]}}
+            return {"competences": {"techniques": ["Techniques & Outils"]}}
+        return {}
+
+    def fake_full(_full_text: str, _uid: str | None) -> dict:
+        fallback_calls.append("full")
+        return {
+            "cv": {
+                "prenom": "Louis",
+                "nom": "Vedovato",
+                "email": "louis@example.com",
+                "experiences": [
+                    {
+                        "id": "exp_1",
+                        "poste": "Chargé d'étude junior",
+                        "entreprise": "Harris Interactive",
+                        "date_debut": "Mai 2024",
+                        "date_fin": "Août 2024",
+                    }
+                ],
+            }
+        }
+
+    cv, _hints, meta = parse_cv_by_sections(text, "user-1", fake_generate, fallback_full=fake_full)
+    assert fallback_calls, "dated jobs without an Expériences heading must call fallback_full"
+    assert "fallback_full" in meta["section_passes"]
+    postes = [e.get("entreprise") for e in cv.get("experiences") or []]
+    assert "Harris Interactive" in postes
+    assert cv.get("email") == "louis@example.com"
+
+
 def test_layout_hints_quota_does_not_abort_parsed_cv():
     from backend.gemini_usage import GeminiQuotaExceeded
 

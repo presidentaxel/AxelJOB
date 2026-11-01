@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  applyImportedProfileCv,
   cvFromImportPayload,
   CV_IMPORT_STEPS,
   CV_IMPORT_STEP_DURATIONS_MS,
@@ -99,4 +100,25 @@ test('AXE-341: finishImportLoadingAnimation respecte la liste d’étapes', () =
     steps: ONBOARDING_IMPORT_STEPS,
   });
   assert.equal(idx, ONBOARDING_IMPORT_STEPS.length - 1);
+});
+
+test('applyImportedProfileCv pose les postes et ne vide pas une section absente de l’import', () => {
+  const current = {
+    prenom: 'Louis',
+    experiences: [{ id: 'exp_old', poste: 'Ancien', entreprise: 'Avant' }],
+    formations: [{ id: 'form_old', diplome: 'Ancien diplôme' }],
+    layout: { pages: [{}] },
+    template_id: 'executive',
+  };
+  const next = applyImportedProfileCv(current, cvFromImportPayload({
+    prenom: 'Louis',
+    nom: 'Vedovato',
+    experiences: [{ id: 'exp_1', poste: "Chargé d'étude junior", entreprise: 'Harris Interactive' }],
+    formations: [],
+  }));
+  assert.equal(next.nom, 'Vedovato');
+  assert.equal(next.experiences[0].entreprise, 'Harris Interactive');
+  assert.equal(next.formations[0].diplome, 'Ancien diplôme');
+  assert.equal(next.template_id, 'executive');
+  assert.deepEqual(next.layout, current.layout);
 });

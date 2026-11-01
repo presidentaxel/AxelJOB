@@ -306,6 +306,23 @@ def _cv_has_minimum(cv: dict[str, Any]) -> bool:
     return isinstance(exps, list) and len(exps) >= 1
 
 
+# « Mai 2024 - Août 2024 » ou « 2023 - Aujourd'hui » : poste daté, même sans titre de section.
+_JOB_DATE_SPAN_RE = re.compile(
+    r"(?:19|20)\d{2}.{0,24}(?:19|20)\d{2}"
+    r"|(?:19|20)\d{2}.{0,20}(?:aujourd|présent|present|current)",
+    re.I,
+)
+
+
+def _experiences_missing(cv: dict[str, Any]) -> bool:
+    exps = cv.get("experiences") or []
+    return not (isinstance(exps, list) and len(exps) >= 1)
+
+
+def _text_suggests_jobs(text: str) -> bool:
+    return bool(_JOB_DATE_SPAN_RE.search(text or ""))
+
+
 def _cv_has_content_sections(cv: dict[str, Any]) -> bool:
     """True si le CV a au moins une section métier (expériences, formations, …).
 
@@ -382,8 +399,13 @@ def parse_cv_by_sections(
 
     cv = _merge_cv_parts(parts)
 
+    # Compétences + formations sans titre « Expériences » : les postes (colonne
+    # timeline) restent hors des passes section. Le full parse les récupère.
     need_full = fallback_full is not None and (
-        headingless or (not _cv_has_minimum(cv)) or (not _cv_has_content_sections(cv))
+        headingless
+        or (not _cv_has_minimum(cv))
+        or (not _cv_has_content_sections(cv))
+        or (_experiences_missing(cv) and _text_suggests_jobs(text))
     )
     if need_full and fallback_full is not None:
         try:

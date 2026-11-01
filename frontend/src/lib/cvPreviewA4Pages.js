@@ -60,6 +60,11 @@ export function syncCvPreviewIframeHeight(iframe) {
       iframe.setAttribute('data-cv-preview-sync-h', String(h));
       iframe.style.height = `${h}px`;
     }
+    const fit = iframe.closest?.('.profile-preview-fit');
+    if (fit) {
+      fit.style.setProperty('--cv-doc-h', `${h}px`);
+      syncProfilePreviewScale(fit);
+    }
     suppressCvPreviewIframeInnerScroll(doc);
   } catch (_) {
     /* ignore */
@@ -92,6 +97,32 @@ function disconnectDocObserver(doc) {
     obs.disconnect();
     doc[RESIZE_OBSERVER_KEY] = null;
   }
+}
+
+/**
+ * Échelle unitaire largeur_disponible / 210mm.
+ * Repli quand calc() ne sait pas diviser deux longueurs (Firefox avant 158).
+ */
+export function syncProfilePreviewScale(fit) {
+  if (!fit?.isConnected || typeof document === 'undefined') return;
+  const available = fit.clientWidth;
+  const a4 = cssMmToPx(document, window, 210);
+  if (available <= 0 || a4 <= 0) return;
+  fit.style.setProperty('--cv-preview-scale', (available / a4).toFixed(4));
+}
+
+/** Recalcule l’échelle quand la colonne d’aperçu change de largeur. */
+export function bindProfilePreviewScale(pane) {
+  if (!pane) return () => {};
+  const apply = () => {
+    const fit = pane.querySelector?.('.profile-preview-fit');
+    if (fit) syncProfilePreviewScale(fit);
+  };
+  apply();
+  if (typeof ResizeObserver === 'undefined') return () => {};
+  const observer = new ResizeObserver(apply);
+  observer.observe(pane);
+  return () => observer.disconnect();
 }
 
 /**

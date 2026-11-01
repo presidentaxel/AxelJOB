@@ -38,7 +38,7 @@ import AdaptLanguageChoiceDialog from './components/ui/AdaptLanguageChoiceDialog
 import { CONTACT_EMAIL, STORAGE_EXPORT_DIR, STORAGE_EXPORT_ATS_BLOCK_SNOOZE, STORAGE_PRE_EXPORT_TEMPLATE_OPTIONS_DONE, STORAGE_PDF_EXPORT_FILENAME_PATTERN, STATUT_LABELS, KANBAN_COLUMNS, getExportFolderName } from './constants';
 import { buildAdaptedPdfFilename } from './lib/pdfExportFilename';
 import { getPdfSaveStartInDirectoryHandle } from './lib/pdfExportStartDirIdb';
-import { HiDocumentText, HiArrowDownTray, HiClipboardDocumentList, HiPencilSquare, HiChatBubbleLeftRight, HiCheck, HiSwatch, HiChevronDown, HiChevronUp, HiPlus, HiOutlinePaperClip } from 'react-icons/hi2';
+import { HiDocumentText, HiArrowDownTray, HiClipboardDocumentList, HiPencilSquare, HiCheck, HiSwatch, HiChevronDown, HiChevronUp, HiPlus, HiOutlinePaperClip } from 'react-icons/hi2';
 import { lazyWithChunkReload } from './lib/lazyChunkReload';
 import { APP_DEFAULT_ROUTE, APP_ROUTES, getViewFromPathname, isKnownAppPathname } from './lib/appRoutes';
 import {
@@ -568,53 +568,54 @@ function SupportTicketSection() {
   };
 
   return (
-    <section className="support-conv">
-      <h2 className="support-section-title">
-        <HiChatBubbleLeftRight className="support-conv-title-icon" aria-hidden />
-        Ouvrir un ticket
-      </h2>
-      <div className="support-conv-card">
-        {success ? (
-          <>
-            <p className="support-ticket-success">
-              Ticket envoyé. Tu recevras une réponse par email à <strong>{ticketEmail}</strong>.
-            </p>
-            <Button type="button" variant="secondary" className="support-ticket-another" onClick={sendAnother}>
-              Envoyer un autre ticket
-            </Button>
-          </>
-        ) : (
-          <>
-            <p className="support-conv-placeholder-text">
-              Décris ton problème ou ta question. Nous te répondrons par email à l&apos;adresse de ton compte.
-            </p>
-            <form onSubmit={handleSubmit} className="support-ticket-form">
+    <section className="support-form-block">
+      <h2 className="ds-heading-sm">Ouvrir un ticket</h2>
+      {success ? (
+        <div className="support-ticket-done">
+          <p className="ds-body-md support-ticket-success" role="status">
+            Ticket envoyé. Tu recevras une réponse par email à <strong>{ticketEmail}</strong>.
+          </p>
+          <Button type="button" variant="secondary" size="sm" onClick={sendAnother}>
+            Envoyer un autre ticket
+          </Button>
+        </div>
+      ) : (
+        <>
+          <p className="ds-body-md support-form-lead">
+            Décris ton problème ou ta question. La réponse part sur l&apos;email de ton compte.
+          </p>
+          <form onSubmit={handleSubmit} className="support-ticket-form">
+            <div className="support-ticket-field">
+              <label className="ds-field-label" htmlFor="support-ticket-subject">Sujet</label>
               <input
+                id="support-ticket-subject"
                 type="text"
-                className="support-ticket-subject"
-                placeholder="Sujet du ticket"
+                className="ds-input"
                 value={subject}
                 onChange={(e) => setSubject(e.target.value)}
                 maxLength={200}
                 required
               />
+            </div>
+            <div className="support-ticket-field">
+              <label className="ds-field-label" htmlFor="support-ticket-message">Message</label>
               <textarea
-                className="support-ticket-message"
-                placeholder="Ton message…"
+                id="support-ticket-message"
+                className="ds-input support-ticket-message"
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
                 rows={5}
                 maxLength={8000}
                 required
               />
-              {error && <p className="support-ticket-error">{error}</p>}
-              <Button type="submit" variant="primary" className="support-ticket-submit" disabled={loading} loading={loading} {...analyticsAttrs('support-ticket-cta-submit', 'ticket', 'primary', 'cta')}>
-                {loading ? 'Envoi…' : 'Envoyer le ticket'}
-              </Button>
-            </form>
-          </>
-        )}
-      </div>
+            </div>
+            {error && <p className="ds-field-error" role="alert">{error}</p>}
+            <Button type="submit" variant="primary" size="sm" disabled={loading} loading={loading} {...analyticsAttrs('support-ticket-cta-submit', 'ticket', 'primary', 'cta')}>
+              {loading ? 'Envoi…' : 'Envoyer le ticket'}
+            </Button>
+          </form>
+        </>
+      )}
     </section>
   );
 }
@@ -647,51 +648,52 @@ function SupportReplySection() {
   };
 
   return (
-    <section className="support-conv">
-      <h2 className="support-section-title">
-        <HiChatBubbleLeftRight className="support-conv-title-icon" aria-hidden />
-        Répondre à un utilisateur
-      </h2>
-      <div className="support-conv-card">
-        {success ? (
-          <>
-            <p className="support-ticket-success">Message envoyé.</p>
-            <Button type="button" variant="secondary" className="support-ticket-another" onClick={sendAnother}>
-              Nouvelle réponse
-            </Button>
-          </>
-        ) : (
-          <>
-            <p className="support-conv-placeholder-text">
-              Envoi d&apos;un email de support depuis l&apos;adresse configurée côté serveur vers l&apos;utilisateur concerné.
-            </p>
-            <form onSubmit={handleSubmit} className="support-ticket-form">
+    <section className="support-form-block">
+      <h2 className="ds-heading-sm">Répondre à un utilisateur</h2>
+      {success ? (
+        <div className="support-ticket-done">
+          <p className="ds-body-md support-ticket-success" role="status">Message envoyé.</p>
+          <Button type="button" variant="secondary" size="sm" onClick={sendAnother}>
+            Nouvelle réponse
+          </Button>
+        </div>
+      ) : (
+        <>
+          <p className="ds-body-md support-form-lead">
+            Le message part depuis l&apos;adresse support vers cet email.
+          </p>
+          <form onSubmit={handleSubmit} className="support-ticket-form">
+            <div className="support-ticket-field">
+              <label className="ds-field-label" htmlFor="support-reply-email">Email</label>
               <input
+                id="support-reply-email"
                 type="email"
-                className="support-ticket-subject"
-                placeholder="Email du destinataire"
+                className="ds-input"
                 value={toEmail}
                 onChange={(e) => setToEmail(e.target.value)}
                 maxLength={320}
                 required
               />
+            </div>
+            <div className="support-ticket-field">
+              <label className="ds-field-label" htmlFor="support-reply-message">Message</label>
               <textarea
-                className="support-ticket-message"
-                placeholder="Message…"
+                id="support-reply-message"
+                className="ds-input support-ticket-message"
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
                 rows={5}
                 maxLength={8000}
                 required
               />
-              {error && <p className="support-ticket-error">{error}</p>}
-              <Button type="submit" variant="primary" className="support-ticket-submit" disabled={loading} loading={loading}>
-                {loading ? 'Envoi…' : 'Envoyer'}
-              </Button>
-            </form>
-          </>
-        )}
-      </div>
+            </div>
+            {error && <p className="ds-field-error" role="alert">{error}</p>}
+            <Button type="submit" variant="primary" size="sm" disabled={loading} loading={loading}>
+              {loading ? 'Envoi…' : 'Envoyer'}
+            </Button>
+          </form>
+        </>
+      )}
     </section>
   );
 }

@@ -45,11 +45,12 @@ test('AuthForm / Reauth / Profil importent Input pour les champs texte', async (
   const app = await readFile(path.join(SRC, 'App.jsx'), 'utf8');
   assert.match(auth, /import Input from '\.\/ui\/Input\.jsx'/);
   assert.match(reauth, /import Input from '\.\/ui\/Input\.jsx'/);
-  assert.match(profile, /import Input from '\.\/ui\/Input\.jsx'/);
   assert.match(app, /import Input from '\.\/components\/ui\/Input\.jsx'/);
   assert.match(auth, /<Input\s+type="email"/);
   assert.match(auth, /<PasswordInput/);
-  assert.match(profile, /<Input type="text"/);
+  assert.match(profile, /import InlineEdit from '\.\/profile\/InlineEdit\.jsx'/);
+  assert.match(profile, /<InlineEdit /);
+  assert.doesNotMatch(profile, /import Input from '\.\/ui\/Input\.jsx'/);
   assert.doesNotMatch(app, /className="button button-primary auth-submit"/);
 });
 
