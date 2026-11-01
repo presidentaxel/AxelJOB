@@ -1274,6 +1274,21 @@ button.ats-score-trigger {
 }
 
 /* Preview éditable : hauteur = contenu du CV (min-height:auto sur l’item flex pour inclure tout le flux + marge A4) */
+.preview-a4-sheet:has(.cv-beta-live-preview) {
+  width: 100%;
+  background: transparent;
+  box-shadow: none;
+}
+
+.cv-beta-live-preview {
+  width: 100%;
+  background: var(--ds-color-bg-subtle);
+}
+
+.cv-beta-live-preview .free-canvas {
+  width: 100%;
+}
+
 .preview-a4-sheet .cv-editable-preview {
   width: 100%;
   min-height: auto;

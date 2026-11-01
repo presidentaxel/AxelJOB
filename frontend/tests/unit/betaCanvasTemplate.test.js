@@ -11,6 +11,7 @@ import {
   betaCanvasRenderFields,
   hasUsableBetaCanvasLayout,
   isBetaCanvasTemplateId,
+  resolveBetaCanvasPreview,
   withBetaCanvasTemplate,
 } from '../../src/lib/betaCanvasTemplate.js';
 
@@ -36,6 +37,26 @@ test('hasUsableBetaCanvasLayout', () => {
     hasUsableBetaCanvasLayout({ pages: [{ blocks: [{ id: 'a', type: 'text', x: 0, y: 0, w: 10, h: 10 }] }] }),
     true,
   );
+});
+
+test('resolveBetaCanvasPreview garde le canvas Beta et ignore le mode Stable', () => {
+  const layout = { pages: [{ blocks: [{ id: 'a', type: 'text', x: 0, y: 0, w: 10, h: 10 }] }] };
+  const cv = { prenom: 'Louis' };
+  assert.equal(resolveBetaCanvasPreview({ betaMode: false, templateId: 'minimal', profileLayout: layout, cv }), null);
+  const fromMode = resolveBetaCanvasPreview({ betaMode: true, templateId: 'minimal', profileLayout: layout, cv });
+  assert.equal(fromMode.layout, layout);
+  assert.equal(fromMode.cv, cv);
+  const fromTemplate = resolveBetaCanvasPreview({ betaMode: false, templateId: 'beta', profileLayout: layout, cv });
+  assert.equal(fromTemplate.layout, layout);
+  const own = { ...cv, layout };
+  const fromCv = resolveBetaCanvasPreview({
+    betaMode: true,
+    templateId: 'minimal',
+    profileLayout: { pages: [] },
+    cv: own,
+  });
+  assert.equal(fromCv.layout, layout);
+  assert.equal(resolveBetaCanvasPreview({ betaMode: true, templateId: 'beta', profileLayout: null, cv }), null);
 });
 
 test('betaCanvasRenderFields', () => {

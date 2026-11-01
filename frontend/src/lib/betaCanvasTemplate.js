@@ -56,3 +56,22 @@ export function betaCanvasRenderFields(templateId, layout) {
   if (!hasUsableBetaCanvasLayout(layout)) return {};
   return { layout };
 }
+
+/**
+ * Aperçu `/app/cv` : même canvas que l'éditeur Beta, pas le HTML des templates Stable.
+ * @param {{ betaMode?: boolean, templateId?: unknown, profileLayout?: object|null, cv?: object|null }} input
+ * @returns {{ layout: object, cv: object } | null}
+ */
+export function resolveBetaCanvasPreview({
+  betaMode = false,
+  templateId,
+  profileLayout,
+  cv,
+} = {}) {
+  if (!cv || typeof cv !== 'object') return null;
+  const wantsBetaLook = Boolean(betaMode) || isBetaCanvasTemplateId(templateId);
+  if (!wantsBetaLook) return null;
+  const layout = hasUsableBetaCanvasLayout(cv.layout) ? cv.layout : profileLayout;
+  if (!hasUsableBetaCanvasLayout(layout)) return null;
+  return { layout, cv };
+}
