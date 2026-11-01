@@ -162,10 +162,12 @@
   container-name: profile-preview;
 }
 
-/* La feuille A4 (210 mm) est mise à l’échelle pour occuper exactement la largeur de la zone. */
+/* La feuille A4 (210 mm) est mise à l’échelle pour occuper exactement la largeur de la zone.
+   --cv-preview-scale est un nombre sans unité (posé en JS) : Firefox < 158 ignore
+   une division de longueurs dans calc() et laisserait l’iframe à 210 mm, coupée à droite. */
 .profile-preview-fit {
   width: 100%;
-  height: calc(var(--cv-doc-h, 297mm) * 100cqw / 210mm);
+  height: calc(var(--cv-doc-h, 297mm) * var(--cv-preview-scale, 1));
   overflow: hidden;
 }
 
@@ -184,8 +186,19 @@
   border: none;
   border-radius: 0;
   background: transparent;
-  transform: scale(calc(100cqw / 210mm));
+  transform: scale(var(--cv-preview-scale, 1));
   transform-origin: top left;
+}
+
+@supports (width: calc(1px / 1px)) {
+  .profile-preview-fit {
+    height: calc(var(--cv-doc-h, 297mm) * 100cqw / 210mm);
+  }
+
+  .profile-preview-wrap.profile-preview-a4,
+  .profile-preview-wrap {
+    transform: scale(calc(100cqw / 210mm));
+  }
 }
 
 .profile-preview-iframe {
@@ -237,7 +250,7 @@
   right: max(1rem, env(safe-area-inset-right, 0px));
   left: auto;
   max-width: calc(100vw - 2rem - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px));
-  z-index: 100;
+  z-index: var(--ds-z-toast);
   padding: 0.6rem 0.85rem;
   border-radius: var(--radius-xs);
   font-size: 0.85rem;
@@ -574,8 +587,7 @@
   gap: 0.35rem 0.75rem;
 }
 
-.profile-grid label,
-.profile-full {
+.profile-grid label {
   display: flex;
   flex-direction: column;
   font-size: 0.8rem;
@@ -586,6 +598,14 @@
 
 .profile-full {
   grid-column: 1 / -1;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--ds-color-text-muted);
+  gap: 0.2rem;
+}
+
+.profile-inline.profile-full {
+  display: grid;
 }
 
 .profile-grid input,
@@ -1247,6 +1267,10 @@
   align-items: center;
   justify-content: center;
   animation: import-overlay-fade 0.2s ease-out;
+}
+.import-cv-loading-overlay--front,
+.import-result-overlay {
+  z-index: 10060;
 }
 @keyframes import-overlay-fade {
   from { opacity: 0; }

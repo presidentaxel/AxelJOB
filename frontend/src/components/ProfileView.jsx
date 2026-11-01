@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import Cropper from 'react-easy-crop';
 import {
   apiGet,
@@ -18,11 +19,12 @@ import { defaultCv, newExpId, newFormId, newCertId, newProjId } from '../data/cv
 import TemplatePicker from './TemplatePicker';
 import ReauthModal from './ReauthModal';
 import DesignModeBridgeModal from './editor/DesignModeBridgeModal.jsx';
-import { applyA4PageFramesToDocument, syncCvPreviewIframeHeight } from '../lib/cvPreviewA4Pages';
+import { applyA4PageFramesToDocument, bindProfilePreviewScale, syncCvPreviewIframeHeight } from '../lib/cvPreviewA4Pages';
 import { buildBetaToStableOffer } from '../lib/designModeBridge.js';
 import { betaCanvasRenderFields } from '../lib/betaCanvasTemplate.js';
 import { HiArrowDownTray, HiChevronDown, HiChevronUp } from 'react-icons/hi2';
 import { analyticsAttrs } from '../lib/analyticsAttrs.js';
+import { applyImportedProfileCv, cvFromImportPayload, extractImportApiResponse } from '../lib/cvImportUtils.js';
 import {
   buildProfileCvPutPayload,
   decideProfileAutoSaveOnActiveChange,
@@ -113,6 +115,11 @@ function ProfileCompletion({ cv }) {
   );
 }
 
+function displayedBullets(list) {
+  if (Array.isArray(list) && list.length > 0) return list;
+  return ['', ''];
+}
+
 function moveListItem(list, index, direction) {
   const items = list || [];
   const target = index + direction;
@@ -180,6 +187,7 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
   const [profilePreviewLoading, setProfilePreviewLoading] = useState(false);
   const [baseCvPdfLoading, setBaseCvPdfLoading] = useState(false);
   const profilePreviewIframeRef = useRef(null);
+  const profilePreviewScrollRef = useRef(null);
   const profilePreviewHtmlRef = useRef('');
   const [photoModalOpen, setPhotoModalOpen] = useState(false);
   const [cropModalOpen, setCropModalOpen] = useState(false);
@@ -188,10 +196,8 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
   const [zoom, setZoom] = useState(1);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState(null);
   const [importLoading, setImportLoading] = useState(false);
-  const [importMergeParsed, setImportMergeParsed] = useState(null);
-  const [importMergeOpen, setImportMergeOpen] = useState(false);
-  const [importMergeChoices, setImportMergeChoices] = useState({});
   const [importStepIndex, setImportStepIndex] = useState(0);
+  const [importSummary, setImportSummary] = useState(null);
   const importStepTimerRef = useRef(null);
   const importFinalisationTimerRef = useRef(null);
   const [cancelSubModalOpen, setCancelSubModalOpen] = useState(false);
@@ -239,6 +245,11 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
       })
       .finally(() => setLoading(false));
   }, [session?.user?.id, refreshKey]);
+
+  useLayoutEffect(() => {
+    if (loading) return undefined;
+    return bindProfilePreviewScale(profilePreviewScrollRef.current);
+  }, [loading]);
 
   // Auto-trigger LinkedIn sync/photo after OAuth redirect
   const linkedinAutoTriggeredRef = useRef(false);
@@ -637,7 +648,7 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
   const updateExpBullet = (expIndex, bulletIndex, value) => {
     setCv((prev) => {
       const next = [...(prev.experiences || [])];
-      const bullets = [...(next[expIndex].bullet_points || ['', ''])];
+      const bullets = [...displayedBullets(next[expIndex].bullet_points)];
       bullets[bulletIndex] = value;
       next[expIndex] = { ...next[expIndex], bullet_points: bullets };
       return { ...prev, experiences: next };
@@ -647,7 +658,7 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
   const addExpBullet = (expIndex) => {
     setCv((prev) => {
       const next = [...(prev.experiences || [])];
-      const bullets = [...(next[expIndex].bullet_points || [''])];
+      const bullets = [...displayedBullets(next[expIndex].bullet_points)];
       bullets.push('');
       next[expIndex] = { ...next[expIndex], bullet_points: bullets };
       return { ...prev, experiences: next };
@@ -657,7 +668,7 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
   const moveExpBullet = (expIndex, bulletIndex, direction) => {
     setCv((prev) => {
       const next = [...(prev.experiences || [])];
-      const bullets = moveListItem(next[expIndex].bullet_points || [''], bulletIndex, direction);
+      const bullets = moveListItem(displayedBullets(next[expIndex].bullet_points), bulletIndex, direction);
       next[expIndex] = { ...next[expIndex], bullet_points: bullets };
       return { ...prev, experiences: next };
     });
@@ -666,7 +677,7 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
   const removeExpBullet = (expIndex, bulletIndex) => {
     setCv((prev) => {
       const next = [...(prev.experiences || [])];
-      const bullets = (next[expIndex].bullet_points || ['']).filter((_, j) => j !== bulletIndex);
+      const bullets = displayedBullets(next[expIndex].bullet_points).filter((_, j) => j !== bulletIndex);
       if (bullets.length === 0) bullets.push('');
       next[expIndex] = { ...next[expIndex], bullet_points: bullets };
       return { ...prev, experiences: next };
@@ -879,25 +890,6 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
     }
   };
 
-  const IMPORT_SCALAR_KEYS = [
-    { key: 'prenom', label: 'Prénom' },
-    { key: 'nom', label: 'Nom' },
-    { key: 'email', label: 'Email' },
-    { key: 'telephone', label: 'Téléphone' },
-    { key: 'linkedin', label: 'LinkedIn' },
-    { key: 'ville', label: 'Ville' },
-    { key: 'titre_professionnel', label: 'Titre professionnel' },
-    { key: 'resume', label: 'Résumé / Accroche' },
-    { key: 'photo_url', label: 'Photo' },
-  ];
-  const IMPORT_SECTION_KEYS = [
-    { key: 'experiences', label: 'Expériences' },
-    { key: 'formations', label: 'Formations' },
-    { key: 'certifications', label: 'Certifications' },
-    { key: 'competences', label: 'Compétences' },
-    { key: 'projets', label: 'Projets' },
-  ];
-
   const IMPORT_STEPS = [
     'Lecture du document',
     'Extraction du texte',
@@ -932,40 +924,27 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
     }, IMPORT_PHASE_DURATION_MS);
     try {
       const result = await apiPostFile('/api/cv/import', file, 'file', { timeoutMs: CV_IMPORT_REQUEST_TIMEOUT_MS });
-      const parsed = result?.cv || result;
-      if (parsed && typeof parsed === 'object') {
-        const choices = {};
-        IMPORT_SCALAR_KEYS.forEach(({ key }) => {
-          const importedVal = parsed[key];
-          if (importedVal === undefined || importedVal === null || String(importedVal).trim() === '') return;
-          const currentVal = (cv[key] ?? '').toString().trim();
-          const importedStr = String(importedVal).trim();
-          if (currentVal === importedStr) return;
-          choices[key] = currentVal === '' ? 'add' : 'keep';
+      const imported = cvFromImportPayload(extractImportApiResponse(result).cv);
+      const next = applyImportedProfileCv(cv, imported);
+      skipNextAutoSaveRef.current = true;
+      setCv(next);
+      setProfileSection('identite');
+      setSaving(true);
+      try {
+        await apiPut('/api/cv', buildProfileCvPutPayload(next, templateId, templateOptions));
+        const nExp = (imported.experiences || []).filter((item) => item?.poste || item?.entreprise).length;
+        const nForm = (imported.formations || []).filter((item) => item?.diplome || item?.etablissement).length;
+        setImportSummary({
+          name: [imported.prenom, imported.nom].filter(Boolean).join(' '),
+          title: imported.titre_professionnel || '',
+          experiences: nExp,
+          formations: nForm,
         });
-        IMPORT_SECTION_KEYS.forEach(({ key }) => {
-          const imported = parsed[key];
-          const hasImported = Array.isArray(imported) ? imported.length > 0 : (imported && typeof imported === 'object' && (Object.keys(imported).length > 0 || (imported.techniques || imported.logiciels || imported.langues || imported.autres)));
-          if (!hasImported) return;
-          const current = cv[key];
-          try {
-            if (JSON.stringify(imported) === JSON.stringify(current)) return;
-          } catch {
-            /* non-serializable fragment: fall through to merge UI */
-          }
-          const hasCurrent = Array.isArray(current) ? current.some((e) => (e && (e.poste || e.entreprise || e.diplome || e.nom || (e.bullet_points && e.bullet_points.some(Boolean))))) : (current && typeof current === 'object' && ((current.techniques || []).some(Boolean) || (current.logiciels || []).some(Boolean)));
-          choices[key] = hasCurrent ? 'keep' : 'replace';
-        });
-        if (Object.keys(choices).length === 0) {
-          skipNextAutoSaveRef.current = true;
-          setCv((prev) => ({ ...defaultCv(), ...prev, ...parsed }));
-          setMessage('CV importé - vérifie et complète les champs ci-dessous.');
-          setTimeout(() => setMessage(''), 5000);
-        } else {
-          setImportMergeParsed(parsed);
-          setImportMergeChoices(choices);
-          setImportMergeOpen(true);
-        }
+        onSaveSuccess?.();
+      } catch (saveErr) {
+        setError(saveErr.message || 'CV importé à l’écran, mais l’enregistrement a échoué.');
+      } finally {
+        setSaving(false);
       }
     } catch (err) {
       setError(err.message || 'Erreur lors de l\'import.');
@@ -975,36 +954,6 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
       if (importFinalisationTimerRef.current) clearTimeout(importFinalisationTimerRef.current);
       if (importFileRef.current) importFileRef.current.value = '';
     }
-  };
-
-  const applyImportMerge = async () => {
-    if (!importMergeParsed) return;
-    const next = { ...defaultCv(), ...cv };
-    IMPORT_SCALAR_KEYS.forEach(({ key }) => {
-      const choice = importMergeChoices[key];
-      if (choice === 'add' || choice === 'replace') next[key] = importMergeParsed[key] ?? next[key];
-    });
-    IMPORT_SECTION_KEYS.forEach(({ key }) => {
-      if (importMergeChoices[key] === 'replace' && importMergeParsed[key] !== undefined) {
-        next[key] = Array.isArray(importMergeParsed[key]) ? [...importMergeParsed[key]] : (typeof importMergeParsed[key] === 'object' && importMergeParsed[key] !== null ? { ...importMergeParsed[key] } : importMergeParsed[key]);
-      }
-    });
-    setCv(next);
-    setImportMergeOpen(false);
-    setImportMergeParsed(null);
-    setImportMergeChoices({});
-    setSaving(true);
-    setError('');
-    try {
-      await apiPut('/api/cv', buildProfileCvPutPayload(next, templateId, templateOptions));
-      setMessage('CV importé et enregistré.');
-      onSaveSuccess?.();
-    } catch (e) {
-      setError(e.message || 'Erreur lors de l\'enregistrement.');
-    } finally {
-      setSaving(false);
-    }
-    setTimeout(() => setMessage(''), 5000);
   };
 
   if (loading) return <div className="profile-loading">Chargement du profil…</div>;
@@ -1025,8 +974,8 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
         </div>
       </div>
 
-      {importLoading && (
-        <div className="import-cv-loading-overlay" role="status" aria-live="polite">
+      {importLoading && createPortal(
+        <div className="import-cv-loading-overlay import-cv-loading-overlay--front" role="status" aria-live="polite">
           <div className="import-cv-loading-card">
             <div className="import-cv-loading-spinner" aria-hidden="true" />
             <p className="import-cv-loading-title">Analyse de ton CV en cours</p>
@@ -1047,7 +996,8 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
               ))}
             </ul>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
 
       {message && <div className="profile-toast profile-toast--success" role="status">{message}</div>}
@@ -1206,10 +1156,10 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
                 <span>Bullet points</span>
                 <button type="button" className="btn btn-add" onClick={() => addExpBullet(i)}>+ Ajouter un point</button>
               </div>
-              {(exp.bullet_points || ['', '']).map((b, j) => (
+              {displayedBullets(exp.bullet_points).map((b, j) => (
                 <div key={j} className="profile-bullet-row">
                   <InlineEdit multiline value={b} onChange={(v) => updateExpBullet(i, j, v)} placeholder={`Point ${j + 1}`} />
-                  <OrderButtons index={j} total={(exp.bullet_points || []).length} onMove={(idx, dir) => moveExpBullet(i, idx, dir)} label="ce point" />
+                  <OrderButtons index={j} total={displayedBullets(exp.bullet_points).length} onMove={(idx, dir) => moveExpBullet(i, idx, dir)} label="ce point" />
                   <button type="button" className="btn btn-remove" onClick={() => removeExpBullet(i, j)} title="Supprimer ce point">×</button>
                 </div>
               ))}
@@ -1484,7 +1434,7 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
             )}
           />
         </div>
-        <div className="profile-preview-pane-scroll">
+        <div className="profile-preview-pane-scroll" ref={profilePreviewScrollRef}>
           <div className="profile-preview-fit">
           <div className="profile-preview-wrap profile-preview-a4">
             {profilePreviewLoading && !profilePreviewHtml && (
@@ -1561,92 +1511,20 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
           </div>
         </div>
       )}
-
-      {importMergeOpen && importMergeParsed && (
-        <div className="linkedin-sync-overlay import-merge-overlay" onClick={() => { setImportMergeOpen(false); setImportMergeParsed(null); }} role="dialog" aria-modal="true" aria-labelledby="import-merge-title">
-          <div className="linkedin-sync-modal import-merge-modal" onClick={(e) => e.stopPropagation()}>
-            <h3 id="import-merge-title" className="import-merge-modal-title">Importer le CV - choisir les champs</h3>
-            <p className="linkedin-sync-intro import-merge-intro">Champ vide : ajouter le texte importé ou l’ignorer. Champ déjà rempli : remplacer ou conserver ta version actuelle.</p>
-            <ul className="linkedin-sync-changes import-merge-list">
-              {IMPORT_SCALAR_KEYS.filter(({ key }) => importMergeParsed[key] !== undefined && String(importMergeParsed[key] ?? '').trim() !== '').map(({ key, label }) => {
-                const currentVal = (cv[key] ?? '').toString().trim();
-                const isEmpty = currentVal === '';
-                const choice = importMergeChoices[key];
-                return (
-                  <li key={key} className="linkedin-sync-change import-merge-row">
-                    <span className="change-label import-merge-field-label">{label}</span>
-                    <div className="change-values import-merge-field-body">
-                      {isEmpty ? (
-                        <>
-                          <div className="import-merge-previews">
-                            <div className="change-new import-merge-preview import-merge-preview--import"><span className="import-merge-preview-tag">Import</span><span className="import-merge-preview-text">{formatScalarPreviewForPrivacy(key, importMergeParsed[key], 80)}</span></div>
-                          </div>
-                          <div className="import-merge-choice-group" role="group" aria-label={`Choix pour ${label}`}>
-                            <label className="import-merge-choice">
-                              <input type="radio" name={`import-merge-${key}`} checked={choice === 'add'} onChange={() => setImportMergeChoices((p) => ({ ...p, [key]: 'add' }))} />
-                              Ajouter
-                            </label>
-                            <label className="import-merge-choice">
-                              <input type="radio" name={`import-merge-${key}`} checked={choice === 'skip'} onChange={() => setImportMergeChoices((p) => ({ ...p, [key]: 'skip' }))} />
-                              Ne pas ajouter
-                            </label>
-                          </div>
-                        </>
-                      ) : (
-                        <>
-                          <div className="import-merge-previews import-merge-previews--compare">
-                            <div className="change-current import-merge-preview import-merge-preview--current"><span className="import-merge-preview-tag">Actuel</span><span className="import-merge-preview-text">{formatScalarPreviewForPrivacy(key, currentVal, 60)}</span></div>
-                            <div className="change-new import-merge-preview import-merge-preview--import"><span className="import-merge-preview-tag">Import</span><span className="import-merge-preview-text">{formatScalarPreviewForPrivacy(key, importMergeParsed[key], 60)}</span></div>
-                          </div>
-                          <div className="import-merge-choice-group" role="group" aria-label={`Choix pour ${label}`}>
-                            <label className="import-merge-choice">
-                              <input type="radio" name={`import-merge-${key}`} checked={choice === 'replace'} onChange={() => setImportMergeChoices((p) => ({ ...p, [key]: 'replace' }))} />
-                              Remplacer
-                            </label>
-                            <label className="import-merge-choice">
-                              <input type="radio" name={`import-merge-${key}`} checked={choice === 'keep'} onChange={() => setImportMergeChoices((p) => ({ ...p, [key]: 'keep' }))} />
-                              Garder l’actuel
-                            </label>
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  </li>
-                );
-              })}
-              {IMPORT_SECTION_KEYS.filter(({ key }) => {
-                const v = importMergeParsed[key];
-                return Array.isArray(v) ? v.length > 0 : (v && typeof v === 'object' && (Object.keys(v).length > 0 || (v.techniques || v.logiciels || v.langues || v.autres)));
-              }).map(({ key, label }) => {
-                const choice = importMergeChoices[key];
-                return (
-                  <li key={key} className="linkedin-sync-change import-merge-row import-merge-row--section">
-                    <span className="change-label import-merge-field-label">{label}</span>
-                    <div className="change-values import-merge-field-body">
-                      <p className="import-merge-section-note">Section complète (plusieurs entrées). Tu choisis si tout le bloc importé remplace le tien.</p>
-                      <div className="import-merge-choice-group" role="group" aria-label={`Choix pour ${label}`}>
-                        <label className="import-merge-choice">
-                          <input type="radio" name={`import-merge-${key}`} checked={choice === 'replace'} onChange={() => setImportMergeChoices((p) => ({ ...p, [key]: 'replace' }))} />
-                          Remplacer par l’import
-                        </label>
-                        <label className="import-merge-choice">
-                          <input type="radio" name={`import-merge-${key}`} checked={choice === 'keep'} onChange={() => setImportMergeChoices((p) => ({ ...p, [key]: 'keep' }))} />
-                          Garder l’actuel
-                        </label>
-                      </div>
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-            <div className="linkedin-sync-actions import-merge-actions">
-              <Button type="button" variant="primary" onClick={applyImportMerge}>
-                Appliquer les choix
-              </Button>
-              <Button type="button" variant="secondary" onClick={() => { setImportMergeOpen(false); setImportMergeParsed(null); }}>Annuler</Button>
+      {importSummary && createPortal(
+        <div className="linkedin-sync-overlay import-result-overlay" role="dialog" aria-modal="true" aria-labelledby="import-result-title">
+          <div className="linkedin-sync-modal" onClick={(e) => e.stopPropagation()}>
+            <h3 id="import-result-title">CV importé</h3>
+            <p className="linkedin-sync-intro">
+              {[importSummary.name, importSummary.title].filter(Boolean).join(' · ') || 'Profil mis à jour.'}
+              {` ${importSummary.experiences} expérience${importSummary.experiences > 1 ? 's' : ''}, ${importSummary.formations} formation${importSummary.formations > 1 ? 's' : ''}.`}
+            </p>
+            <div className="linkedin-sync-actions">
+              <Button type="button" variant="primary" onClick={() => setImportSummary(null)}>OK</Button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );

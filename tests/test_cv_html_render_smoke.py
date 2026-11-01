@@ -141,6 +141,39 @@ class TestCvHtmlRenderSmoke(unittest.TestCase):
         )
         self.assertIn("<body", html.lower())
 
+    def test_empty_leading_cards_do_not_drop_filled_tail(self):
+        """Une carte vide en tête ne doit pas consommer le quota avant le filtre."""
+        experiences = [{"id": "empty", "poste": "", "entreprise": "", "bullet_points": ["", ""]}]
+        experiences += [
+            {
+                "id": f"e{i}",
+                "poste": "Poste",
+                "entreprise": f"Org{i:02d}",
+                "bullet_points": ["fait"],
+            }
+            for i in range(15)
+        ]
+        formations = [{"id": "empty", "diplome": "", "etablissement": ""}]
+        formations += [
+            {"id": f"f{i}", "diplome": f"Diplome{i:02d}", "etablissement": "Ecole"}
+            for i in range(8)
+        ]
+        projets = [{"id": "empty", "nom": "", "description": ""}]
+        projets += [
+            {"id": f"p{i}", "nom": f"Projet{i:02d}", "description": "desc"} for i in range(5)
+        ]
+        cv = {
+            "prenom": "Ada",
+            "nom": "Lovelace",
+            "experiences": experiences,
+            "formations": formations,
+            "projets": projets,
+        }
+        html = render_cv_html(cv, for_preview=True, template_id="minimal")
+        self.assertIn("Org14", html)
+        self.assertIn("Diplome07", html)
+        self.assertIn("Projet04", html)
+
 
 if __name__ == "__main__":
     unittest.main()

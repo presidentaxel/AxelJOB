@@ -196,6 +196,63 @@ export function applyImportMergeChoices(cv, parsed, choices) {
   return next;
 }
 
+const PROFILE_IMPORT_SCALARS = [
+  'prenom',
+  'nom',
+  'first_name',
+  'last_name',
+  'email',
+  'telephone',
+  'linkedin',
+  'ville',
+  'titre_professionnel',
+  'resume',
+];
+
+function importedListHasItems(items) {
+  if (!Array.isArray(items) || items.length === 0) return false;
+  return items.some((item) => {
+    if (typeof item === 'string') return item.trim();
+    if (!item || typeof item !== 'object') return false;
+    return Object.entries(item).some(([key, value]) => key !== 'id' && String(value ?? '').trim());
+  });
+}
+
+/**
+ * Pose le CV importé sur le profil Stable.
+ * Une liste vide dans l'import ne remplace pas une section déjà remplie.
+ */
+export function applyImportedProfileCv(current, imported) {
+  const base = current && typeof current === 'object' ? current : {};
+  const src = imported && typeof imported === 'object' ? imported : {};
+  const next = { ...base };
+
+  PROFILE_IMPORT_SCALARS.forEach((key) => {
+    const value = String(src[key] ?? '').trim();
+    if (value) next[key] = src[key];
+  });
+
+  ['experiences', 'formations', 'certifications', 'projets'].forEach((key) => {
+    if (importedListHasItems(src[key])) next[key] = src[key];
+  });
+
+  const srcComp = src.competences && typeof src.competences === 'object' ? src.competences : null;
+  if (srcComp) {
+    const prev = next.competences && typeof next.competences === 'object' ? { ...next.competences } : {};
+    ['techniques', 'logiciels', 'langues', 'autres'].forEach((key) => {
+      if (importedListHasItems(srcComp[key])) prev[key] = srcComp[key];
+    });
+    next.competences = prev;
+  }
+
+  const photo = String(src.photo_url ?? '').trim();
+  if (photo) next.photo_url = photo;
+  next.layout = base.layout;
+  next.template_id = base.template_id;
+  next.template_options = base.template_options;
+  return next;
+}
+
 /** Timers d'animation des étapes d'import (retourne une fonction cleanup). */
 /** Extrait CV + layout + hints depuis la réponse API import. */
 export function extractImportApiResponse(result) {
