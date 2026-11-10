@@ -21,6 +21,7 @@ import {
   wrapAtsColonLabels,
   repairExplodedFreeformSemanticOverlays,
   removeTextDuplicatingContact,
+  restoreMissingHeaderPhone,
 } from '../../src/lib/canvasHeaderOverlayCleanup.js';
 import { sanitizeLayoutV3 } from '../../src/lib/cvLayoutModelV3.js';
 import { bindStructuralTextToSemanticBlocks } from '../../src/lib/structuralSemanticBind.js';
@@ -1181,6 +1182,79 @@ test('removeTextDuplicatingContact retire le téléphone PDF à côté du contac
   assert.equal(out.pages[0].blocks.some((b) => b.id === 'ct'), true);
   const withoutCvPhone = removeTextDuplicatingContact(layout, {});
   assert.equal(withoutCvPhone.pages[0].blocks.some((b) => b.id === 'phone'), true);
+});
+
+test('removeTextDuplicatingContact garde le numéro si le contact n’affiche que l’email', () => {
+  const layout = layoutWith([
+    {
+      id: 'ct',
+      type: 'contact',
+      x: 53,
+      y: 26,
+      w: 46,
+      h: 6,
+      z: 3,
+      bind: ['email'],
+    },
+    {
+      id: 'phone',
+      type: 'text',
+      content: '+33 6 12 34 56 78',
+      x: 53,
+      y: 27,
+      w: 40,
+      h: 5,
+      z: 2,
+    },
+  ]);
+  const out = removeTextDuplicatingContact(layout, {
+    email: 'louis@example.com',
+    telephone: '+33 6 12 34 56 78',
+  });
+  assert.equal(out.pages[0].blocks.some((b) => b.id === 'phone'), true);
+});
+
+test('restoreMissingHeaderPhone pose le numéro sur la rangée d’icône vide', () => {
+  const layout = layoutWith([
+    {
+      id: 'icon-phone',
+      type: 'image',
+      x: 45,
+      y: 21,
+      w: 4,
+      h: 4,
+      z: 2,
+    },
+    {
+      id: 'loc',
+      type: 'text',
+      content: 'Région parisienne',
+      x: 53,
+      y: 14,
+      w: 40,
+      h: 5,
+      z: 2,
+      style: { font_size: 9, color: '#112233' },
+    },
+    {
+      id: 'ct',
+      type: 'contact',
+      x: 53,
+      y: 27,
+      w: 46,
+      h: 5,
+      z: 3,
+      bind: ['email'],
+    },
+  ]);
+  const out = restoreMissingHeaderPhone(layout, { telephone: '+33 6 00 00 00 00' });
+  const line = out.pages[0].blocks.find((b) => b.id === 'import-phone-line');
+  assert.ok(line);
+  assert.equal(line.content, '+33 6 00 00 00 00');
+  assert.equal(line.x, 53);
+  assert.ok(Math.abs(line.y - 20.6) < 0.01);
+  const again = restoreMissingHeaderPhone(out, { telephone: '+33 6 00 00 00 00' });
+  assert.equal(again.pages[0].blocks.filter((b) => b.id === 'import-phone-line').length, 1);
 });
 
 test('removeTextDuplicatingContact retire l’email PDF (dots conservés)', () => {
