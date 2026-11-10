@@ -58,10 +58,10 @@ function sanitizeSpanStyle(styleValue) {
  */
 const RICH_TEXT_SANITIZE_CONFIG = Object.freeze({
   ALLOWED_TAGS: ['strong', 'em', 'u', 's', 'span', 'br', 'b', 'i', 'strike'],
-  ALLOWED_ATTR: ['style'],
+  ALLOWED_ATTR: ['style', 'class'],
   ALLOW_DATA_ATTR: false,
   FORBID_TAGS: ['script', 'style', 'img', 'iframe', 'object', 'embed', 'svg', 'a', 'font'],
-  FORBID_ATTR: ['onerror', 'onload', 'onclick', 'href', 'src', 'color', 'face', 'class', 'id'],
+  FORBID_ATTR: ['onerror', 'onload', 'onclick', 'href', 'src', 'color', 'face', 'id'],
 });
 
 let _hooksInstalled = false;
@@ -69,6 +69,13 @@ let _hooksInstalled = false;
 function ensureDomPurifyHooks() {
   if (_hooksInstalled || typeof DOMPurify?.addHook !== 'function') return;
   DOMPurify.addHook('uponSanitizeAttribute', (node, data) => {
+    if (data.attrName === 'class') {
+      const isSpan = (node.tagName || '').toLowerCase() === 'span';
+      const onlyChanged = String(data.attrValue || '').trim() === 'cv-changed';
+      data.keepAttr = isSpan && onlyChanged;
+      if (data.keepAttr) data.attrValue = 'cv-changed';
+      return;
+    }
     if (data.attrName !== 'style') return;
     if ((node.tagName || '').toLowerCase() !== 'span') {
       data.keepAttr = false;
@@ -202,6 +209,29 @@ export function normalizeRichTextHtml(value) {
   const trimmed = value.trim();
   if (!ESCAPED_RICH_HTML_RE.test(trimmed)) return trimmed;
   return decodeHtmlEntities(trimmed);
+}
+
+export function htmlToPlainText(html) {
+  return String(html || '')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&#39;/g, "'");
+}
+
+/** Le placeholder d'un bloc vide ne doit pas rester collé au vrai texte. */
+export function repairCanvasPlaceholderGlue(value) {
+  return String(value || '').replace(/^(?:Texte libre|Titre)(?=\S)/, '');
+}
+
+export function repairCanvasPlaceholderHtml(html) {
+  const raw = String(html || '');
+  return raw
+    .replace(/^(<span\b[^>]*>)(?:Texte libre|Titre)(?=\S)/i, '$1')
+    .replace(/^(?:Texte libre|Titre)(?=\S)/, '');
 }
 
 export function fieldValueLooksLikeHtml(value) {

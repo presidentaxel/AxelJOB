@@ -396,6 +396,11 @@ class AdaptRefineBody(BaseModel):
     documents_context: str = ""
 
 
+class AdaptFitTextBody(BaseModel):
+    text: str = ""
+    max_chars: int = 80
+
+
 class RenderHtmlBody(BaseModel):
     cv: dict
     base_cv: dict | None = None
@@ -1734,6 +1739,64 @@ def _parse_cv_import_with_ai(text: str, user_id: str | None = None) -> tuple[dic
     return sync_dual_keys(cv), layout_hints or {}, semantic_meta
 
 
+_PHONE_LIKE_RE = re.compile(r"(?:\+?\d[\d\s().-]{7,}\d)")
+
+
+def _phone_like_line_count(text: str) -> int:
+    """Lignes qui ressemblent à un numéro, hors plages d'années."""
+    count = 0
+    for line in (text or "").splitlines():
+        match = _PHONE_LIKE_RE.search(line)
+        if not match:
+            continue
+        rest = re.sub(r"(?:19|20)\d{2}", "", match.group(0))
+        digits = re.sub(r"\D", "", rest)
+        if 8 <= len(digits) <= 15:
+            count += 1
+    return count
+
+
+def _log_cv_import_contact(
+    text: str,
+    cv: dict[str, Any],
+    layout: dict[str, Any] | None,
+) -> None:
+    """Diagnostic import : comptes et positions, jamais le numéro lui-même."""
+    tel_digits = re.sub(r"\D", "", str((cv or {}).get("telephone") or ""))
+    positions: list[str] = []
+    binds: list[str] = []
+    if layout:
+        for page in layout.get("pages") or []:
+            for block in page.get("blocks") or []:
+                if block.get("type") == "contact":
+                    paths = block.get("bind") or []
+                    binds.append(",".join(str(path) for path in paths) or "-")
+                content = re.sub(r"<[^>]+>", " ", str(block.get("content") or ""))
+                digits = re.sub(r"\D", "", content)
+                if len(tel_digits) >= 8 and tel_digits[-8:] in digits:
+                    positions.append(f"{float(block.get('y') or 0):.1f}")
+        for ann in layout.get("semantic_annotations") or []:
+            if ann.get("type") != "contact":
+                continue
+            paths = ann.get("bind") or []
+            binds.append("ann:" + (",".join(str(path) for path in paths) or "-"))
+    logger.info(
+        "CV import contact: telephone_digits=%s phone_like_lines=%s "
+        "layout_phone_blocks=%s layout_phone_y=%s contact_binds=%s email_set=%s",
+        len(tel_digits),
+        _phone_like_line_count(text),
+        len(positions),
+        ",".join(positions) or "-",
+        "|".join(binds) or "-",
+        bool(str((cv or {}).get("email") or "").strip()),
+    )
+    if len(tel_digits) >= 8 and not positions:
+        logger.info(
+            "CV import contact: numéro extrait (%s chiffres) absent des blocs texte du layout",
+            len(tel_digits),
+        )
+
+
 @app.post("/api/cv/import")
 def api_cv_import_file(request: Request, file: UploadFile = File(...)):
     """Importe un CV depuis un fichier PDF ou Word, parse via IA, retourne le CV structuré."""
@@ -1853,6 +1916,7 @@ def api_cv_import_file(request: Request, file: UploadFile = File(...)):
         if structural_layout
         else 0
     )
+    _log_cv_import_contact(text, cv, structural_layout)
     file_ext = (file.filename or "").rsplit(".", 1)[-1].lower() if file.filename else "unknown"
     _track_analytics(
         request,
@@ -4072,6 +4136,7 @@ async def api_adapt_run_stream(request: Request, body: AdaptRunBody):
                         "step_id": sid,
                         "step_index": i,
                         "step_label": step_lookup.get(sid, sid),
+                        "cv": {k: v for k, v in merged.items() if k != "layout"},
                     }
                 )
                 try:
@@ -4348,6 +4413,23 @@ def api_adapt(request: Request, body: AdaptBody):
         "export_hints": export_hints,
         **lang_meta,
     }
+
+
+@app.post("/api/adapt-fit-text")
+def api_adapt_fit_text(request: Request, body: AdaptFitTextBody):
+    """Raccourcit un passage qui déborderait sur la ligne suivante du canvas."""
+    user_id = _get_user_id(request)
+    check_rate_limit(user_id, rate_limit_max_adapt())
+    text = (body.text or "").strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="Texte requis.")
+    try:
+        check_user_input_for_injection(description=text)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    from backend.services.adapter import shorten_text_to_fit
+
+    return shorten_text_to_fit(text, body.max_chars, user_id=user_id)
 
 
 @app.post("/api/adapt-refine")

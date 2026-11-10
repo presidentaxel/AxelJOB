@@ -2,8 +2,10 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   fieldValueLooksLikeHtml,
+  htmlToPlainText,
   isCanvasInlineEditableType,
   normalizeRichTextHtml,
+  repairCanvasPlaceholderGlue,
   sanitizeRichTextHtml,
   setByPath,
 } from '../../src/lib/canvasInlineEdit.js';
@@ -38,4 +40,13 @@ test('sanitizeRichTextHtml sans DOM escape le markup (Node)', () => {
   assert.equal(out.includes('<b>'), false);
   assert.match(out, /&lt;b&gt;A&lt;\/b&gt;/);
   assert.match(out, /&lt;script&gt;/);
+});
+
+test('le placeholder ne reste pas collé au texte', () => {
+  assert.equal(
+    repairCanvasPlaceholderGlue('Texte libreen troisième année'),
+    'en troisième année',
+  );
+  assert.equal(htmlToPlainText('<span class="cv-changed">motivé</span>'), 'motivé');
+  assert.equal(repairCanvasPlaceholderGlue('Texte libre'), 'Texte libre');
 });

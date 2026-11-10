@@ -426,35 +426,27 @@ def _score_title_match(cv: dict, offre: dict) -> float:
 
 
 def _score_skills_match(cv: dict, offre: dict) -> float:
-    all_skills = []
-    comp = cv.get("competences") or {}
-    for key in ("techniques", "soft_skills", "transversales", "outils"):
-        for c in comp.get(key) or []:
-            if isinstance(c, str) and c.strip():
-                all_skills.append(c.lower().strip())
-    if not all_skills:
-        return 20.0
-    offre_text = _texte_plat(
+    """Part des mots-clés de l'offre présents dans les compétences et le texte adapté.
+
+    L'adaptation ne réécrit pas la liste de compétences : le résumé, les expériences
+    et les mots-clés cachés doivent compter, sinon la note reste à 0.
+    """
+    mots = _mots_offre(offre)
+    if not mots:
+        return 50.0
+    blob = _texte_plat(
         {
-            "desc": offre.get("description_brute", ""),
-            "comp": offre.get("competences_requises", []),
-            "kw": offre.get("mots_cles_extraits", []),
-            "titre": offre.get("titre", ""),
+            "competences": cv.get("competences") or {},
+            "resume": cv.get("resume") or "",
+            "experiences": cv.get("experiences") or [],
+            "projets": cv.get("projets") or [],
+            "mots_cles_cache": cv.get("mots_cles_cache") or "",
         }
     )
-    offre_tokens = _tokenize(offre_text)
-    offre_stems = {_stem_fr(t) for t in offre_tokens}
-    matched = 0
-    for skill in all_skills:
-        skill_tokens = set(re.findall(r"\w+", skill))
-        if len(skill_tokens) > 1 and skill in offre_text:
-            matched += 1
-            continue
-        for st in skill_tokens:
-            if st in offre_tokens or _stem_fr(st) in offre_stems:
-                matched += 1
-                break
-    return min(100.0, (matched / len(all_skills)) * 100.0)
+    tokens = _tokenize(blob)
+    stems = {_stem_fr(t) for t in tokens}
+    total = sum(_keyword_in_text(m, blob, tokens, stems) for m in mots)
+    return min(100.0, (total / len(mots)) * 100.0)
 
 
 def _score_experience(exp: dict, mots: set[str]) -> float:

@@ -1287,6 +1287,58 @@ button.ats-score-trigger {
 
 .cv-beta-live-preview .free-canvas {
   width: 100%;
+  flex: none;
+  min-height: auto;
+}
+
+.cv-beta-live-preview .free-canvas-page-wrap {
+  overflow: visible;
+}
+
+.cv-beta-live-preview .cv-changed {
+  background-color: color-mix(in srgb, var(--ds-color-feedback-success) 22%, white);
+  color: var(--ds-color-feedback-success);
+  padding: 0 2px;
+  border-radius: 2px;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+.cv-beta-live-preview .free-canvas-block[data-text-editable='true'] {
+  cursor: text;
+}
+
+.cv-beta-live-preview .free-canvas-block--editing .free-canvas-block__text,
+.cv-beta-live-preview .free-canvas-block--editing .free-canvas-block__title {
+  white-space: pre-wrap !important;
+  line-height: 1.35 !important;
+  overflow: visible;
+  height: auto;
+}
+
+.cv-preview-a4-page-layer,
+.cv-preview-a4-page-layer * {
+  pointer-events: none;
+}
+
+.cv-editable-preview [data-cv-field][contenteditable='true'] {
+  position: relative;
+  z-index: 1;
+  cursor: text;
+}
+.cv-beta-live-preview .free-canvas-block[data-preview-clip='true'],
+.cv-beta-live-preview .free-canvas-block[data-preview-clip='true'] .free-canvas-block__inner,
+.cv-beta-live-preview .free-canvas-block[data-preview-clip='true'] .free-canvas-block__text {
+  overflow: hidden;
+}
+
+.cv-beta-fit-notice {
+  margin: 0 0 var(--ds-space-sm);
+  padding: var(--ds-space-sm) var(--ds-space-md);
+  color: var(--ds-color-text-default);
+  background: var(--ds-color-bg-subtle);
+  border: 1px solid var(--ds-color-border-default);
+  border-radius: var(--ds-radius-sm);
 }
 
 .preview-a4-sheet .cv-editable-preview {

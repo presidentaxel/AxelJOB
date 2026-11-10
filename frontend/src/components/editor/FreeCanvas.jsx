@@ -125,6 +125,7 @@ function SnapGuides({ guides }) {
 export default function FreeCanvas({
   layout,
   cv,
+  baseCv = null,
   selectedBlockId = null,
   selectedBlockIds = [],
   editingBlockId = null,
@@ -145,6 +146,7 @@ export default function FreeCanvas({
   showGrid = false,
   snapEnabled = true,
   interactable = true,
+  textEditable = false,
   placementPreset = null,
   onPlaceBlockAt,
   onPlaceBlockRect,
@@ -823,7 +825,11 @@ export default function FreeCanvas({
             <div
               key={page.id || `page-${pageIndex}`}
               className="free-canvas-page-wrap"
-              style={{ height: `${scaledHeight}px` }}
+              style={interactable ? { height: `${scaledHeight}px` } : {
+                height: `${scaledHeight}px`,
+                width: '100%',
+                justifyContent: 'flex-start',
+              }}
             >
               {showRemovePageBtns && (
                 <button
@@ -848,7 +854,9 @@ export default function FreeCanvas({
                 style={{
                   width: `${PAGE_WIDTH_MM}mm`,
                   height: `${PAGE_HEIGHT_MM}mm`,
-                  transform: `scale(${scale})`,
+                  ...(interactable
+                    ? { transform: `scale(${scale})` }
+                    : { zoom: scale }),
                   fontFamily: fontBody,
                   ['--free-canvas-accent']: accent,
                   ['--free-canvas-sidebar']: sidebarColor,
@@ -900,12 +908,14 @@ export default function FreeCanvas({
                     key={block.id}
                     block={renderBlock}
                     cv={cv}
+                    baseCv={baseCv}
                     embeddedFonts={layout?.fonts}
                     selected={selectedBlockIds.includes(block.id)}
                     editing={editingBlockId === block.id}
                     dragging={draggingBlockId === block.id}
                     resizing={resizingBlockId === block.id}
                     interactable={interactable}
+                    textEditable={textEditable}
                     onPointerDown={handleBlockPointerDown}
                     onPointerMove={handleBlockPointerMove}
                     onPointerUp={handleBlockPointerUp}
