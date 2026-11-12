@@ -184,6 +184,10 @@ _CPU_HIGH_AVG_WINDOW_TICKS = max(1, int(os.getenv("MONITORING_ALERT_CPU_AVG_WIND
 _CPU_HIGH_AVG_MIN_PCT = float(
     os.getenv("MONITORING_ALERT_CPU_AVG_MIN_PCT", str(MONITORING_ALERT_CPU_PCT))
 )
+# Un pic isolé (une fenêtre de 150 ms) ne suffit plus : il doit tenir plusieurs ticks.
+_cpu_spike_streak = 0
+_cpu_percent_primed = False
+_CPU_SPIKE_REQUIRED_TICKS = max(1, int(os.getenv("MONITORING_ALERT_SPIKE_REQUIRED_TICKS", "2")))
 _last_alert_at: dict[str, float] = {}
 _alert_log: deque[dict[str, Any]] = deque(maxlen=30)
 _psutil_process: Any = None
@@ -413,6 +417,15 @@ def _append_alert_log(kind: str, detail: str) -> None:
     )
 
 
+def take_system_cpu_percent(measured: float) -> float | None:
+    """Pourcentage depuis le dernier appel. None au premier appel (amorce psutil)."""
+    global _cpu_percent_primed
+    if not _cpu_percent_primed:
+        _cpu_percent_primed = True
+        return None
+    return measured
+
+
 def tick_system_and_db() -> None:
     proc = _get_psutil_process()
     if proc and proc is not False:
@@ -426,9 +439,11 @@ def tick_system_and_db() -> None:
             PROCESS_VMS.set(vms)
             cpu_p = proc.cpu_percent(interval=None)
             PROCESS_CPU.set(cpu_p)
-            sys_cpu = psutil.cpu_percent(interval=0.15)
+            # Depuis le tick précédent (~45 s), pas une fenêtre de 150 ms.
+            sys_cpu = take_system_cpu_percent(float(psutil.cpu_percent(interval=None)))
             mem_pct = psutil.virtual_memory().percent
-            SYSTEM_CPU.set(sys_cpu)
+            if sys_cpu is not None:
+                SYSTEM_CPU.set(sys_cpu)
             SYSTEM_MEM_PCT.set(mem_pct)
             try:
                 sw = psutil.swap_memory()
@@ -455,7 +470,8 @@ def tick_system_and_db() -> None:
             PROCESS_OPEN_FDS.set(nfd)
             PROCESS_UPTIME_SECONDS.set(time.time() - _PROCESS_START)
             with _lock:
-                _last_snap["system_cpu"] = sys_cpu
+                if sys_cpu is not None:
+                    _last_snap["system_cpu"] = sys_cpu
                 _last_snap["process_cpu"] = cpu_p
                 _last_snap["system_mem_pct"] = mem_pct
                 _last_snap["process_rss"] = float(rss)
@@ -467,7 +483,8 @@ def tick_system_and_db() -> None:
                 except Exception:
                     _last_snap["process_threads"] = 0.0
                 _last_snap["process_open_fds"] = float(nfd)
-            _cpu_samples.append(sys_cpu)
+            if sys_cpu is not None:
+                _cpu_samples.append(sys_cpu)
             _record_capacity_sample()
         except Exception as e:
             logger.debug("psutil tick skipped: %s", e)
@@ -519,7 +536,7 @@ def evaluate_alerts() -> None:
     n5 = sum(1 for _t, c, _r, _d in recent if c >= 500)
     n_slow = sum(1 for _t, _c, _r, d in recent if d >= MONITORING_ALERT_SLOW_REQUEST_SEC)
 
-    global _cpu_high_streak
+    global _cpu_high_streak, _cpu_spike_streak
     if sys_cpu >= MONITORING_ALERT_CPU_PCT:
         _cpu_high_streak += 1
     else:
@@ -576,15 +593,28 @@ def evaluate_alerts() -> None:
     if len(_cpu_samples) >= 8:
         arr = list(_cpu_samples)[-30:]
         avg = sum(arr) / len(arr)
-        if (
+        spike = (
             avg > 5
             and sys_cpu >= avg * MONITORING_ALERT_SPIKE_CPU_RATIO
             and sys_cpu >= MONITORING_ALERT_SPIKE_MIN_CPU
-            and _alert_can_send("cpu_spike")
-        ):
-            msg = f"Pic CPU : {sys_cpu:.1f}% vs moyenne récente ~{avg:.1f}% (ratio ×{MONITORING_ALERT_SPIKE_CPU_RATIO})."
+        )
+        if spike:
+            _cpu_spike_streak += 1
+        else:
+            _cpu_spike_streak = 0
+        if _cpu_spike_streak >= _CPU_SPIKE_REQUIRED_TICKS and _alert_can_send("cpu_spike"):
+            proc_cpu = float(_last_snap.get("process_cpu", 0.0))
+            msg = (
+                f"Pic CPU tenu : {sys_cpu:.1f}% sur {_cpu_spike_streak} relevés "
+                f"(~{_cpu_spike_streak * 45}s), moyenne récente ~{avg:.1f}% "
+                f"(ratio ×{MONITORING_ALERT_SPIKE_CPU_RATIO}, "
+                f"plancher {MONITORING_ALERT_SPIKE_MIN_CPU:.0f}%). "
+                f"CPU du processus {proc_cpu:.1f}%."
+            )
             _send_alert_email("[AxeL Job] Pic CPU suspect", msg)
             _append_alert_log("cpu_spike", msg)
+    else:
+        _cpu_spike_streak = 0
 
 
 def _median_sorted(values: list[float]) -> float | None:
@@ -879,6 +909,7 @@ def get_admin_snapshot() -> dict[str, Any]:
                 "slow_request_sec": MONITORING_ALERT_SLOW_REQUEST_SEC,
                 "min_interval_sec": MONITORING_ALERT_MIN_INTERVAL_SEC,
                 "cpu_required_ticks": _CPU_HIGH_REQUIRED_TICKS,
+                "cpu_spike_required_ticks": _CPU_SPIKE_REQUIRED_TICKS,
                 "cpu_avg_window_ticks": _CPU_HIGH_AVG_WINDOW_TICKS,
                 "cpu_avg_min_pct": round(_CPU_HIGH_AVG_MIN_PCT, 2),
             },
