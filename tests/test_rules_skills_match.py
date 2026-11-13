@@ -4,7 +4,6 @@ import unittest
 
 from backend.services.rules import appliquer_regles
 
-
 OFFRE = {
     "titre": "Tech lead",
     "mots_cles_extraits": ["python", "michelin"],

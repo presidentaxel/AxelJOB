@@ -97,7 +97,7 @@ def _main_blocks(blocks: list[dict[str, Any]]) -> list[dict[str, Any]]:
     xs = sorted({round(float(block.get("x") or 0), 1) for block in blocks})
     gap_at = None
     best = 0.0
-    for left, right in zip(xs, xs[1:]):
+    for left, right in zip(xs, xs[1:], strict=False):
         gap = right - left
         if gap > best:
             best = gap
@@ -430,7 +430,7 @@ def _paint_group(found: dict[str, dict[str, Any]], block_ids: list[str], text: s
     pieces = _split_words(text, len(slots))
     grouped: dict[int, list[str]] = {}
     order: list[dict[str, Any]] = []
-    for (primary, _), line in zip(slots, pieces):
+    for (primary, _), line in zip(slots, pieces, strict=True):
         key = id(primary)
         if key not in grouped:
             grouped[key] = []
