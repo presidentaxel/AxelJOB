@@ -14,7 +14,7 @@ import re
 from copy import deepcopy
 from pathlib import Path
 
-from backend.config import GEMINI_MODEL_DEFAULT
+from backend.config import GEMINI_MODEL_DEFAULT, gemini_client
 from backend.services.cv_language import (
     apply_deterministic_localization,
     detect_cv_language,
@@ -314,12 +314,11 @@ def adapter_cv(
     ensure_budget(user_id)
 
     try:
-        from google import genai
         from google.genai import types
     except ImportError:
         raise ImportError("pip install google-genai")
 
-    client = genai.Client(api_key=api_key)
+    client = gemini_client(api_key)
     model_id = GEMINI_MODEL_DEFAULT
     config = types.GenerateContentConfig(temperature=0.2)
 
@@ -471,11 +470,10 @@ def _adapt_gemini_json(system: str, user: str, user_id: str | None, operation: s
     ensure_budget, record_and_check = _gemini_usage_guard()
     ensure_budget(user_id)
     try:
-        from google import genai
         from google.genai import types
     except ImportError:
         raise ImportError("pip install google-genai")
-    client = genai.Client(api_key=api_key)
+    client = gemini_client(api_key)
     config = types.GenerateContentConfig(temperature=0.2)
 
     def _call(prompt: str) -> tuple[str, object]:
@@ -894,12 +892,11 @@ def refine_cv(
         raise RuntimeError("GEMINI_API_KEY manquante.")
 
     try:
-        from google import genai
         from google.genai import types
     except ImportError:
         raise ImportError("pip install google-genai")
 
-    client = genai.Client(api_key=api_key)
+    client = gemini_client(api_key)
     experiences_input = [
         {
             "id": e.get("id", ""),
@@ -1011,7 +1008,6 @@ def plan_adaptation_todo(
     ensure_budget, record_and_check = _gemini_usage_guard()
     ensure_budget(user_id)
     try:
-        from google import genai
         from google.genai import types
     except ImportError:
         return default_out
@@ -1044,7 +1040,7 @@ resume: {json.dumps(resume, ensure_ascii=False)}
 experiences: {json.dumps(exps, ensure_ascii=False)}
 </cv>"""
     try:
-        client = genai.Client(api_key=api_key)
+        client = gemini_client(api_key)
         response = client.models.generate_content(
             model=GEMINI_MODEL_DEFAULT,
             contents=PLAN_SYSTEM + "\n\n---\n\n" + user_prompt,
@@ -1098,7 +1094,6 @@ def shorten_text_to_fit(text: str, max_chars: int, user_id: str | None = None) -
     ensure_budget, record_and_check = _gemini_usage_guard()
     try:
         ensure_budget(user_id)
-        from google import genai
         from google.genai import types
     except Exception:
         return {"text": source, "impossible": True}
@@ -1113,7 +1108,7 @@ def shorten_text_to_fit(text: str, max_chars: int, user_id: str | None = None) -
         f"Passage:\n{source}"
     )
     try:
-        client = genai.Client(api_key=api_key)
+        client = gemini_client(api_key)
         response = client.models.generate_content(
             model=GEMINI_MODEL_DEFAULT,
             contents=prompt,
