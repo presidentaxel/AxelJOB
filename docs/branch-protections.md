@@ -89,7 +89,7 @@ Dès que c’est coché, un `git push origin main` est rejeté pour les acteurs 
 | Visibilité repo | **Public** → branch protection possible sans Pro | Privé Free → Pro requis |
 | Garde-fous locaux | Hooks Git + Cursor | Discipline + env policies CD |
 
-Ne pas copier le flux `main` → `prod` ici : sur Axel Job, merger dans `main` met à jour la branche de prod Git ; le **déploiement serveur** reste une étape manuelle ([`deploy.md`](deploy.md)).
+Le droplet suit la branche `prod`. Un push sur `prod` lance `deploy-prod.yml`. Un merge dans `main` ne déploie pas ([`deploy.md`](deploy.md)).
 
 ---
 
@@ -100,5 +100,5 @@ Ne pas copier le flux `main` → `prod` ici : sur Axel Job, merger dans `main` m
 | [`git-workflow.md`](git-workflow.md) | Branches, Draft #33, flux quotidien |
 | [`contributing.md`](contributing.md) | Quality gates, checklist PR |
 | [`linear-github-workflow.md`](linear-github-workflow.md) | Issues Linear ↔ PR |
-| [`deploy.md`](deploy.md) | Déploiement serveur après merge `main` |
+| [`deploy.md`](deploy.md) | Déploiement du droplet depuis `prod` |
 | [`COMMANDS.md`](COMMANDS.md) | Aide-mémoire pre-push / hooks |
