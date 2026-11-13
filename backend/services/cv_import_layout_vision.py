@@ -13,7 +13,7 @@ import os
 import re
 from typing import Any
 
-from backend.config import GEMINI_MODELS_VISION
+from backend.config import GEMINI_MODELS_VISION, gemini_client
 
 logger = logging.getLogger(__name__)
 
@@ -234,13 +234,12 @@ def parse_cv_design_from_vision(image_jpeg: bytes, user_id: str | None = None) -
         return None, {}
 
     try:
-        from google import genai
         from google.genai import types
     except ImportError:
         logger.warning("cv_import_layout_vision: google-genai indisponible")
         return None, {}
 
-    client = genai.Client(api_key=api_key)
+    client = gemini_client(api_key)
     image_part = types.Part.from_bytes(data=image_jpeg, mime_type="image/jpeg")
     contents = [image_part, CV_DESIGN_VISION_PROMPT]
 

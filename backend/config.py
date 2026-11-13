@@ -267,6 +267,18 @@ GEMINI_MODELS_VISION = [
     if m.strip()
 ]
 
+
+def gemini_client(api_key: str):
+    """Client Gemini. Les modèles preview ne sont exposés que sur l'API v1beta."""
+    from google import genai
+    from google.genai import types
+
+    return genai.Client(
+        api_key=api_key,
+        http_options=types.HttpOptions(api_version="v1beta"),
+    )
+
+
 if os.name == "nt":
     dll_dirs = _env("WEASYPRINT_DLL_DIRECTORIES")
     if dll_dirs:
