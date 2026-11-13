@@ -180,6 +180,7 @@ Secrets minimum pour un local utile : `GEMINI_API_KEY`, `SUPABASE_URL`, `SUPABAS
 | `STRIPE_PRICE_ID_PRO_MONTHLY` | Price ID Stripe pour l'abo Pro | Non |
 | `STRIPE_WEBHOOK_SECRET` | Secret webhook Stripe | Non |
 | `METRICS_AUTH_TOKEN` | Token pour proteger `/metrics` | Non |
+| `MONITORING_ALERT_SPIKE_REQUIRED_TICKS` | Relevés CPU d'affilée avant le mail « Pic CPU suspect ». Défaut `2`, plancher `1`. Avec `1`, un seul relevé envoie le mail : plus de protection contre un pic isolé. Pas un secret. | Non |
 | `SENTRY_DSN` | DSN Sentry backend (`axel-job-backend`). Vide = no-op | Non |
 | `SENTRY_ENVIRONMENT` | Tag Sentry ; sinon `ENVIRONMENT` | Non |
 | `LOGO_DEV_TOKEN` | Token publishable Logo.dev | Non |

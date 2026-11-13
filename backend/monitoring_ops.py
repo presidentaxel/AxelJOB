@@ -186,6 +186,8 @@ _CPU_HIGH_AVG_MIN_PCT = float(
 )
 # Un pic isolé (une fenêtre de 150 ms) ne suffit plus : il doit tenir plusieurs ticks.
 _cpu_spike_streak = 0
+_cpu_sample_seq = 0
+_cpu_spike_seen_seq = 0
 _cpu_percent_primed = False
 _CPU_SPIKE_REQUIRED_TICKS = max(1, int(os.getenv("MONITORING_ALERT_SPIKE_REQUIRED_TICKS", "2")))
 _last_alert_at: dict[str, float] = {}
@@ -426,6 +428,12 @@ def take_system_cpu_percent(measured: float) -> float | None:
     return measured
 
 
+def note_fresh_cpu_sample() -> None:
+    """Marque un relevé CPU enregistré. evaluate_alerts ne le compte qu'une fois."""
+    global _cpu_sample_seq
+    _cpu_sample_seq += 1
+
+
 def tick_system_and_db() -> None:
     proc = _get_psutil_process()
     if proc and proc is not False:
@@ -485,6 +493,7 @@ def tick_system_and_db() -> None:
                 _last_snap["process_open_fds"] = float(nfd)
             if sys_cpu is not None:
                 _cpu_samples.append(sys_cpu)
+                note_fresh_cpu_sample()
             _record_capacity_sample()
         except Exception as e:
             logger.debug("psutil tick skipped: %s", e)
@@ -536,7 +545,10 @@ def evaluate_alerts() -> None:
     n5 = sum(1 for _t, c, _r, _d in recent if c >= 500)
     n_slow = sum(1 for _t, _c, _r, d in recent if d >= MONITORING_ALERT_SLOW_REQUEST_SEC)
 
-    global _cpu_high_streak, _cpu_spike_streak
+    global _cpu_high_streak, _cpu_spike_streak, _cpu_spike_seen_seq
+    fresh_cpu = _cpu_sample_seq != _cpu_spike_seen_seq
+    if fresh_cpu:
+        _cpu_spike_seen_seq = _cpu_sample_seq
     if sys_cpu >= MONITORING_ALERT_CPU_PCT:
         _cpu_high_streak += 1
     else:
@@ -598,10 +610,11 @@ def evaluate_alerts() -> None:
             and sys_cpu >= avg * MONITORING_ALERT_SPIKE_CPU_RATIO
             and sys_cpu >= MONITORING_ALERT_SPIKE_MIN_CPU
         )
-        if spike:
-            _cpu_spike_streak += 1
-        else:
-            _cpu_spike_streak = 0
+        if fresh_cpu:
+            if spike:
+                _cpu_spike_streak += 1
+            else:
+                _cpu_spike_streak = 0
         if _cpu_spike_streak >= _CPU_SPIKE_REQUIRED_TICKS and _alert_can_send("cpu_spike"):
             proc_cpu = float(_last_snap.get("process_cpu", 0.0))
             msg = (
@@ -613,7 +626,7 @@ def evaluate_alerts() -> None:
             )
             _send_alert_email("[AxeL Job] Pic CPU suspect", msg)
             _append_alert_log("cpu_spike", msg)
-    else:
+    elif fresh_cpu:
         _cpu_spike_streak = 0
 
 
