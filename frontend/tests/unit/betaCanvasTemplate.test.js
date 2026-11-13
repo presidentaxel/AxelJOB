@@ -14,6 +14,7 @@ import {
   isBetaCanvasTemplateId,
   projectCvDeltaOntoLayout,
   resolveBetaCanvasPreview,
+  flagCanvasOverlaps,
   resolveBetaPreviewCv,
   applyCanvasFitText,
   withBetaCanvasTemplate,
@@ -259,7 +260,7 @@ test('un titre adapté ne déplace pas les autres lignes', () => {
   assert.equal(layout.pages[0].blocks[1].y, 24);
 });
 
-test('un titre long s’élargit sans déplacer la ligne suivante', () => {
+test('un titre long garde la taille et la police du bloc', () => {
   const layout = {
     pages: [{
       blocks: [
@@ -292,13 +293,15 @@ test('un titre long s’élargit sans déplacer la ligne suivante', () => {
   );
   const title = preview.pages[0].blocks.find((block) => block.id === 'title');
   const city = preview.pages[0].blocks.find((block) => block.id === 'city');
-  assert.ok(title.w > 30);
+  assert.equal(title.w, 30);
   assert.equal(title.h, 5);
+  assert.equal(title.style.font_size, 11);
+  assert.equal(title.style.nowrap, true);
   assert.equal(city.y, 40);
   assert.equal(preview.previewConflicts, undefined);
 });
 
-test('un retour à la ligne qui touche la ligne suivante signale un conflit', () => {
+test('un titre long reste dans son cadre d’origine', () => {
   const longTitle = 'Tech Lead data operations Michelin Lyon Paris remote';
   const layout = {
     pages: [{
@@ -344,11 +347,12 @@ test('un retour à la ligne qui touche la ligne suivante signale un conflit', ()
   const date = preview.pages[0].blocks.find((block) => block.id === 'date');
   assert.equal(city.y, 24);
   assert.equal(date.x, 55);
+  assert.equal(title.w, 28);
   assert.equal(title.h, 5);
-  assert.equal(title.style.preview_clip, true);
-  assert.equal(preview.previewConflicts.length, 1);
-  assert.equal(preview.previewConflicts[0].key, 'titre');
-  assert.ok(preview.previewConflicts[0].maxChars < longTitle.length);
+  assert.equal(title.style.font_size, 11);
+  assert.equal(title.style.preview_clip, undefined);
+  assert.equal(preview.previewConflicts, undefined);
+  assert.match(String(title.content), /Tech Lead data operations Michelin Lyon Paris remote/);
 });
 
 test('applyCanvasFitText remplace le titre', () => {
@@ -387,4 +391,93 @@ test('betaCanvasRenderFields', () => {
   );
   assert.equal(rendered.layout.pages[0].blocks[0].content, 'Pilotage des quotas terrain.');
   assert.equal(painted.pages[0].blocks[0].content, 'Suivi des quotas sur les marchés.');
+});
+
+test('le journal avant/après distingue le titre peint du corps Canva ignoré', () => {
+  const layout = {
+    pages: [{
+      blocks: [
+        { id: 'title', type: 'text', x: 20, y: 8, w: 40, h: 5, content: 'ALTERNANT' },
+        {
+          id: 'body',
+          type: 'text',
+          x: 20,
+          y: 40,
+          w: 150,
+          h: 8,
+          content: 'Harris Interactive conception de questionnaires quantitatifs.',
+        },
+      ],
+    }],
+  };
+  const logs = [];
+  const original = console.info;
+  console.info = (...args) => { logs.push(args); };
+  try {
+    const preview = projectCvDeltaOntoLayout(
+      layout,
+      { titre_professionnel: 'ALTERNANT', resume: '', experiences: [] },
+      {
+        titre_professionnel: 'Étudiant ESSEC - Président de la République',
+        resume: 'Étudiant ESSEC, intérêt pour les institutions publiques.',
+        experiences: [],
+      },
+    );
+    const title = preview.pages[0].blocks.find((block) => block.id === 'title');
+    const body = preview.pages[0].blocks.find((block) => block.id === 'body');
+    assert.match(title.content, /Président/);
+    assert.match(body.content, /Harris Interactive/);
+  } finally {
+    console.info = original;
+  }
+  const report = logs.find((args) => args[0] === '[beta-canvas] avant/après')?.[1];
+  assert.ok(report);
+  assert.equal(report.changed.find((row) => row.key === 'titre').onCanvas, true);
+  assert.equal(report.added.some((row) => row.key === 'resume'), true);
+  assert.equal(report.structuredExperiences, 0);
+  assert.ok(report.canvasTextBlocks >= 1);
+  assert.ok(logs.some((args) => String(args[0]).includes('experiences vide')));
+});
+
+test('un texte adapté trop long est signalé sans déplacer les blocs', () => {
+  const layout = {
+    pages: [{
+      blocks: [
+        {
+          id: 'resume',
+          type: 'text',
+          x: 80,
+          y: 8,
+          w: 100,
+          h: 22,
+          content: '<span class="cv-changed">Étudiant ESSEC en troisième année, je mobilise ma rigueur pour les missions de haute responsabilité.</span>',
+        },
+        { id: 'chip', type: 'text', x: 110, y: 12, w: 22, h: 4, content: 'organisation' },
+        { id: 'city', type: 'text', x: 20, y: 16, w: 40, h: 5, content: 'Région parisienne' },
+        { id: 'skill', type: 'text', x: 8, y: 48, w: 28, h: 5, content: 'Rigueur' },
+        {
+          id: 'bullet',
+          type: 'text',
+          x: 80,
+          y: 40,
+          w: 90,
+          h: 16,
+          content: '<span class="cv-changed">Conception de questionnaires et analyse de données quantitatives pour des clients.</span>',
+        },
+        { id: 'dot', type: 'text', x: 72, y: 40, w: 4, h: 4, content: '•' },
+        { id: 'next', type: 'text', x: 80, y: 48, w: 90, h: 8, content: 'Suite du poste' },
+      ],
+    }],
+  };
+  const out = flagCanvasOverlaps(layout);
+  const byId = Object.fromEntries(out.pages[0].blocks.map((block) => [block.id, block]));
+  assert.equal(byId.chip.y, 12);
+  assert.equal(byId.city.y, 16);
+  assert.equal(byId.skill.y, 48);
+  assert.equal(byId.dot.y, 40);
+  assert.equal(byId.next.y, 48);
+  assert.ok(out.previewConflicts.some((row) => row.hostId === 'resume' && row.otherId === 'chip'));
+  assert.ok(out.previewConflicts.some((row) => row.hostId === 'bullet' && row.otherId === 'next'));
+  assert.equal(out.previewConflicts.some((row) => row.otherId === 'city'), false);
+  assert.equal(out.previewConflicts.some((row) => row.otherId === 'skill'), false);
 });

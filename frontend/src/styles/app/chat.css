@@ -1296,12 +1296,23 @@ button.ats-score-trigger {
 }
 
 .cv-beta-live-preview .cv-changed {
-  background-color: color-mix(in srgb, var(--ds-color-feedback-success) 22%, white);
-  color: var(--ds-color-feedback-success);
-  padding: 0 2px;
+  color: inherit;
+  background-color: color-mix(in srgb, var(--ds-color-feedback-success) 42%, transparent);
+  padding: 0;
   border-radius: 2px;
   box-decoration-break: clone;
   -webkit-box-decoration-break: clone;
+}
+
+.cv-beta-live-preview .free-canvas-block[data-text-editable='true'][data-block-type='text'] .free-canvas-block__inner,
+.cv-beta-live-preview .free-canvas-block[data-text-editable='true'][data-block-type='title'] .free-canvas-block__inner,
+.cv-beta-live-preview .free-canvas-block[data-text-editable='true'] .free-canvas-block__text,
+.cv-beta-live-preview .free-canvas-block[data-text-editable='true'] .free-canvas-block__title {
+  overflow: visible;
+  max-height: none;
+  pointer-events: auto;
+  user-select: text;
+  cursor: text;
 }
 
 .cv-beta-live-preview .free-canvas-block[data-text-editable='true'] {
@@ -1330,15 +1341,6 @@ button.ats-score-trigger {
 .cv-beta-live-preview .free-canvas-block[data-preview-clip='true'] .free-canvas-block__inner,
 .cv-beta-live-preview .free-canvas-block[data-preview-clip='true'] .free-canvas-block__text {
   overflow: hidden;
-}
-
-.cv-beta-fit-notice {
-  margin: 0 0 var(--ds-space-sm);
-  padding: var(--ds-space-sm) var(--ds-space-md);
-  color: var(--ds-color-text-default);
-  background: var(--ds-color-bg-subtle);
-  border: 1px solid var(--ds-color-border-default);
-  border-radius: var(--ds-radius-sm);
 }
 
 .preview-a4-sheet .cv-editable-preview {

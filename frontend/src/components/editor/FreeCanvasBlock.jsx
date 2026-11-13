@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef } from 'react';
 import { fontStyleForText } from '../../lib/embeddedFontCoverage.js';
 // useRef also used by EditableRichText
 import { HiEnvelope, HiLink, HiPhone, HiLockClosed } from 'react-icons/hi2';
@@ -809,13 +809,22 @@ function SemanticBlockBody({ block, cv, baseCv = null, editing = false }) {
   }
 }
 
-function EditableRichText({ tag, className, style, editing, html, onAutoHeight }) {
+function EditableRichText({
+  tag, className, style, editing, html, onAutoHeight, directEdit = false, onCommit,
+}) {
   const Tag = tag;
   const ref = useRef(null);
   const seededRef = useRef(false);
+  const focusedRef = useRef(false);
   const richHtml = sanitizeRichTextHtml(normalizeRichTextHtml(html || ''));
   const plain = repairCanvasPlaceholderGlue(htmlToPlainText(richHtml));
-  useEffect(() => {
+  useLayoutEffect(() => {
+    if (directEdit) {
+      const el = ref.current;
+      if (!el || focusedRef.current) return;
+      if (el.innerHTML !== richHtml) el.innerHTML = richHtml;
+      return;
+    }
     if (!editing) {
       seededRef.current = false;
       return;
@@ -824,7 +833,7 @@ function EditableRichText({ tag, className, style, editing, html, onAutoHeight }
     seededRef.current = true;
     ref.current.textContent = plain;
     ref.current.focus();
-  }, [editing, plain]);
+  }, [directEdit, editing, plain, richHtml]);
 
   const reportHeight = () => {
     if (!editing || !ref.current || typeof onAutoHeight !== 'function') return;
@@ -836,6 +845,31 @@ function EditableRichText({ tag, className, style, editing, html, onAutoHeight }
   useEffect(() => {
     if (editing) reportHeight();
   }, [editing]);
+
+  if (directEdit) {
+    return (
+      <Tag
+        key="canvas-direct"
+        ref={ref}
+        className={className}
+        style={{
+          ...style,
+          overflow: 'visible',
+        }}
+        contentEditable
+        suppressContentEditableWarning
+        data-canvas-block-content="1"
+        onBlur={(e) => {
+          focusedRef.current = false;
+          if (typeof onCommit === 'function') onCommit(e.currentTarget);
+        }}
+        onFocus={() => { focusedRef.current = true; }}
+        onPaste={handleRichTextPaste}
+        onPointerDown={(e) => e.stopPropagation()}
+        onMouseDown={(e) => e.stopPropagation()}
+      />
+    );
+  }
 
   if (editing) {
     return (
@@ -885,6 +919,17 @@ function paintedPlainText(block, cv) {
   return stripPdfMarkup(block.content);
 }
 
+function paragraphAlign(style = {}, content = '') {
+  if (style.align === 'center' || style.align === 'right' || style.align === 'justify') {
+    return style.align;
+  }
+  // Les lignes Canva réécrites remplissent la largeur, comme avant l'adaptation.
+  if (/cv-changed/.test(String(content || '')) && /<br\b/i.test(String(content || ''))) {
+    return 'justify';
+  }
+  return style.align || 'left';
+}
+
 function inlineTypographyStyle(style = {}) {
   const css = {};
   if (style.font_size != null) css.fontSize = `${style.font_size}pt`;
@@ -908,7 +953,9 @@ function inlineTypographyStyle(style = {}) {
   return css;
 }
 
-function NonSemanticBlockBody({ block, editing = false, onAutoHeight, livePreview = false }) {
+function NonSemanticBlockBody({
+  block, editing = false, onAutoHeight, livePreview = false, onCommit,
+}) {
   const { type, content: rawContent = '', style = {} } = block;
   const content = livePreview ? repairCanvasPlaceholderHtml(rawContent) : rawContent;
   const editStyle = editing
@@ -918,7 +965,7 @@ function NonSemanticBlockBody({ block, editing = false, onAutoHeight, livePrevie
     case 'text': {
       const textStyle = {
         ...inlineTypographyStyle(editing ? { ...style, nowrap: false } : style),
-        textAlign: style.align || 'left',
+        textAlign: paragraphAlign(style, content),
         opacity: style.opacity ?? 1,
         margin: 0,
         minHeight: style.nowrap || style.multiline ? 0 : '1em',
@@ -940,13 +987,15 @@ function NonSemanticBlockBody({ block, editing = false, onAutoHeight, livePrevie
           editing={editing}
           html={shown}
           onAutoHeight={onAutoHeight}
+          directEdit={livePreview && !editing}
+          onCommit={onCommit}
         />
       );
     }
     case 'title': {
       const titleStyle = {
         ...inlineTypographyStyle(editing ? { ...style, nowrap: false } : style),
-        textAlign: style.align || 'left',
+        textAlign: paragraphAlign(style, content),
         opacity: style.opacity ?? 1,
         margin: 0,
         height: 'auto',
@@ -967,6 +1016,8 @@ function NonSemanticBlockBody({ block, editing = false, onAutoHeight, livePrevie
           editing={editing}
           html={shown}
           onAutoHeight={onAutoHeight}
+          directEdit={livePreview && !editing}
+          onCommit={onCommit}
         />
       );
     }
@@ -1198,9 +1249,19 @@ export default function FreeCanvasBlock({
 
   const handleTextClick = (e) => {
     if (!textEditable || interactable || editing) return;
+    if (type === 'text' || type === 'title') {
+      const field = e.currentTarget.querySelector?.('[data-canvas-block-content="1"]');
+      if (field && document.activeElement !== field) field.focus();
+      return;
+    }
     if (!canEdit) return;
     e.stopPropagation();
     if (typeof onDoubleClickEdit === 'function') onDoubleClickEdit(block.id);
+  };
+
+  const commitPreviewText = (rootEl) => {
+    if (!textEditable || typeof onInnerBlur !== 'function') return;
+    onInnerBlur(block.id, rootEl);
   };
 
   const handleInnerPointerDown = (e) => {
@@ -1252,6 +1313,7 @@ export default function FreeCanvasBlock({
     && !editing
     && (type === 'text' || type === 'title')
     && !visibleText.trim();
+  const passPreviewClick = textEditable && !interactable && !canEdit;
 
   return (
     <div
@@ -1274,7 +1336,7 @@ export default function FreeCanvasBlock({
         width: `${w}mm`,
         height: `${h}mm`,
         zIndex: dragging || resizing || editing ? 9999 : z,
-        pointerEvents: previewGhost ? 'none' : undefined,
+        pointerEvents: previewGhost || passPreviewClick ? 'none' : undefined,
         ...blockEffectStyle,
       }}
       title={
@@ -1315,6 +1377,7 @@ export default function FreeCanvasBlock({
               editing={editing}
               livePreview={textEditable}
               onAutoHeight={autoHeight ? reportHeight : undefined}
+              onCommit={textEditable ? commitPreviewText : undefined}
             />
           )
           : <SemanticBlockBody block={renderBlock} cv={cv} baseCv={baseCv} editing={editing} />}

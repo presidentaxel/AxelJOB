@@ -3,7 +3,7 @@
  * Pas un dossier templates/ — le rendu passe par `layout` (layout_renderer).
  */
 
-import { isEmptyLayoutV3, PAGE_HEIGHT_MM, PAGE_WIDTH_MM } from './cvLayoutModelV3.js';
+import { isEmptyLayoutV3 } from './cvLayoutModelV3.js';
 import { diffHighlightHtml } from './cvChangeHighlight.js';
 import {
   BIND_MODE_ABSORB,
@@ -80,7 +80,9 @@ export function betaCanvasRenderFields(templateId, layout) {
 export function betaCanvasRenderFieldsForCv(templateId, layout, baseCv, nextCv) {
   const fields = betaCanvasRenderFields(templateId, layout);
   if (!fields.layout) return {};
-  const projected = previewLayoutForAdaptedCv(fields.layout, baseCv, nextCv);
+  const projected = flagCanvasOverlaps(
+    previewLayoutForAdaptedCv(fields.layout, baseCv, nextCv),
+  );
   if (!projected?.pages) return {};
   const { previewConflicts: _previewConflicts, ...rest } = projected;
   return {
@@ -205,6 +207,60 @@ function changedTextPairs(baseCv, nextCv) {
   return pairs;
 }
 
+function clipAdaptLog(value) {
+  const text = String(value || '').replace(/\s+/g, ' ').trim();
+  if (/(?:\+?\d[\d\s.\-]{7,}\d)/.test(text)) return '[contact]';
+  if (!text) return '∅';
+  return text.length > 90 ? `${text.slice(0, 89)}…` : text;
+}
+
+function canvasTextBlockCount(layout) {
+  let count = 0;
+  for (const page of layout?.pages || []) {
+    for (const block of page.blocks || []) {
+      if (block?.type !== 'text' && block?.type !== 'title') continue;
+      if (normText(block.content).length >= 12) count += 1;
+    }
+  }
+  return count;
+}
+
+let lastCanvasProjectionLog = '';
+
+/**
+ * Journal avant/après : quels champs structurés ont bougé, et lesquels
+ * ont trouvé un bloc sur le canvas. Un résumé ajouté (source vide) ou un
+ * corps Canva sans experiences ne peut pas être peint.
+ */
+function reportCanvasProjection({ pairs, paintedKeys, layout, baseCv, nextCv }) {
+  const baseKeys = collectKeyedText(baseCv);
+  const nextKeys = collectKeyedText(nextCv);
+  const added = [];
+  for (const [key, value] of nextKeys) {
+    if (!baseKeys.has(key)) added.push({ key, after: clipAdaptLog(value) });
+  }
+  const changed = (pairs || []).map((pair) => ({
+    key: pair.key,
+    before: clipAdaptLog(pair.oldVal),
+    after: clipAdaptLog(pair.newVal),
+    onCanvas: paintedKeys.has(pair.key),
+  }));
+  if (!changed.length && !added.length) return;
+  const canvasTextBlocks = canvasTextBlockCount(layout);
+  const structuredExperiences = Array.isArray(nextCv?.experiences) ? nextCv.experiences.length : 0;
+  const report = { changed, added, canvasTextBlocks, structuredExperiences };
+  const signature = JSON.stringify(report);
+  if (signature === lastCanvasProjectionLog) return;
+  lastCanvasProjectionLog = signature;
+  console.info('[beta-canvas] avant/après', report);
+  if (structuredExperiences === 0 && canvasTextBlocks > 0) {
+    console.info(
+      '[beta-canvas] experiences vide : le corps Canva (%s blocs) reste le texte d’origine',
+      canvasTextBlocks,
+    );
+  }
+}
+
 function unionBox(blocks) {
   let minX = Infinity;
   let minY = Infinity;
@@ -226,14 +282,6 @@ function unionBox(blocks) {
   };
 }
 
-function overlapsX(a, b) {
-  const a1 = Number(a.x) || 0;
-  const a2 = a1 + (Number(a.w) || 0);
-  const b1 = Number(b.x) || 0;
-  const b2 = b1 + (Number(b.w) || 0);
-  return Math.min(a2, b2) - Math.max(a1, b1) > 1;
-}
-
 function plainOf(html) {
   return String(html || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
 }
@@ -248,73 +296,11 @@ function charsPerLine(widthMm, fontPt) {
 }
 
 /**
- * Étend le texte vers la droite jusqu'au bord ou au bloc voisin.
- * S'il ne tient pas, retour à la ligne dans le vide disponible.
- * S'il empiéterait sur la ligne suivante, on signale un raccourcissement.
- * Les autres blocs ne sont pas déplacés.
+ * Le texte adapté reste dans le bloc d'origine : même largeur, même hauteur,
+ * même police. S'il déborde, `flagCanvasOverlaps` le signale.
  */
-function fitChangedTextBlocks(pages, changedIds, removedIds, fitKeys) {
-  const conflicts = new Map();
-  pages.forEach((page) => {
-    (page.blocks || []).forEach((block) => {
-      if (!changedIds.has(block.id) || removedIds.has(block.id)) return;
-      const fontPt = Number(block.style?.font_size) || (block.type === 'title' ? 13 : 10);
-      const text = plainOf(block.content);
-      if (!text) return;
-      const x = Number(block.x) || 0;
-      const y = Number(block.y) || 0;
-      const h = Number(block.h) || lineBoxMm(fontPt);
-      const w = Number(block.w) || 40;
-      const lineH = lineBoxMm(fontPt);
-      const bandBottom = y + Math.max(h, lineH) * 0.72;
-      let right = PAGE_WIDTH_MM - 4;
-      for (const other of page.blocks || []) {
-        if (!other || other.id === block.id || removedIds.has(other.id)) continue;
-        const oy = Number(other.y) || 0;
-        const oh = Math.max(0.4, Number(other.h) || 0);
-        const ox = Number(other.x) || 0;
-        if (oy + oh <= y + 0.4 || oy >= bandBottom) continue;
-        if (ox <= x + w * 0.15) continue;
-        right = Math.min(right, ox - 1.2);
-      }
-      const maxW = Math.max(w, right - x);
-      const fittedPerLine = charsPerLine(maxW, fontPt);
-      const ownPerLine = charsPerLine(w, fontPt);
-      if (text.length <= ownPerLine) return;
-      block.w = maxW;
-      if (text.length <= fittedPerLine) {
-        block.style = { ...(block.style || {}), nowrap: true };
-        return;
-      }
-      const widened = { ...block, w: maxW };
-      let floor = PAGE_HEIGHT_MM - 8;
-      for (const other of page.blocks || []) {
-        if (!other || other.id === block.id || removedIds.has(other.id)) continue;
-        const oy = Number(other.y) || 0;
-        if (oy <= y + 0.8) continue;
-        if (!overlapsX(widened, other)) continue;
-        floor = Math.min(floor, oy - 0.6);
-      }
-      const available = Math.max(lineH, floor - y);
-      const linesNeeded = Math.ceil(text.length / fittedPerLine);
-      const neededH = linesNeeded * lineH;
-      if (neededH <= available + 0.4) {
-        block.h = Math.max(h, neededH);
-        block.style = { ...(block.style || {}), nowrap: false, lock_height: false };
-        return;
-      }
-      block.h = h;
-      block.style = { ...(block.style || {}), nowrap: false, preview_clip: true };
-      const linesFit = Math.max(1, Math.floor((available + 0.4) / lineH));
-      const maxChars = Math.max(12, linesFit * fittedPerLine);
-      const key = fitKeys.get(block.id) || block.id;
-      const prev = conflicts.get(key);
-      if (!prev || maxChars < prev.maxChars) {
-        conflicts.set(key, { key, text, maxChars, blockId: block.id });
-      }
-    });
-  });
-  return [...conflicts.values()];
+function fitChangedTextBlocks() {
+  // Largeur, hauteur et police du bloc restent celles du Canva.
 }
 
 function findTextSequence(entries, oldNorm, used) {
@@ -360,7 +346,16 @@ function findTextSequence(entries, oldNorm, used) {
 export function projectCvDeltaOntoLayout(layout, baseCv, nextCv, { highlight = false } = {}) {
   if (!layout?.pages?.length || !baseCv || !nextCv) return layout;
   const pairs = changedTextPairs(baseCv, nextCv);
-  if (!pairs.length) return layout;
+  if (!pairs.length) {
+    reportCanvasProjection({
+      pairs,
+      paintedKeys: new Set(),
+      layout,
+      baseCv,
+      nextCv,
+    });
+    return layout;
+  }
 
   const pages = layout.pages.map((page, pageIndex) => ({
     ...page,
@@ -383,7 +378,7 @@ export function projectCvDeltaOntoLayout(layout, baseCv, nextCv, { highlight = f
 
   const used = new Set();
   const remove = new Set();
-  const fitKeys = new Map();
+  const paintedKeys = new Set();
   let changed = false;
   for (const pair of pairs) {
     let exact = false;
@@ -396,8 +391,8 @@ export function projectCvDeltaOntoLayout(layout, baseCv, nextCv, { highlight = f
         oldValue: pair.oldVal,
       });
       entry.block.previewField = pair.key;
-      fitKeys.set(entry.block.id, pair.key);
       used.add(entry.block.id);
+      paintedKeys.add(pair.key);
       exact = true;
       changed = true;
     }
@@ -416,25 +411,24 @@ export function projectCvDeltaOntoLayout(layout, baseCv, nextCv, { highlight = f
     });
     first.style = { ...(first.style || {}), nowrap: false, lock_height: false };
     first.previewField = pair.key;
-    fitKeys.set(first.id, pair.key);
     used.add(first.id);
+    paintedKeys.add(pair.key);
     for (const extra of seq.slice(1)) {
       used.add(extra.block.id);
       remove.add(extra.block.id);
     }
     changed = true;
   }
+  reportCanvasProjection({ pairs, paintedKeys, layout, baseCv, nextCv });
   if (!changed) return layout;
-  const conflicts = fitChangedTextBlocks(pages, used, remove, fitKeys);
-  const fitted = {
+  fitChangedTextBlocks(pages, used, remove);
+  return {
     ...layout,
     pages: pages.map((page) => ({
       ...page,
       blocks: page.blocks.filter((block) => !remove.has(block.id)),
     })),
   };
-  if (conflicts.length) fitted.previewConflicts = conflicts;
-  return fitted;
 }
 
 /**
@@ -450,6 +444,71 @@ function previewLayoutForAdaptedCv(layout, baseCv, nextCv, options) {
   });
   if (!bound?.boundCount || !bound.layout) return layout;
   return bound.layout;
+}
+
+function blockBox(block) {
+  const x = Number(block?.x) || 0;
+  const y = Number(block?.y) || 0;
+  const w = Math.max(0.4, Number(block?.w) || 0);
+  const h = Math.max(0.4, Number(block?.h) || 0);
+  return { x, y, w, h, r: x + w, b: y + h };
+}
+
+function isAdaptedBlock(block) {
+  return /cv-changed/.test(String(block?.content || '')) || Boolean(block?.previewField);
+}
+
+function occupiedBox(block) {
+  const box = blockBox(block);
+  if (!isAdaptedBlock(block)) return box;
+  const html = String(block.content || '');
+  const text = plainOf(html);
+  if (!text) return box;
+  // Le <br> est la ligne d'origine : on ne recalcule pas une hauteur de paragraphe.
+  if (/<br\s*\/?>/i.test(html)) return box;
+  const font = Number(block.style?.font_size) || (block.type === 'title' ? 13 : 10);
+  const perLine = charsPerLine(box.w, font);
+  const lines = Math.max(1, Math.ceil(text.length / perLine));
+  const h = Math.max(box.h, lines * lineBoxMm(font));
+  return { ...box, h, b: box.y + h };
+}
+
+function blocksOverlap(host, other) {
+  const a = occupiedBox(host);
+  const b = blockBox(other);
+  const overlapW = Math.min(a.r, b.r) - Math.max(a.x, b.x);
+  const overlapH = Math.min(a.b, b.b) - Math.max(a.y, b.y);
+  if (overlapW < 3 || overlapH < 1.5) return false;
+  if (Math.abs(a.y - b.y) <= 2.5) return false;
+  return true;
+}
+
+/**
+ * L'adaptation ne déplace aucun bloc. Si le nouveau texte recouvre
+ * un autre élément, on le signale pour que le CV soit vérifié.
+ * @returns {object}
+ */
+export function flagCanvasOverlaps(layout) {
+  if (!layout?.pages) return layout;
+  const conflicts = [];
+  for (const page of layout.pages) {
+    const blocks = (page.blocks || []).filter((block) => {
+      if (!block) return false;
+      if (block.type === 'text' || block.type === 'title') return plainOf(block.content).length > 0;
+      return false;
+    });
+    for (const host of blocks) {
+      if (!isAdaptedBlock(host)) continue;
+      for (const other of blocks) {
+        if (other === host) continue;
+        if (!blocksOverlap(host, other)) continue;
+        conflicts.push({ hostId: host.id, otherId: other.id });
+        break;
+      }
+    }
+  }
+  if (!conflicts.length) return layout;
+  return { ...layout, previewConflicts: conflicts };
 }
 
 /**
@@ -470,7 +529,9 @@ export function resolveBetaCanvasPreview({
   if (!isBetaCanvasTemplateId(templateId)) return null;
   const source = hasUsableBetaCanvasLayout(cv.layout) ? cv.layout : profileLayout;
   if (!hasUsableBetaCanvasLayout(source)) return null;
-  const projected = previewLayoutForAdaptedCv(source, baseCv, cv, { highlight: highlightChanges });
+  const projected = flagCanvasOverlaps(
+    previewLayoutForAdaptedCv(source, baseCv, cv, { highlight: highlightChanges }),
+  );
   if (!projected) return null;
   const conflicts = Array.isArray(projected.previewConflicts) ? projected.previewConflicts : [];
   if (!conflicts.length) return { layout: projected, cv, conflicts };

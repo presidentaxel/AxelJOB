@@ -5,14 +5,23 @@ function escapeHtml(value) {
     .replace(/>/g, '&gt;');
 }
 
+function wordKey(word) {
+  return String(word || '')
+    .toLowerCase()
+    .replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, '');
+}
+
 /** Indices du texte courant qui appartiennent au plus long sous-texte commun. */
 function lcsMask(baseWords, currentWords) {
   const n = baseWords.length;
   const m = currentWords.length;
+  const baseKeys = baseWords.map(wordKey);
+  const currentKeys = currentWords.map(wordKey);
   const dp = Array.from({ length: n + 1 }, () => new Uint16Array(m + 1));
   for (let i = 1; i <= n; i += 1) {
     for (let j = 1; j <= m; j += 1) {
-      dp[i][j] = baseWords[i - 1] === currentWords[j - 1]
+      const same = baseKeys[i - 1].length > 0 && baseKeys[i - 1] === currentKeys[j - 1];
+      dp[i][j] = same
         ? dp[i - 1][j - 1] + 1
         : Math.max(dp[i - 1][j], dp[i][j - 1]);
     }
@@ -21,7 +30,8 @@ function lcsMask(baseWords, currentWords) {
   let i = n;
   let j = m;
   while (i > 0 && j > 0) {
-    if (baseWords[i - 1] === currentWords[j - 1] && dp[i][j] === dp[i - 1][j - 1] + 1) {
+    const same = baseKeys[i - 1].length > 0 && baseKeys[i - 1] === currentKeys[j - 1];
+    if (same && dp[i][j] === dp[i - 1][j - 1] + 1) {
       inLcs[j - 1] = true;
       i -= 1;
       j -= 1;

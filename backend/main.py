@@ -1797,6 +1797,118 @@ def _log_cv_import_contact(
         )
 
 
+def _clip_adapt_text(value: object, limit: int = 90) -> str:
+    """Extrait court pour le journal d'adaptation. Masque un numéro."""
+    text = re.sub(r"\s+", " ", str(value or "")).strip()
+    if re.search(r"(?:\+?\d[\d\s.\-]{7,}\d)", text):
+        return "[contact]"
+    if not text:
+        return "∅"
+    if len(text) <= limit:
+        return text
+    return text[: limit - 1] + "…"
+
+
+def _canvas_text_block_count(cv: dict | None) -> int:
+    layout = (cv or {}).get("layout") or {}
+    count = 0
+    for page in layout.get("pages") or []:
+        for block in page.get("blocks") or []:
+            if block.get("type") not in ("text", "title"):
+                continue
+            plain = re.sub(r"<[^>]+>", " ", str(block.get("content") or ""))
+            plain = re.sub(r"\s+", " ", plain).strip()
+            if len(plain) >= 12:
+                count += 1
+    return count
+
+
+def _log_cv_adapt_delta(before: dict | None, after: dict | None) -> None:
+    """Avant/après de l'adaptation. Le canvas Beta fige le texte hors champs structurés."""
+    src = before or {}
+    dst = after or {}
+    src_exp = [e for e in (src.get("experiences") or []) if isinstance(e, dict)]
+    dst_exp = [e for e in (dst.get("experiences") or []) if isinstance(e, dict)]
+    canvas_blocks = _canvas_text_block_count(src) or _canvas_text_block_count(dst)
+    logger.info(
+        "CV adapt avant/après: template=%s experiences=%s→%s resume_chars=%s→%s "
+        "titre_chars=%s→%s canvas_text_blocks=%s",
+        (dst.get("template_id") or src.get("template_id") or "-"),
+        len(src_exp),
+        len(dst_exp),
+        len(str(src.get("resume") or "")),
+        len(str(dst.get("resume") or "")),
+        len(str(src.get("titre_professionnel") or "")),
+        len(str(dst.get("titre_professionnel") or "")),
+        canvas_blocks,
+    )
+    logger.info(
+        "CV adapt titre: «%s» → «%s»",
+        _clip_adapt_text(src.get("titre_professionnel")),
+        _clip_adapt_text(dst.get("titre_professionnel")),
+    )
+    logger.info(
+        "CV adapt resume: «%s» → «%s»",
+        _clip_adapt_text(src.get("resume")),
+        _clip_adapt_text(dst.get("resume")),
+    )
+    for index in range(max(len(src_exp), len(dst_exp))):
+        exp = src_exp[index] if index < len(src_exp) else {}
+        nxt = dst_exp[index] if index < len(dst_exp) else {}
+        src_bullets = exp.get("bullet_points") or []
+        dst_bullets = nxt.get("bullet_points") or []
+        logger.info(
+            "CV adapt exp.%s %s @ %s: bullets %s→%s | «%s» → «%s»",
+            index,
+            _clip_adapt_text(nxt.get("poste") or exp.get("poste"), 40),
+            _clip_adapt_text(nxt.get("entreprise") or exp.get("entreprise"), 40),
+            len(src_bullets),
+            len(dst_bullets),
+            _clip_adapt_text(src_bullets[0] if src_bullets else ""),
+            _clip_adapt_text(dst_bullets[0] if dst_bullets else ""),
+        )
+    if not src_exp and not dst_exp and canvas_blocks:
+        logger.info(
+            "CV adapt canvas: %s blocs de texte, experiences vide — "
+            "le corps Canva n'est pas envoyé au modèle, seuls le résumé et le titre structurés sont réécrits",
+            canvas_blocks,
+        )
+    elif not src_exp and dst_exp:
+        logger.info(
+            "CV adapt canvas: corps lu sur le canvas, %s expériences réécrites",
+            len(dst_exp),
+        )
+
+
+def _prepare_canvas_source(cv: dict) -> dict | None:
+    """Si le profil n'a pas d'expériences, lit le corps du canvas pour le modèle."""
+    from backend.services.canvas_adapt import canvas_adapt_plan, seed_cv_from_canvas
+
+    plan = canvas_adapt_plan(cv)
+    if not plan:
+        return None
+    seed_cv_from_canvas(cv, plan)
+    logger.info(
+        "CV adapt canvas: lecture du corps, experiences=%s puces=%s resume_chars=%s",
+        len(plan.get("experiences") or []),
+        sum(len(exp.get("bullets") or []) for exp in plan.get("experiences") or []),
+        len(plan.get("resume_text") or ""),
+    )
+    return plan
+
+
+def _paint_adapted_canvas(merged: dict, plan: dict | None, cv_base: dict | None) -> None:
+    if not plan:
+        return
+    from backend.services.canvas_adapt import paint_canvas_plan
+
+    if not (merged.get("layout") or {}).get("pages") and (cv_base or {}).get("layout"):
+        merged["layout"] = deepcopy(cv_base.get("layout"))
+    layout, painted = paint_canvas_plan(merged.get("layout") or {}, plan, merged)
+    merged["layout"] = layout
+    logger.info("CV adapt canvas: %s groupes de texte réécrits sur le layout", painted)
+
+
 @app.post("/api/cv/import")
 def api_cv_import_file(request: Request, file: UploadFile = File(...)):
     """Importe un CV depuis un fichier PDF ou Word, parse via IA, retourne le CV structuré."""
@@ -3761,6 +3873,9 @@ def _adapt_run_prepare(request: Request, body: AdaptRunBody) -> dict:
                 raise HTTPException(
                     status_code=429, detail="Quota temporairement atteint. Réessaie plus tard."
                 )
+    canvas_plan = _prepare_canvas_source(cv_working)
+    if canvas_plan and not (cv_working.get("layout") or {}).get("pages") and cv_base.get("layout"):
+        cv_working["layout"] = deepcopy(cv_base.get("layout"))
     return {
         "user_id": user_id,
         "plan_payload": plan_payload,
@@ -3775,6 +3890,7 @@ def _adapt_run_prepare(request: Request, body: AdaptRunBody) -> dict:
         "entreprise_request": entreprise_request,
         "lang_meta": lang_meta,
         "output_policy": lang_meta.get("output_language") or "cv",
+        "canvas_plan": canvas_plan,
     }
 
 
@@ -3793,6 +3909,8 @@ def _adapt_run_finalize_result(
     out_code = lang_meta.get("output_language_code")
     if out_code in {"fr", "en"}:
         merged["langue"] = out_code
+    _paint_adapted_canvas(merged, prep.get("canvas_plan"), cv_base)
+    _log_cv_adapt_delta(cv_base, merged)
     adaptation_id = _adaptation_id_from_user_and_offer(user_id, description)
     poste_offre = (tweaks.get("poste_offre") or "").strip()
     entreprise_offre = (offre.get("entreprise") or "").strip()
@@ -4286,6 +4404,9 @@ def api_adapt(request: Request, body: AdaptBody):
             raise HTTPException(
                 status_code=429, detail="Quota temporairement atteint. Réessaie plus tard."
             )
+    canvas_plan = _prepare_canvas_source(cv_working)
+    if canvas_plan and not (cv_working.get("layout") or {}).get("pages") and cv_base.get("layout"):
+        cv_working["layout"] = deepcopy(cv_base.get("layout"))
 
     try:
         tweaks = adapter_cv(
@@ -4314,6 +4435,8 @@ def api_adapt(request: Request, body: AdaptBody):
     out_code = lang_meta.get("output_language_code")
     if out_code in {"fr", "en"}:
         merged["langue"] = out_code
+    _paint_adapted_canvas(merged, canvas_plan, cv_base)
+    _log_cv_adapt_delta(cv_base, merged)
     poste_offre = (tweaks.get("poste_offre") or "").strip()
     entreprise_offre = (offre.get("entreprise") or "").strip()
     user_titre = (body.titre or "").strip()

@@ -274,7 +274,9 @@ export function applyCvFieldsFromRoot(cv, rootEl) {
 
 export function readBlockContentFromRoot(rootEl) {
   if (!rootEl) return '';
-  const el = rootEl.querySelector('[data-canvas-block-content="1"]');
+  const el = rootEl.getAttribute?.('data-canvas-block-content') === '1'
+    ? rootEl
+    : rootEl.querySelector?.('[data-canvas-block-content="1"]');
   if (!el) return '';
   return fieldValueFromEditableEl(el);
 }

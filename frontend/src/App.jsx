@@ -66,7 +66,6 @@ import {
   betaCanvasRenderFieldsForCv,
   hasUsableBetaCanvasLayout,
   isBetaCanvasTemplateId,
-  applyCanvasFitText,
   withBetaCanvasTemplate,
 } from './lib/betaCanvasTemplate.js';
 import BetaCvLivePreview from './components/editor/BetaCvLivePreview.jsx';
@@ -830,13 +829,6 @@ export default function App() {
   const [apiAdaptDone, setApiAdaptDone] = useState(false);
   /** CV partiel reçu à chaque étape du flux, pour les zones vertes avant le résultat final. */
   const [adaptLiveCv, setAdaptLiveCv] = useState(null);
-  const [canvasFitNotice, setCanvasFitNotice] = useState('');
-  const [canvasConflicts, setCanvasConflicts] = useState([]);
-  const canvasFitTriedRef = useRef(new Set());
-  const canvasFitInflightRef = useRef(new Set());
-  const canvasFitUserEditedRef = useRef(new Set());
-  const adaptCvForFitRef = useRef({ last: null, live: null });
-  adaptCvForFitRef.current = { last: lastAdaptedCv, live: adaptLiveCv };
   const pendingAdaptResultRef = useRef(null);
   /** Annule un flux d'adaptation précédent si un nouveau démarre (double clic / relance rapide). */
   const adaptRunAbortRef = useRef(null);
@@ -1722,11 +1714,6 @@ export default function App() {
   const resetAdaptationWorkspace = () => {
     setLastAdaptedCv(null);
     setAdaptLiveCv(null);
-    setCanvasFitNotice('');
-    setCanvasConflicts([]);
-    canvasFitTriedRef.current = new Set();
-    canvasFitInflightRef.current = new Set();
-    canvasFitUserEditedRef.current = new Set();
     setLastAdaptationId(null);
     setLastSelectionA4(null);
     setRapport(null);
@@ -2065,83 +2052,9 @@ export default function App() {
     setAdapting(false);
   }, [apiAdaptDone, adaptStepIndex, adapting, bumpPostFirstAdaptTour]);
 
-  const handlePreviewCvEdit = useCallback((nextCv, fieldKey) => {
-    if (fieldKey) canvasFitUserEditedRef.current.add(fieldKey);
+  const handlePreviewCvEdit = useCallback((nextCv) => {
     if (nextCv) setLastAdaptedCv(nextCv);
   }, []);
-
-  const handleCanvasConflicts = useCallback((conflicts) => {
-    const next = Array.isArray(conflicts) ? conflicts : [];
-    const sig = next.map((item) => `${item.key}:${item.maxChars}:${item.text}`).join('|');
-    setCanvasConflicts((prev) => {
-      const prevSig = (prev || []).map((item) => `${item.key}:${item.maxChars}:${item.text}`).join('|');
-      return sig === prevSig ? prev : next;
-    });
-  }, []);
-
-  useEffect(() => {
-    if (!isBetaCanvasTemplateId(templateId)) {
-      setCanvasConflicts((prev) => (prev.length ? [] : prev));
-      setCanvasFitNotice('');
-      return undefined;
-    }
-    if (!canvasConflicts.length) {
-      setCanvasFitNotice('');
-      return undefined;
-    }
-    const pending = canvasConflicts.filter((item) => {
-      if (canvasFitUserEditedRef.current.has(item.key)) return false;
-      const stamp = `${item.key}:${item.maxChars}:${item.text}`;
-      return !canvasFitTriedRef.current.has(stamp) && !canvasFitInflightRef.current.has(stamp);
-    });
-    if (!pending.length) {
-      const waiting = canvasConflicts.some((item) => canvasFitInflightRef.current.has(`${item.key}:${item.maxChars}:${item.text}`));
-      if (!waiting) {
-        setCanvasFitNotice('Un passage est trop long pour le canvas : il chevaucherait la ligne suivante. Raccourcis-le à la main.');
-      }
-      return undefined;
-    }
-    let cancelled = false;
-    pending.forEach((item) => {
-      canvasFitInflightRef.current.add(`${item.key}:${item.maxChars}:${item.text}`);
-    });
-    setCanvasFitNotice('Raccourcissement du passage qui déborde…');
-    (async () => {
-      let cv = adaptCvForFitRef.current.last || adaptCvForFitRef.current.live;
-      let blocked = false;
-      for (const item of pending) {
-        const stamp = `${item.key}:${item.maxChars}:${item.text}`;
-        try {
-          const res = await apiPost('/api/adapt-fit-text', {
-            text: item.text,
-            max_chars: item.maxChars,
-          }, { timeoutMs: ADAPT_PLAN_TIMEOUT_MS });
-          const nextText = typeof res?.text === 'string' ? res.text.trim() : '';
-          if (!nextText || res?.impossible || nextText.length > item.maxChars) {
-            canvasFitTriedRef.current.add(stamp);
-            blocked = true;
-          } else if (cv) {
-            cv = applyCanvasFitText(cv, item.key, nextText);
-          }
-        } catch {
-          canvasFitTriedRef.current.add(stamp);
-          blocked = true;
-        } finally {
-          canvasFitInflightRef.current.delete(stamp);
-        }
-      }
-      if (cancelled) return;
-      const source = adaptCvForFitRef.current.last || adaptCvForFitRef.current.live;
-      if (cv && cv !== source) {
-        if (adaptCvForFitRef.current.last) setLastAdaptedCv(cv);
-        else setAdaptLiveCv(cv);
-      }
-      setCanvasFitNotice(blocked
-        ? 'Un passage est trop long pour le canvas : il chevaucherait la ligne suivante. Raccourcis-le à la main.'
-        : '');
-    })();
-    return () => { cancelled = true; };
-  }, [canvasConflicts, templateId]);
 
   // Scroll vers la réponse / animation quand on lance un prompt
   useEffect(() => {
@@ -2200,11 +2113,6 @@ export default function App() {
     setApiAdaptDone(false);
     setAdaptStepIndex(0);
     setAdaptLiveCv(null);
-    setCanvasFitNotice('');
-    setCanvasConflicts([]);
-    canvasFitTriedRef.current = new Set();
-    canvasFitInflightRef.current = new Set();
-    canvasFitUserEditedRef.current = new Set();
     setAdaptStreamRunningStepId(null);
     setAdaptStreamDoneStepIds([]);
     const selected = Array.isArray(selectedStepIds) ? selectedStepIds : [];
@@ -4308,8 +4216,6 @@ export default function App() {
                       languagePreviewStatus={languagePreviewStatus}
                       languagePreviewCv={languagePreviewStatus === 'ready' ? languagePreviewCvRef.current : null}
                       freshPreviewPhotoUrl={freshPreviewPhotoUrl}
-                      fitNotice={canvasFitNotice}
-                      onConflicts={handleCanvasConflicts}
                       textEditable={Boolean(lastAdaptedCv) && !adapting}
                       onCvChange={handlePreviewCvEdit}
                     />
