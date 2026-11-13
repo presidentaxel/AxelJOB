@@ -6,7 +6,6 @@ Données : Supabase (cv_base, applications) ou fallback fichiers.
 
 import asyncio
 import hashlib
-import html as html_module
 import json
 import logging
 import re
@@ -14,6 +13,7 @@ import sys
 import time as _time
 import uuid as uuid_module
 from concurrent.futures import ThreadPoolExecutor
+from copy import deepcopy
 from datetime import datetime, timezone
 from io import BytesIO
 from pathlib import Path
@@ -31,7 +31,7 @@ from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
-from fastapi.responses import FileResponse, HTMLResponse, Response, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response, StreamingResponse
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, generate_latest
 from pydantic import BaseModel
 
@@ -50,6 +50,7 @@ from backend.config import (
     STRIPE_SECRET_KEY,
     STRIPE_WEBHOOK_SECRET,
     SUPPORT_ADMIN_EMAILS,
+    SUPPORT_ADMIN_USER_IDS,
     SUPPORT_EMAIL,
     USE_SUPABASE,
     USE_SUPABASE_PG,
@@ -62,6 +63,12 @@ from backend.config import (
 )
 from backend.cv_html_render import render_cv_html as _render_cv_html
 from backend.rate_limit import check_rate_limit, rate_limit_max_adapt
+from backend.services.public_error import public_http_detail
+from backend.services.support_ticket import (
+    support_reply_email_html,
+    support_ticket_email_html,
+    support_ticket_failure_detail,
+)
 from backend.template_registry import DEFAULT_TEMPLATE_ID
 
 _thread_pool = ThreadPoolExecutor(max_workers=thread_pool_max_workers())
@@ -109,7 +116,18 @@ from backend.gemini_usage import (
 )
 from backend.promo_codes import redeem_promo_code
 from backend.security import check_user_input_for_injection
+from backend.sentry_business import capture_business_event, record_jwt_reject
+from backend.sentry_config import bind_sentry_user, init_sentry
 from backend.services import billing_notifications, template_access
+from backend.services.stripe_customer import (
+    cancel_free_subscriptions,
+    ensure_stripe_customer,
+    find_stripe_customer_id,
+    list_billable_subscriptions,
+    subscription_uses_free_price,
+)
+
+init_sentry()
 
 
 # --- Structured logging ---
@@ -150,6 +168,17 @@ app = FastAPI(
     docs_url=None if IS_PRODUCTION else "/docs",
     redoc_url=None if IS_PRODUCTION else "/redoc",
 )
+
+
+@app.exception_handler(HTTPException)
+async def _public_http_exception(request: Request, exc: HTTPException) -> JSONResponse:
+    """En production, ne renvoie pas les détails de config (clé API, Resend, webhook)."""
+    detail = public_http_detail(exc.status_code, exc.detail, production=IS_PRODUCTION)
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": detail},
+        headers=exc.headers or None,
+    )
 
 
 @app.on_event("startup")
@@ -314,12 +343,15 @@ class AdaptBody(BaseModel):
     entreprise: str = ""
     template_id: str | None = None
     template_options: dict | None = None
+    output_language: str | None = None  # "cv" | "offer"
+    documents_context: str = ""
 
 
 class AdaptPlanBody(BaseModel):
     description: str = ""
     titre: str = ""
     entreprise: str = ""
+    documents_context: str = ""
 
 
 class AdaptRunBody(BaseModel):
@@ -330,6 +362,23 @@ class AdaptRunBody(BaseModel):
     selected_step_ids: list[str] | None = None
     template_id: str | None = None
     template_options: dict | None = None
+    output_language: str | None = None  # "cv" | "offer"
+    documents_context: str = ""
+
+
+class AdaptLanguageBody(BaseModel):
+    description: str = ""
+    titre: str = ""
+    entreprise: str = ""
+
+
+class AdaptLocalizeBody(BaseModel):
+    description: str = ""
+    titre: str = ""
+    entreprise: str = ""
+    plan_id: str | None = None
+    output_language: str | None = None  # "cv" | "offer"
+    preview_seq: int | None = None
 
 
 class AdaptPlanExplainBody(BaseModel):
@@ -344,6 +393,12 @@ class AdaptPlanUpdateBody(BaseModel):
 class AdaptRefineBody(BaseModel):
     cv: dict
     instruction: str = ""
+    documents_context: str = ""
+
+
+class AdaptFitTextBody(BaseModel):
+    text: str = ""
+    max_chars: int = 80
 
 
 class RenderHtmlBody(BaseModel):
@@ -536,16 +591,46 @@ def snapshot_application_pdfs_to_storage(
     return out
 
 
-def _apply_tweaks(cv_base: dict, tweaks: dict) -> dict:
+def _apply_tweaks(
+    cv_base: dict,
+    tweaks: dict,
+    output_policy: str | None = None,
+    offre: dict | None = None,
+) -> dict:
     from backend.services.adapter import apply_tweaks_to_cv
 
-    return apply_tweaks_to_cv(cv_base, tweaks)
+    return apply_tweaks_to_cv(cv_base, tweaks, output_policy=output_policy, offre=offre)
 
 
 def _offre_from_description(description: str, titre: str = "", entreprise: str = "") -> dict:
     from backend.services.mots_cles import offre_from_description
 
     return offre_from_description(description or "", titre=titre, entreprise=entreprise)
+
+
+def _checked_documents_context(raw: str) -> str:
+    from backend.services.adapt_context_docs import MAX_CONTEXT_CHARS
+
+    text = (raw or "").strip()[:MAX_CONTEXT_CHARS]
+    if not text:
+        return ""
+    try:
+        check_user_input_for_injection(text=text)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return text
+
+
+def _offre_for_adapt(
+    description: str,
+    titre: str = "",
+    entreprise: str = "",
+    documents_context: str = "",
+) -> dict:
+    from backend.services.adapt_context_docs import apply_documents_context
+
+    offre = _offre_from_description(description, titre=titre, entreprise=entreprise)
+    return apply_documents_context(offre, documents_context)
 
 
 def _adaptation_id_from_user_and_offer(user_id: str | None, description: str) -> str:
@@ -635,6 +720,7 @@ def _resolve_jwt_payload_for_request(request: Request) -> dict | None:
                 if state is not None:
                     state._jwt_resolved = True
                     state._jwt_payload = None
+                record_jwt_reject()
                 raise
             except Exception as e:
                 hint = ""
@@ -648,6 +734,7 @@ def _resolve_jwt_payload_for_request(request: Request) -> dict | None:
                     hint,
                 )
                 payload = None
+                record_jwt_reject()
     if state is not None:
         state._jwt_resolved = True
         state._jwt_payload = payload
@@ -665,12 +752,31 @@ def _get_user_id(request: Request) -> str | None:
             from backend.auth_user_verify import ensure_supabase_user_still_exists
 
             ensure_supabase_user_still_exists(user_id)
+        if user_id:
+            plan = None
+            try:
+                plan = get_user_plan(user_id)
+            except Exception:
+                plan = None
+            bind_sentry_user(user_id, plan)
         return user_id
     except HTTPException:
         raise
     except Exception as e:
+        from backend.supabase_pg import is_pg_connect_outage
+
+        if is_pg_connect_outage(e):
+            logger.warning("user check unavailable (postgres): %s", e)
+            raise HTTPException(
+                status_code=503,
+                detail=(
+                    "Impossible de vérifier ton compte pour le moment. "
+                    "Réessaie dans quelques secondes."
+                ),
+            ) from e
         hint = ""
-        if "not yet valid" in str(e).lower() or "iat" in str(e).lower():
+        message = str(e).lower()
+        if "not yet valid" in message or "iat" in message:
             hint = " (décalage horaire ? synchronise l’horloge ou augmente JWT_LEEWAY_SECONDS)"
         logger.warning(
             "JWT post-decode user check failed: %s%s",
@@ -719,7 +825,9 @@ def _materialize_canvas_image(user_id: str, image_bytes: bytes, mime: str) -> st
     safe_id = "".join(c for c in (user_id or "") if c.isalnum() or c in "_-") or "user"
     from PIL import Image
 
-    img = Image.open(BytesIO(image_bytes)).convert("RGB")
+    img = Image.open(BytesIO(image_bytes))
+    has_alpha = img.mode in ("RGBA", "LA") or (img.mode == "P" and "transparency" in img.info)
+    img = img.convert("RGBA" if has_alpha else "RGB")
     w, h = img.size
     max_side = 1200
     if w > max_side or h > max_side:
@@ -728,10 +836,15 @@ def _materialize_canvas_image(user_id: str, image_bytes: bytes, mime: str) -> st
         resample = getattr(Image, "Resampling", Image).LANCZOS
         img = img.resize(new_size, resample)
     buffer = BytesIO()
-    img.save(buffer, "JPEG", quality=85, optimize=True)
+    if has_alpha:
+        img.save(buffer, "PNG", optimize=True)
+        ext = "png"
+    else:
+        img.save(buffer, "JPEG", quality=85, optimize=True)
+        ext = "jpg"
     buffer.seek(0)
     out_bytes = buffer.getvalue()
-    asset_name = f"canvas_{uuid_module.uuid4().hex[:16]}.jpg"
+    asset_name = f"canvas_{uuid_module.uuid4().hex[:16]}.{ext}"
     if USE_SUPABASE:
         from backend.db import upload_canvas_asset_to_storage
 
@@ -741,6 +854,40 @@ def _materialize_canvas_image(user_id: str, image_bytes: bytes, mime: str) -> st
     dest = uploads_dir / asset_name
     dest.write_bytes(out_bytes)
     return f"assets/uploads/{safe_id}/{asset_name}"
+
+
+def _materialize_layout_data_urls(
+    layout: dict[str, Any] | None, user_id: str | None
+) -> dict[str, Any] | None:
+    """Remplace les data URL d'un layout importé par des fichiers assets/.
+
+    Le canvas refuse les data URL (XSS). Sans cette étape, photo et logos
+    s'affichent comme le mot « Image ».
+    """
+    if not layout or not user_id:
+        return layout
+    import base64
+    import re
+
+    data_re = re.compile(r"^data:(image/(?:png|jpeg|jpg|webp));base64,([A-Za-z0-9+/=\s]+)$", re.I)
+    for page in layout.get("pages") or []:
+        if not isinstance(page, dict):
+            continue
+        for block in page.get("blocks") or []:
+            if not isinstance(block, dict) or block.get("type") != "image":
+                continue
+            src = block.get("image_src") if isinstance(block.get("image_src"), str) else ""
+            match = data_re.match(src.strip())
+            if not match:
+                continue
+            try:
+                raw = base64.b64decode(re.sub(r"\s+", "", match.group(2)))
+                mime = match.group(1).lower().replace("image/jpg", "image/jpeg")
+                block["image_src"] = _materialize_canvas_image(user_id, raw, mime)
+            except Exception as exc:
+                logger.warning("import layout image non stockée: %s", exc)
+                block["image_src"] = ""
+    return layout
 
 
 def _sanitize_cv_layout_field(body: dict[str, Any], user_id: str) -> dict[str, Any]:
@@ -1002,11 +1149,14 @@ def api_cv(request: Request, profile: bool = False):
     Si profile=1 (requête depuis l'onglet Profil) et qu'aucun CV n'est enregistré, on renvoie {} pour
     afficher un formulaire vide (données Supabase = rien), pas le CV d'exemple."""
     user_id = _get_user_id(request)
-    if USE_SUPABASE and user_id is None and _bearer_token_nonempty(request):
+    if USE_SUPABASE and user_id is None and (_bearer_token_nonempty(request) or profile):
         raise HTTPException(
             status_code=401,
             detail="Session invalide ou expirée (JWT). Reconnecte-toi ou vérifie l’heure de ton PC.",
         )
+    # Le formulaire profil ne doit jamais retomber sur la ligne partagée "default".
+    if profile and not user_id:
+        return {}
     try:
         cv = load_cv_base(user_id)
         if profile and cv.get("__example__"):
@@ -1387,9 +1537,30 @@ def _extract_text_from_pdf(file_bytes: bytes) -> str:
             if text:
                 pages.append(text)
         pdf.close()
-        return "\n\n".join(pages)
+        text = "\n\n".join(pages)
+        from backend.services.pdf_structural_extract import visible_text_excluding_hidden_ats
+
+        try:
+            visible, hidden_count = visible_text_excluding_hidden_ats(file_bytes)
+        except Exception as exc:  # noqa: BLE001 — filtre ATS facultatif
+            logger.info("PDF import: filtrage ATS ignoré: %s", exc)
+            visible, hidden_count = "", 0
+        if hidden_count and len(visible) >= 40:
+            logger.info(
+                "PDF import: %s ligne(s) de mots-clés ATS masqués retirées du texte",
+                hidden_count,
+            )
+            return visible
+        return text
     except Exception as e:
         logger.warning("PDF extraction error: %s", e)
+        capture_business_event(
+            "import",
+            "PDF import illisible",
+            kind="pdf_unreadable",
+            size_bytes=len(file_bytes),
+            provider_code=type(e).__name__,
+        )
         raise HTTPException(status_code=400, detail="Impossible de lire le PDF.")
 
 
@@ -1400,6 +1571,13 @@ def _extract_text_from_docx(file_bytes: bytes) -> str:
         return extract_text_from_docx_bytes(file_bytes)
     except Exception as e:
         logger.warning("DOCX extraction error: %s", e)
+        capture_business_event(
+            "import",
+            "DOCX import illisible",
+            kind="docx_unreadable",
+            size_bytes=len(file_bytes),
+            provider_code=type(e).__name__,
+        )
         raise HTTPException(status_code=400, detail="Impossible de lire le fichier Word.")
 
 
@@ -1444,11 +1622,21 @@ def _parse_cv_text_with_ai(text: str, user_id: str | None = None) -> dict:
         try:
             r = client.models.generate_content(model=model_id, contents=prompt, config=cfg)
         except Exception as exc:
-            logger.warning("_parse_cv_text_with_ai: %s tentative %d: %s", model_id, attempt, exc)
+            from backend.gemini_health import gemini_failure_detail, scrub_gemini_text
+
+            logger.warning(
+                "_parse_cv_text_with_ai: %s tentative %d: %s",
+                model_id,
+                attempt,
+                scrub_gemini_text(str(exc)),
+            )
             if attempt < len(models_to_try) - 1:
                 time.sleep(0.5)
                 continue
-            raise HTTPException(status_code=502, detail="Erreur Gemini lors de l'import.")
+            raise HTTPException(
+                status_code=502,
+                detail=gemini_failure_detail(exc, "Erreur Gemini lors de l'import."),
+            )
         if r and getattr(r, "text", None):
             break
         logger.warning(
@@ -1549,6 +1737,176 @@ def _parse_cv_import_with_ai(text: str, user_id: str | None = None) -> tuple[dic
         )
 
     return sync_dual_keys(cv), layout_hints or {}, semantic_meta
+
+
+_PHONE_LIKE_RE = re.compile(r"(?:\+?\d[\d\s().-]{7,}\d)")
+
+
+def _phone_like_line_count(text: str) -> int:
+    """Lignes qui ressemblent à un numéro, hors plages d'années."""
+    count = 0
+    for line in (text or "").splitlines():
+        match = _PHONE_LIKE_RE.search(line)
+        if not match:
+            continue
+        rest = re.sub(r"(?:19|20)\d{2}", "", match.group(0))
+        digits = re.sub(r"\D", "", rest)
+        if 8 <= len(digits) <= 15:
+            count += 1
+    return count
+
+
+def _log_cv_import_contact(
+    text: str,
+    cv: dict[str, Any],
+    layout: dict[str, Any] | None,
+) -> None:
+    """Diagnostic import : comptes et positions, jamais le numéro lui-même."""
+    tel_digits = re.sub(r"\D", "", str((cv or {}).get("telephone") or ""))
+    positions: list[str] = []
+    binds: list[str] = []
+    if layout:
+        for page in layout.get("pages") or []:
+            for block in page.get("blocks") or []:
+                if block.get("type") == "contact":
+                    paths = block.get("bind") or []
+                    binds.append(",".join(str(path) for path in paths) or "-")
+                content = re.sub(r"<[^>]+>", " ", str(block.get("content") or ""))
+                digits = re.sub(r"\D", "", content)
+                if len(tel_digits) >= 8 and tel_digits[-8:] in digits:
+                    positions.append(f"{float(block.get('y') or 0):.1f}")
+        for ann in layout.get("semantic_annotations") or []:
+            if ann.get("type") != "contact":
+                continue
+            paths = ann.get("bind") or []
+            binds.append("ann:" + (",".join(str(path) for path in paths) or "-"))
+    logger.info(
+        "CV import contact: telephone_digits=%s phone_like_lines=%s "
+        "layout_phone_blocks=%s layout_phone_y=%s contact_binds=%s email_set=%s",
+        len(tel_digits),
+        _phone_like_line_count(text),
+        len(positions),
+        ",".join(positions) or "-",
+        "|".join(binds) or "-",
+        bool(str((cv or {}).get("email") or "").strip()),
+    )
+    if len(tel_digits) >= 8 and not positions:
+        logger.info(
+            "CV import contact: numéro extrait (%s chiffres) absent des blocs texte du layout",
+            len(tel_digits),
+        )
+
+
+def _clip_adapt_text(value: object, limit: int = 90) -> str:
+    """Extrait court pour le journal d'adaptation. Masque un numéro."""
+    text = re.sub(r"\s+", " ", str(value or "")).strip()
+    if re.search(r"(?:\+?\d[\d\s.\-]{7,}\d)", text):
+        return "[contact]"
+    if not text:
+        return "∅"
+    if len(text) <= limit:
+        return text
+    return text[: limit - 1] + "…"
+
+
+def _canvas_text_block_count(cv: dict | None) -> int:
+    layout = (cv or {}).get("layout") or {}
+    count = 0
+    for page in layout.get("pages") or []:
+        for block in page.get("blocks") or []:
+            if block.get("type") not in ("text", "title"):
+                continue
+            plain = re.sub(r"<[^>]+>", " ", str(block.get("content") or ""))
+            plain = re.sub(r"\s+", " ", plain).strip()
+            if len(plain) >= 12:
+                count += 1
+    return count
+
+
+def _log_cv_adapt_delta(before: dict | None, after: dict | None) -> None:
+    """Avant/après de l'adaptation. Le canvas Beta fige le texte hors champs structurés."""
+    src = before or {}
+    dst = after or {}
+    src_exp = [e for e in (src.get("experiences") or []) if isinstance(e, dict)]
+    dst_exp = [e for e in (dst.get("experiences") or []) if isinstance(e, dict)]
+    canvas_blocks = _canvas_text_block_count(src) or _canvas_text_block_count(dst)
+    logger.info(
+        "CV adapt avant/après: template=%s experiences=%s→%s resume_chars=%s→%s "
+        "titre_chars=%s→%s canvas_text_blocks=%s",
+        (dst.get("template_id") or src.get("template_id") or "-"),
+        len(src_exp),
+        len(dst_exp),
+        len(str(src.get("resume") or "")),
+        len(str(dst.get("resume") or "")),
+        len(str(src.get("titre_professionnel") or "")),
+        len(str(dst.get("titre_professionnel") or "")),
+        canvas_blocks,
+    )
+    logger.info(
+        "CV adapt titre: «%s» → «%s»",
+        _clip_adapt_text(src.get("titre_professionnel")),
+        _clip_adapt_text(dst.get("titre_professionnel")),
+    )
+    logger.info(
+        "CV adapt resume: «%s» → «%s»",
+        _clip_adapt_text(src.get("resume")),
+        _clip_adapt_text(dst.get("resume")),
+    )
+    for index in range(max(len(src_exp), len(dst_exp))):
+        exp = src_exp[index] if index < len(src_exp) else {}
+        nxt = dst_exp[index] if index < len(dst_exp) else {}
+        src_bullets = exp.get("bullet_points") or []
+        dst_bullets = nxt.get("bullet_points") or []
+        logger.info(
+            "CV adapt exp.%s %s @ %s: bullets %s→%s | «%s» → «%s»",
+            index,
+            _clip_adapt_text(nxt.get("poste") or exp.get("poste"), 40),
+            _clip_adapt_text(nxt.get("entreprise") or exp.get("entreprise"), 40),
+            len(src_bullets),
+            len(dst_bullets),
+            _clip_adapt_text(src_bullets[0] if src_bullets else ""),
+            _clip_adapt_text(dst_bullets[0] if dst_bullets else ""),
+        )
+    if not src_exp and not dst_exp and canvas_blocks:
+        logger.info(
+            "CV adapt canvas: %s blocs de texte, experiences vide — "
+            "le corps Canva n'est pas envoyé au modèle, seuls le résumé et le titre structurés sont réécrits",
+            canvas_blocks,
+        )
+    elif not src_exp and dst_exp:
+        logger.info(
+            "CV adapt canvas: corps lu sur le canvas, %s expériences réécrites",
+            len(dst_exp),
+        )
+
+
+def _prepare_canvas_source(cv: dict) -> dict | None:
+    """Si le profil n'a pas d'expériences, lit le corps du canvas pour le modèle."""
+    from backend.services.canvas_adapt import canvas_adapt_plan, seed_cv_from_canvas
+
+    plan = canvas_adapt_plan(cv)
+    if not plan:
+        return None
+    seed_cv_from_canvas(cv, plan)
+    logger.info(
+        "CV adapt canvas: lecture du corps, experiences=%s puces=%s resume_chars=%s",
+        len(plan.get("experiences") or []),
+        sum(len(exp.get("bullets") or []) for exp in plan.get("experiences") or []),
+        len(plan.get("resume_text") or ""),
+    )
+    return plan
+
+
+def _paint_adapted_canvas(merged: dict, plan: dict | None, cv_base: dict | None) -> None:
+    if not plan:
+        return
+    from backend.services.canvas_adapt import paint_canvas_plan
+
+    if not (merged.get("layout") or {}).get("pages") and (cv_base or {}).get("layout"):
+        merged["layout"] = deepcopy(cv_base.get("layout"))
+    layout, painted = paint_canvas_plan(merged.get("layout") or {}, plan, merged)
+    merged["layout"] = layout
+    logger.info("CV adapt canvas: %s groupes de texte réécrits sur le layout", painted)
 
 
 @app.post("/api/cv/import")
@@ -1663,12 +2021,14 @@ def api_cv_import_file(request: Request, file: UploadFile = File(...)):
 
             block_annotations = annotate_structural_blocks(structural_layout, cv)
             structural_layout = attach_annotations_to_layout(structural_layout, block_annotations)
+            structural_layout = _materialize_layout_data_urls(structural_layout, user_id)
 
     structural_blocks = (
         sum(len(p.get("blocks", [])) for p in structural_layout.get("pages", []))
         if structural_layout
         else 0
     )
+    _log_cv_import_contact(text, cv, structural_layout)
     file_ext = (file.filename or "").rsplit(".", 1)[-1].lower() if file.filename else "unknown"
     _track_analytics(
         request,
@@ -1906,17 +2266,19 @@ def api_create_checkout_session(request: Request):
 
         client = stripe.StripeClient(STRIPE_SECRET_KEY)
         base = (FRONTEND_URL or "").rstrip("/")
-        session = client.checkout.sessions.create(
-            params={
-                "mode": "subscription",
-                "client_reference_id": user_id,
-                "allow_promotion_codes": True,
-                "line_items": [{"price": STRIPE_PRICE_ID_PRO_MONTHLY, "quantity": 1}],
-                "subscription_data": {"metadata": {"user_id": user_id}},
-                "success_url": f"{base}/app?success=pro",
-                "cancel_url": f"{base}/app?cancel=checkout",
-            }
-        )
+        customer_id = ensure_stripe_customer(user_id, _get_user_email_from_jwt(request))
+        params = {
+            "mode": "subscription",
+            "client_reference_id": user_id,
+            "allow_promotion_codes": True,
+            "line_items": [{"price": STRIPE_PRICE_ID_PRO_MONTHLY, "quantity": 1}],
+            "subscription_data": {"metadata": {"user_id": user_id}},
+            "success_url": f"{base}/app?success=pro",
+            "cancel_url": f"{base}/app?cancel=checkout",
+        }
+        if customer_id:
+            params["customer"] = customer_id
+        session = client.checkout.sessions.create(params=params)
         return {"url": session.url}
     except Exception as e:
         logger.exception(e)
@@ -1963,15 +2325,7 @@ def _stripe_client():
 
 
 def _stripe_customer_id_for_user(client, user_id: str) -> str | None:
-    customers = client.customers.search(params={"query": f"metadata['user_id']:'{user_id}'"})
-    if customers.data:
-        return customers.data[0].id
-    sessions = client.checkout.sessions.list(params={"limit": 100})
-    for s in sessions.data:
-        if s.client_reference_id == user_id and s.customer:
-            cid = s.customer
-            return cid if isinstance(cid, str) else _stripe_attr(cid, "id")
-    return None
+    return find_stripe_customer_id(client, user_id)
 
 
 def _stripe_first_active_subscription_id(client, customer_id: str) -> str | None:
@@ -1995,6 +2349,20 @@ _STRIPE_SNAPSHOT_CACHE = _TTLCache(max_size=2000, ttl_sec=90.0)
 _STRIPE_SUB_RESOLVE_CACHE = _TTLCache(max_size=2000, ttl_sec=300.0)
 
 
+def _subscription_period_end(sub) -> int | None:
+    """Stripe 16 : la fin de période est sur l'article, plus sur l'abonnement."""
+    direct = _stripe_attr(sub, "current_period_end")
+    if direct is not None:
+        return int(direct)
+    items = _stripe_attr(sub, "items")
+    ends = []
+    for item in _stripe_attr(items, "data") or []:
+        end = _stripe_attr(item, "current_period_end")
+        if end is not None:
+            ends.append(int(end))
+    return min(ends) if ends else None
+
+
 def _stripe_subscription_snapshot_dict(client, subscription_id: str) -> dict | None:
     """Lecture seule : état affichage (fin de période, résiliation programmée). Cache TTL 90s."""
     cached = _STRIPE_SNAPSHOT_CACHE.get(subscription_id)
@@ -2002,20 +2370,19 @@ def _stripe_subscription_snapshot_dict(client, subscription_id: str) -> dict | N
         return cached or None
     try:
         sub = client.subscriptions.retrieve(subscription_id)
-        cpe = _stripe_attr(sub, "current_period_end")
+        cpe = _subscription_period_end(sub)
         catp = bool(_stripe_attr(sub, "cancel_at_period_end"))
         st = _stripe_attr(sub, "status") or ""
-        if cpe is None:
-            _STRIPE_SNAPSHOT_CACHE.set(subscription_id, "")
-            return None
-        cpe = int(cpe)
         snap = {
             "status": st,
             "cancel_at_period_end": catp,
-            "current_period_end": cpe,
-            "current_period_end_iso": datetime.fromtimestamp(cpe, tz=timezone.utc).isoformat(),
-            "current_period_end_label": _stripe_period_end_label_fr(cpe),
         }
+        if cpe is not None:
+            snap["current_period_end"] = cpe
+            snap["current_period_end_iso"] = datetime.fromtimestamp(
+                cpe, tz=timezone.utc
+            ).isoformat()
+            snap["current_period_end_label"] = _stripe_period_end_label_fr(cpe)
         _STRIPE_SNAPSHOT_CACHE.set(subscription_id, snap)
         return snap
     except Exception as e:
@@ -2066,6 +2433,7 @@ def _send_subscription_cancelled_email(to_email: str, period_end_label: str) -> 
         period_end_label=period_end_label,
         resend_api_key=RESEND_API_KEY,
         resend_from_email=RESEND_FROM_EMAIL,
+        frontend_url=FRONTEND_URL,
     )
 
 
@@ -2081,9 +2449,21 @@ async def api_stripe_webhook(request: Request):
 
         event = stripe.Webhook.construct_event(payload, sig, STRIPE_WEBHOOK_SECRET)
     except ValueError:
+        capture_business_event(
+            "billing",
+            "Webhook Stripe payload invalide",
+            kind="stripe_bad_payload",
+            size_bytes=len(payload),
+        )
         raise HTTPException(status_code=400, detail="Payload invalide.")
     except Exception as e:
         if "signature" in str(e).lower():
+            capture_business_event(
+                "billing",
+                "Webhook Stripe signature invalide",
+                kind="stripe_bad_signature",
+                size_bytes=len(payload),
+            )
             raise HTTPException(status_code=400, detail="Signature invalide.")
         raise
     # set_user_plan / find_user_id_by_stripe_subscription_id / _send_template_perso_email
@@ -2126,11 +2506,24 @@ async def api_stripe_webhook(request: Request):
                         stripe_customer_id=stripe_customer_id,
                         stripe_subscription_id=stripe_sub_id,
                     )
+                    if stripe_customer_id and stripe_sub_id:
+                        await asyncio.to_thread(
+                            cancel_free_subscriptions,
+                            stripe_customer_id,
+                            stripe_sub_id,
+                        )
                     _invalidate_stripe_caches_for_user(user_id)
                     _invalidate_usage_cache(user_id)
                     if stripe_sub_id:
                         _STRIPE_SNAPSHOT_CACHE.invalidate(stripe_sub_id)
                     logger.info("User %s set to pro after Stripe checkout", user_id)
+                else:
+                    capture_business_event(
+                        "billing",
+                        "Abonnement Stripe sans utilisateur",
+                        kind="stripe_orphan_subscription",
+                        reason="checkout_no_user",
+                    )
         except Exception as e:
             logger.exception(
                 "Stripe webhook checkout.session.completed failed: %s (event_id=%s)",
@@ -2149,14 +2542,27 @@ async def api_stripe_webhook(request: Request):
                     _stripe_attr(sub, "id") or "",
                 )
                 uid = (found or "").strip()
-            if uid:
+            if subscription_uses_free_price(sub):
+                logger.info(
+                    "Abonnement gratuit retiré, plan inchangé (sub=%s)",
+                    _stripe_attr(sub, "id"),
+                )
+            elif uid:
                 await asyncio.to_thread(set_user_plan, uid, "free", stripe_subscription_id="")
+                await asyncio.to_thread(ensure_stripe_customer, uid)
                 _invalidate_stripe_caches_for_user(uid)
                 _invalidate_usage_cache(uid)
                 deleted_sub_id = (_stripe_attr(sub, "id") or "").strip()
                 if deleted_sub_id:
                     _STRIPE_SNAPSHOT_CACHE.invalidate(deleted_sub_id)
                 logger.info("User %s set to free after Stripe subscription deleted", uid)
+            else:
+                capture_business_event(
+                    "billing",
+                    "Abonnement Stripe sans utilisateur",
+                    kind="stripe_orphan_subscription",
+                    reason="subscription_deleted_no_user",
+                )
         except Exception as e:
             logger.exception(
                 "Stripe webhook customer.subscription.deleted failed: %s (event_id=%s)",
@@ -2221,6 +2627,7 @@ def api_cancel_subscription(request: Request):
         import stripe
 
         client = stripe.StripeClient(STRIPE_SECRET_KEY)
+        ensure_stripe_customer(user_id, _get_user_email_from_jwt(request))
         cust_id, sub_id = _resolve_pro_subscription_id(client, user_id)
         if not cust_id or not sub_id:
             raise HTTPException(status_code=404, detail="Aucun abonnement Stripe actif trouvé.")
@@ -2306,76 +2713,15 @@ class SupportTicketBody(BaseModel):
 
 def _send_support_ticket_email(
     to_support: str, user_email: str, subject: str, message: str
-) -> bool:
-    """Envoie un email au support avec le ticket (Reply-To: user_email pour répondre par mail)."""
+) -> str | None:
+    """Envoie le ticket. None si envoyé, sinon le message à montrer à l'utilisateur."""
     if not RESEND_API_KEY or not to_support:
-        return False
+        return support_ticket_failure_detail(None, production=IS_PRODUCTION)
     try:
         import resend
 
         resend.api_key = RESEND_API_KEY
-        # Message avec retours à la ligne en <br> pour l'affichage HTML
-        message_html = html_module.escape(message).replace("\n", "<br>")
-        html = f"""
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Nouveau ticket support</title>
-</head>
-<body style="margin:0; padding:0; background-color:#f1f5f9; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 15px; line-height: 1.5; color: #334155;">
-  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color:#f1f5f9; padding: 24px 16px;">
-    <tr>
-      <td align="center">
-        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width: 560px; background-color:#ffffff; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); overflow: hidden;">
-          <tr>
-            <td style="background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%); padding: 24px 28px; text-align: center;">
-              <span style="font-size: 13px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: rgba(255,255,255,0.9);">AxeL Job · Support</span>
-              <h1 style="margin: 8px 0 0 0; font-size: 20px; font-weight: 700; color: #ffffff;">Nouveau ticket</h1>
-            </td>
-          </tr>
-          <tr>
-            <td style="padding: 28px;">
-              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-bottom: 20px;">
-                <tr>
-                  <td style="padding: 12px 16px; background-color: #f8fafc; border-radius: 8px; border-left: 4px solid #6366f1;">
-                    <span style="font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: #64748b;">De</span>
-                    <div style="font-size: 15px; font-weight: 500; color: #1e293b; margin-top: 2px;">{html_module.escape(user_email)}</div>
-                  </td>
-                </tr>
-              </table>
-              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-bottom: 20px;">
-                <tr>
-                  <td style="padding: 12px 16px; background-color: #f8fafc; border-radius: 8px; border-left: 4px solid #6366f1;">
-                    <span style="font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: #64748b;">Sujet</span>
-                    <div style="font-size: 15px; font-weight: 500; color: #1e293b; margin-top: 2px;">{html_module.escape(subject)}</div>
-                  </td>
-                </tr>
-              </table>
-              <div style="font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: #64748b; margin-bottom: 8px;">Message</div>
-              <div style="padding: 16px; background-color: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0; color: #334155; font-size: 14px; line-height: 1.6;">{message_html}</div>
-              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top: 24px;">
-                <tr>
-                  <td style="padding: 16px; background-color: #eef2ff; border-radius: 8px; text-align: center;">
-                    <span style="font-size: 13px; color: #4f46e5;">Réponds à cet email pour envoyer ta réponse à l'utilisateur.</span>
-                  </td>
-                </tr>
-              </table>
-            </td>
-          </tr>
-          <tr>
-            <td style="padding: 16px 28px; background-color: #f8fafc; border-top: 1px solid #e2e8f0; text-align: center;">
-              <span style="font-size: 12px; color: #94a3b8;">AxeL Job - Ton CV sur-mesure pour chaque annonce</span>
-            </td>
-          </tr>
-        </table>
-      </td>
-    </tr>
-  </table>
-</body>
-</html>
-"""
+        html = support_ticket_email_html(user_email, subject, message, FRONTEND_URL)
         params = {
             "from": RESEND_FROM_EMAIL,
             "to": [to_support.strip()],
@@ -2385,10 +2731,121 @@ def _send_support_ticket_email(
         }
         resend.Emails.send(params)
         logger.info("Support ticket email sent to %s from %s", to_support, user_email)
-        return True
+        return None
     except Exception as e:
         logger.exception("Resend support ticket email failed: %s", e)
-        return False
+        return support_ticket_failure_detail(e, production=IS_PRODUCTION)
+
+
+class PasswordSetupBody(BaseModel):
+    email: str = ""
+
+
+class DeleteAccountBody(BaseModel):
+    cancel_subscription: bool = False
+
+
+def _subscription_customer_id(sub) -> str | None:
+    sub_cust = _stripe_attr(sub, "customer")
+    if isinstance(sub_cust, dict):
+        sub_cust = sub_cust.get("id")
+    return str(sub_cust) if sub_cust else None
+
+
+def _cancel_subscription_for_account_deletion(user_id: str, confirmed: bool) -> None:
+    """Annule les abonnements Free et Pro encore facturables avant d'effacer le compte."""
+    from backend.services.account_delete import (
+        assert_subscription_cancel_confirmed,
+        subscription_is_active,
+    )
+
+    if not STRIPE_SECRET_KEY:
+        return
+    paywall_off = get_paywall_disabled(user_id)
+    try:
+        import stripe
+
+        client = stripe.StripeClient(STRIPE_SECRET_KEY)
+        cust_id = ensure_stripe_customer(user_id, create_if_missing=False)
+        stored_sub = None
+        if not cust_id:
+            cust_id, stored_sub = get_user_stripe_ids(user_id)
+        else:
+            _stored_customer, stored_sub = get_user_stripe_ids(user_id)
+        if not cust_id:
+            return
+        subs = list_billable_subscriptions(client, cust_id)
+        known = {str(_stripe_attr(sub, "id") or "") for sub in subs}
+        if stored_sub and stored_sub not in known:
+            extra = client.subscriptions.retrieve(stored_sub)
+            extra_customer = _subscription_customer_id(extra)
+            if extra_customer and extra_customer != cust_id:
+                raise HTTPException(
+                    status_code=403, detail="Cet abonnement n'est pas associé à ton compte."
+                )
+            extra_status = (_stripe_attr(extra, "status") or "").strip().lower()
+            if extra_status in ("active", "trialing", "past_due", "unpaid"):
+                subs.append(extra)
+        for sub in subs:
+            sub_customer = _subscription_customer_id(sub)
+            if sub_customer and sub_customer != cust_id:
+                raise HTTPException(
+                    status_code=403, detail="Cet abonnement n'est pas associé à ton compte."
+                )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.warning("account delete subscription lookup failed: %s", type(exc).__name__)
+        raise HTTPException(
+            status_code=503,
+            detail="Impossible de vérifier l'abonnement. Réessaie.",
+        ) from exc
+    paid = [
+        sub
+        for sub in subs
+        if not subscription_uses_free_price(sub)
+        and subscription_is_active((_stripe_attr(sub, "status") or "").strip().lower())
+    ]
+    if paid and not paywall_off:
+        assert_subscription_cancel_confirmed((_stripe_attr(paid[0], "status") or ""), confirmed)
+    for sub in subs:
+        sub_id = str(_stripe_attr(sub, "id") or "")
+        if not sub_id:
+            continue
+        try:
+            client.subscriptions.cancel(sub_id)
+        except Exception as exc:
+            logger.warning("account delete subscription cancel failed: %s", type(exc).__name__)
+            raise HTTPException(
+                status_code=503,
+                detail="Annulation de l'abonnement impossible. Réessaie.",
+            ) from exc
+        _STRIPE_SNAPSHOT_CACHE.invalidate(sub_id)
+    if subs:
+        _invalidate_stripe_caches_for_user(user_id)
+        _invalidate_usage_cache(user_id)
+
+
+@app.post("/api/auth/password-setup")
+def api_password_setup(body: PasswordSetupBody):
+    """Si l'e-mail est déjà un compte social, prépare un mot de passe sur ce même compte."""
+    from backend.rate_limit import check_rate_limit
+    from backend.services.account_password_link import password_setup_for_email
+
+    email = (body.email or "").strip().lower()
+    check_rate_limit(email or "anon", max_requests=5, scope="password-setup")
+    return password_setup_for_email(email)
+
+
+@app.post("/api/account/delete")
+def api_delete_account(request: Request, body: DeleteAccountBody):
+    """Supprime le compte du JWT. Annule d'abord les abonnements Free et Pro encore actifs."""
+    from backend.services.account_delete import delete_my_account
+
+    user_id = _require_user_id(request)
+    _cancel_subscription_for_account_deletion(user_id, body.cancel_subscription)
+    delete_my_account(user_id)
+    return {"ok": True}
 
 
 @app.post("/api/support-ticket")
@@ -2413,16 +2870,17 @@ def api_support_ticket(request: Request, body: SupportTicketBody):
         raise HTTPException(status_code=400, detail="Message trop long.")
     if not SUPPORT_EMAIL:
         raise HTTPException(status_code=503, detail="Support non configuré (SUPPORT_EMAIL).")
-    if not _send_support_ticket_email(SUPPORT_EMAIL, user_email, subject, message):
-        raise HTTPException(
-            status_code=503,
-            detail="Envoi du ticket impossible. Réessaie ou contacte-nous par email.",
-        )
+    send_error = _send_support_ticket_email(SUPPORT_EMAIL, user_email, subject, message)
+    if send_error:
+        raise HTTPException(status_code=503, detail=send_error)
     return {"ok": True, "email": user_email}
 
 
-def _is_support_admin(email: str | None) -> bool:
-    """True si l'email fait partie des admins support (réponses via l'app)."""
+def _is_support_admin(email: str | None, user_id: str | None = None) -> bool:
+    """True si l'email, ou l'UID en dev, fait partie des admins support."""
+    uid = (user_id or "").strip()
+    if uid and uid in SUPPORT_ADMIN_USER_IDS and not IS_PRODUCTION:
+        return True
     if not email:
         return False
     e = email.strip().lower()
@@ -2432,9 +2890,9 @@ def _is_support_admin(email: str | None) -> bool:
 
 
 def _require_support_admin(request: Request) -> None:
-    """JWT valide + email dans SUPPORT_ADMIN_EMAILS ou égal à SUPPORT_EMAIL."""
-    _require_user_id(request)
-    if not _is_support_admin(_get_user_email_from_jwt(request)):
+    """JWT valide + email admin, ou UID listé hors production."""
+    user_id = _require_user_id(request)
+    if not _is_support_admin(_get_user_email_from_jwt(request), user_id):
         raise HTTPException(status_code=403, detail="Accès réservé aux administrateurs.")
 
 
@@ -2446,44 +2904,7 @@ def _send_support_reply_email(to_email: str, message: str) -> bool:
         import resend
 
         resend.api_key = RESEND_API_KEY
-        message_html = html_module.escape(message).replace("\n", "<br>")
-        html = f"""
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Réponse support AxeL Job</title>
-</head>
-<body style="margin:0; padding:0; background-color:#f1f5f9; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 15px; line-height: 1.5; color: #334155;">
-  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color:#f1f5f9; padding: 24px 16px;">
-    <tr>
-      <td align="center">
-        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width: 560px; background-color:#ffffff; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); overflow: hidden;">
-          <tr>
-            <td style="background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%); padding: 24px 28px; text-align: center;">
-              <span style="font-size: 13px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: rgba(255,255,255,0.9);">AxeL Job · Support</span>
-              <h1 style="margin: 8px 0 0 0; font-size: 20px; font-weight: 700; color: #ffffff;">Réponse à ton ticket</h1>
-            </td>
-          </tr>
-          <tr>
-            <td style="padding: 28px;">
-              <div style="padding: 20px; background-color: #f8fafc; border-radius: 8px; border-left: 4px solid #6366f1; color: #334155; font-size: 15px; line-height: 1.6;">{message_html}</div>
-              <p style="margin: 24px 0 0 0; font-size: 13px; color: #64748b;">Si tu as d'autres questions, rouvre un ticket depuis l'app (Support).</p>
-            </td>
-          </tr>
-          <tr>
-            <td style="padding: 16px 28px; background-color: #f8fafc; border-top: 1px solid #e2e8f0; text-align: center;">
-              <span style="font-size: 12px; color: #94a3b8;">AxeL Job - Ton CV sur-mesure pour chaque annonce</span>
-            </td>
-          </tr>
-        </table>
-      </td>
-    </tr>
-  </table>
-</body>
-</html>
-"""
+        html = support_reply_email_html(message, FRONTEND_URL)
         params = {
             "from": RESEND_FROM_EMAIL,
             "to": [to_email.strip()],
@@ -2506,9 +2927,9 @@ class SupportReplyBody(BaseModel):
 @app.post("/api/support-reply")
 def api_support_reply(request: Request, body: SupportReplyBody):
     """Envoie une réponse support à un utilisateur (template HTML). Réservé aux admins support (SUPPORT_ADMIN_EMAILS ou SUPPORT_EMAIL)."""
-    _require_user_id(request)
+    user_id = _require_user_id(request)
     user_email = _get_user_email_from_jwt(request)
-    if not _is_support_admin(user_email):
+    if not _is_support_admin(user_email, user_id):
         raise HTTPException(status_code=403, detail="Accès réservé au support.")
     to_email = (body.to_email or "").strip()
     message = (body.message or "").strip()
@@ -2545,6 +2966,7 @@ def api_usage(request: Request):
         return cached
     if user_id:
         ensure_implicit_free_adaptation_anchor(user_id)
+        ensure_stripe_customer(user_id, _get_user_email_from_jwt(request))
     plan = get_user_plan(uid)
     no_paywall = get_paywall_disabled(uid)
     count_adapt = count_quota_adaptations(uid)
@@ -2561,7 +2983,7 @@ def api_usage(request: Request):
         adaptations_limit = FREE_ADAPTATIONS_LIMIT
     applications_limit = 999999 if (plan == "pro" or no_paywall) else FREE_APPLICATIONS_LIMIT
     user_email = _get_user_email_from_jwt(request)
-    is_support = _is_support_admin(user_email)
+    is_support = _is_support_admin(user_email, user_id)
     stripe_subscription = None
     if user_id and STRIPE_SECRET_KEY and plan == "pro" and not no_paywall:
         try:
@@ -2740,6 +3162,245 @@ def api_admin_monitoring_news(request: Request):
     return {"items": safe}
 
 
+_SIGN_IN_MIGRATION_MESSAGE = (
+    "Migration user_sign_ins requise (backend/supabase_migration_user_sign_ins.sql)."
+)
+
+
+def _account_activity_http(_exc: Exception) -> HTTPException:
+    return HTTPException(status_code=503, detail="Suivi des connexions indisponible.")
+
+
+def _account_activity_result(exc) -> dict:
+    """Table absente : 200, pour ne pas déclencher la coupure globale des appels API."""
+    from backend.services.account_activity import SIGN_IN_RETENTION_MONTHS
+    from backend.services.account_activity_store import AccountActivityUnavailable
+
+    if isinstance(exc, AccountActivityUnavailable) and exc.code == "migration_required":
+        return {
+            "available": False,
+            "retention_months": SIGN_IN_RETENTION_MONTHS,
+            "message": _SIGN_IN_MIGRATION_MESSAGE,
+        }
+    raise _account_activity_http(exc) from exc
+
+
+@app.post("/api/account/sign-in")
+def api_account_sign_in(request: Request):
+    """Enregistre une connexion réussie. Pas d'e-mail dans la réponse ni dans les logs."""
+    user_id = _require_user_id(request)
+    if not user_id or user_id == "default":
+        return {"ok": False, "recorded": False}
+    from backend.services.account_activity_store import (
+        AccountActivityUnavailable,
+        record_user_sign_in,
+    )
+
+    try:
+        recorded = record_user_sign_in(user_id)
+    except (AccountActivityUnavailable, ValueError):
+        return {"ok": False, "recorded": False}
+    return {"ok": True, "recorded": recorded}
+
+
+@app.get("/api/admin/monitoring/accounts")
+def api_admin_monitoring_accounts(request: Request, paying_only: bool = True):
+    """Comptes avec dernière connexion et dernière action produit. Filtre payant par défaut."""
+    _require_support_admin(request)
+    from backend.services.account_activity_store import (
+        AccountActivityUnavailable,
+        list_account_activity,
+    )
+
+    try:
+        return list_account_activity(paying_only=paying_only)
+    except AccountActivityUnavailable as exc:
+        return {
+            **_account_activity_result(exc),
+            "paying_only": paying_only,
+            "accounts": [],
+        }
+
+
+@app.get("/api/admin/monitoring/accounts/{user_id}/sign-ins")
+def api_admin_monitoring_account_sign_ins(request: Request, user_id: str):
+    """Historique des connexions d'un compte (12 mois). Pas d'e-mail."""
+    _require_support_admin(request)
+    from backend.services.account_activity_store import (
+        AccountActivityUnavailable,
+        list_sign_ins,
+    )
+
+    try:
+        return list_sign_ins(user_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Identifiant de compte invalide.") from exc
+    except AccountActivityUnavailable as exc:
+        return {
+            **_account_activity_result(exc),
+            "user_id": user_id,
+            "sign_ins": [],
+        }
+
+
+def _without_scheduled_cancel(user_ids: list[str]) -> list[str]:
+    """Un abonnement déjà en fin de période ne reçoit pas le rappel."""
+    if not user_ids or not STRIPE_SECRET_KEY:
+        return user_ids
+    import stripe
+
+    from backend.db import get_user_stripe_ids
+
+    client = stripe.StripeClient(STRIPE_SECRET_KEY)
+    kept: list[str] = []
+    for user_id in user_ids:
+        _customer_id, subscription_id = get_user_stripe_ids(user_id)
+        if not subscription_id:
+            kept.append(user_id)
+            continue
+        snap = _stripe_subscription_snapshot_dict(client, subscription_id)
+        if snap and snap.get("cancel_at_period_end"):
+            continue
+        kept.append(user_id)
+    return kept
+
+
+def _reminder_targets(days: int) -> tuple[list[str], bool]:
+    """Au plus `send_cap` comptes, après exclusion des résiliations déjà programmées."""
+    from backend.services.inactivity_reminder_store import eligible_user_ids, send_cap
+
+    raw = eligible_user_ids(days=days)
+    cap = send_cap()
+    return _without_scheduled_cancel(raw[:cap]), len(raw) > cap
+
+
+def _reminder_days(days: int) -> int:
+    if int(days) not in (60, 90):
+        raise HTTPException(status_code=400, detail="Seuil 60 ou 90 jours.")
+    return int(days)
+
+
+def _reminder_unavailable(exc) -> HTTPException:
+    from backend.services.inactivity_reminder_store import InactivityReminderUnavailable
+
+    if isinstance(exc, InactivityReminderUnavailable) and exc.code == "migration_required":
+        return HTTPException(
+            status_code=503,
+            detail=(
+                "Migration inactivity_reminder_sends requise "
+                "(backend/supabase_migration_inactivity_reminders.sql)."
+            ),
+        )
+    return HTTPException(status_code=503, detail="Rappels d'inactivité indisponibles.")
+
+
+@app.get("/api/admin/inactivity-reminders")
+def api_admin_inactivity_reminders_preview(request: Request, days: int = 90):
+    """Comptes éligibles, sans adresse et sans envoi."""
+    _require_support_admin(request)
+    threshold = _reminder_days(days)
+    from backend.services.inactivity_reminder_store import InactivityReminderUnavailable
+
+    try:
+        user_ids, truncated = _reminder_targets(threshold)
+    except InactivityReminderUnavailable as exc:
+        raise _reminder_unavailable(exc) from exc
+    return {
+        "days": threshold,
+        "eligible_count": len(user_ids),
+        "user_ids": user_ids,
+        "truncated": truncated,
+    }
+
+
+@app.post("/api/admin/inactivity-reminders/send")
+def api_admin_inactivity_reminders_send(request: Request, days: int = 90):
+    """Envoie les rappels éligibles. La réponse ne contient pas d'adresse."""
+    _require_support_admin(request)
+    threshold = _reminder_days(days)
+    from backend.services import billing_notifications
+    from backend.services.inactivity_reminder_store import (
+        InactivityReminderUnavailable,
+        auth_email,
+        claim_reminder,
+        release_claim,
+    )
+
+    try:
+        user_ids, _truncated = _reminder_targets(threshold)
+    except InactivityReminderUnavailable as exc:
+        raise _reminder_unavailable(exc) from exc
+    sent: list[str] = []
+    for user_id in user_ids:
+        try:
+            claim_id = claim_reminder(user_id, days=threshold)
+        except InactivityReminderUnavailable as exc:
+            raise _reminder_unavailable(exc) from exc
+        if claim_id is None:
+            continue
+        address = auth_email(user_id)
+        ok = bool(address) and billing_notifications.send_inactivity_reminder_email(
+            address,
+            RESEND_API_KEY,
+            RESEND_FROM_EMAIL,
+            FRONTEND_URL,
+        )
+        if not ok:
+            try:
+                release_claim(claim_id)
+            except InactivityReminderUnavailable as exc:
+                raise _reminder_unavailable(exc) from exc
+            continue
+        sent.append(user_id)
+    return {"days": threshold, "sent_count": len(sent), "user_ids": sent}
+
+
+@app.post("/api/admin/inactivity-reminders/test")
+def api_admin_inactivity_reminders_test(request: Request):
+    """Envoie le mail à l'admin connecté, sans écrire aux abonnés."""
+    _require_support_admin(request)
+    admin_id = _require_user_id(request)
+    address = _get_user_email_from_jwt(request)
+    if not address:
+        raise HTTPException(status_code=400, detail="Aucune adresse sur la session admin.")
+    from backend.services import billing_notifications
+    from backend.services.inactivity_reminder_store import (
+        InactivityReminderUnavailable,
+        record_send,
+    )
+
+    ok = billing_notifications.send_inactivity_reminder_email(
+        address,
+        RESEND_API_KEY,
+        RESEND_FROM_EMAIL,
+        FRONTEND_URL,
+    )
+    if not ok:
+        raise HTTPException(status_code=502, detail="L'envoi de test a échoué.")
+    try:
+        record_send(admin_id, kind="test")
+    except (InactivityReminderUnavailable, ValueError) as exc:
+        if isinstance(exc, InactivityReminderUnavailable):
+            raise _reminder_unavailable(exc) from exc
+        raise HTTPException(status_code=400, detail="Identifiant admin invalide.") from exc
+    return {"ok": True, "user_id": admin_id}
+
+
+@app.get("/api/admin/inactivity-reminders/journal")
+def api_admin_inactivity_reminders_journal(request: Request):
+    """Dates d'envoi et comptes. Pas le contenu du mail."""
+    _require_support_admin(request)
+    from backend.services.inactivity_reminder_store import (
+        InactivityReminderUnavailable,
+        list_journal,
+    )
+
+    try:
+        return {"items": list_journal()}
+    except InactivityReminderUnavailable as exc:
+        raise _reminder_unavailable(exc) from exc
+
+
 ADAPT_TODO_DEFAULT_STEPS = [
     {
         "id": "rewrite_resume",
@@ -2819,6 +3480,55 @@ def _keep_original_experiences_tweaks(cv_base: dict) -> list[dict]:
     ]
 
 
+@app.post("/api/adapt-documents")
+async def api_adapt_documents(request: Request):
+    """Extrait le texte de PDF / DOCX joints avant l'adaptation. Pas d'OCR."""
+    user_id = _require_user_id(request)
+    check_rate_limit(user_id, rate_limit_max_adapt())
+    form = await request.form()
+    uploads = list(form.getlist("files") or [])
+    if not uploads:
+        single = form.get("file")
+        if single is not None:
+            uploads = [single]
+    from backend.services.adapt_context_docs import (
+        MAX_DOCUMENT_BYTES,
+        MAX_DOCUMENTS,
+        AdaptContextDocError,
+        extract_adapt_context_document,
+        join_documents_context,
+    )
+
+    if not uploads:
+        raise HTTPException(status_code=400, detail="Ajoute un PDF ou un DOCX.")
+    if len(uploads) > MAX_DOCUMENTS:
+        raise HTTPException(status_code=400, detail="3 documents maximum.")
+
+    docs = []
+    for upload in uploads:
+        if not hasattr(upload, "read"):
+            raise HTTPException(status_code=400, detail="Fichier illisible.")
+        raw = await upload.read(MAX_DOCUMENT_BYTES + 1)
+        if len(raw) > MAX_DOCUMENT_BYTES:
+            raise HTTPException(status_code=400, detail="8 Mo maximum par document.")
+        try:
+            extracted = await asyncio.to_thread(
+                extract_adapt_context_document,
+                getattr(upload, "filename", "") or "",
+                getattr(upload, "content_type", "") or "",
+                raw,
+            )
+            docs.append(extracted)
+        except AdaptContextDocError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+    context = join_documents_context(docs)
+    _checked_documents_context(context)
+    return {
+        "documents": [{"filename": doc["filename"], "chars": doc["chars"]} for doc in docs],
+        "documents_context": context,
+    }
+
+
 @app.post("/api/adapt-plan")
 def api_adapt_plan(request: Request, body: AdaptPlanBody):
     user_id = _get_user_id(request)
@@ -2830,14 +3540,16 @@ def api_adapt_plan(request: Request, body: AdaptPlanBody):
         check_user_input_for_injection(description=description)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    documents_context = _checked_documents_context(body.documents_context)
     try:
         cv_base = load_cv_base(user_id)
     except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
-    offre = _offre_from_description(
+    offre = _offre_for_adapt(
         description,
         titre=(body.titre or "").strip(),
         entreprise=(body.entreprise or "").strip(),
+        documents_context=documents_context,
     )
     from backend.services.adapter import fallback_todo_steps_for_offre, plan_adaptation_todo
 
@@ -2867,17 +3579,94 @@ def api_adapt_plan(request: Request, body: AdaptPlanBody):
         "description": description,
         "titre": (body.titre or "").strip(),
         "entreprise": (body.entreprise or "").strip(),
+        "documents_context": documents_context,
+        "context_documents": list(offre.get("context_documents") or []),
         "todo": safe_steps,
         "assistant_message": str(
             (plan or {}).get("assistant_message") or "Voici le plan d'adaptation proposé."
         ),
     }
+    from backend.services.cv_language import adaptation_language_payload
+
+    lang_meta = adaptation_language_payload(cv_base, offre)
+    payload.update(lang_meta)
     _save_adapt_plan(plan_id, user_id, payload)
     return {
         "plan_id": plan_id,
         "todo": payload["todo"],
         "assistant_message": payload["assistant_message"],
+        **lang_meta,
     }
+
+
+@app.post("/api/adapt-language")
+def api_adapt_language(request: Request, body: AdaptLanguageBody):
+    """Détecte langue CV vs offre (pour le popup de choix, sans lancer l'adaptation)."""
+    user_id = _get_user_id(request)
+    check_rate_limit(user_id, rate_limit_max_adapt())
+    description = (body.description or "").strip()
+    if not description:
+        raise HTTPException(status_code=400, detail="Collez l'annonce dans le champ 'description'")
+    try:
+        cv_base = load_cv_base(user_id)
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    offre = _offre_from_description(
+        description,
+        titre=(body.titre or "").strip(),
+        entreprise=(body.entreprise or "").strip(),
+    )
+    from backend.services.cv_language import adaptation_language_payload
+
+    return adaptation_language_payload(cv_base, offre)
+
+
+@app.post("/api/adapt-localize")
+def api_adapt_localize(request: Request, body: AdaptLocalizeBody):
+    """Aperçu fidèle dans la langue choisie, sans adaptation ATS ni changement de template."""
+    user_id = _get_user_id(request)
+    check_rate_limit(user_id, rate_limit_max_adapt())
+    description = (body.description or "").strip()
+    if not description:
+        raise HTTPException(status_code=400, detail="Collez l'annonce dans le champ 'description'")
+    try:
+        cv_base = load_cv_base(user_id)
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    offre = _offre_from_description(
+        description,
+        titre=(body.titre or "").strip(),
+        entreprise=(body.entreprise or "").strip(),
+    )
+    from backend.services.cv_language import adaptation_language_payload
+
+    lang_meta = adaptation_language_payload(cv_base, offre, body.output_language)
+    try:
+        cv_out = _cv_working_from_lang_meta(cv_base, lang_meta, user_id)
+    except GeminiQuotaExceeded:
+        raise HTTPException(
+            status_code=429, detail="Quota temporairement atteint. Réessaie plus tard."
+        )
+    from backend.services.cv_language import localization_source_fingerprint
+
+    source_fp = localization_source_fingerprint(cv_base)
+    pid = (body.plan_id or "").strip()
+    if pid:
+        payload = _get_adapt_plan(pid, user_id)
+        if payload:
+            incoming_seq = int(body.preview_seq or 0)
+            stored_seq = int(payload.get("preview_seq") or 0)
+            if incoming_seq >= stored_seq:
+                payload["preview_seq"] = incoming_seq
+                if lang_meta.get("translate_cv"):
+                    payload["preview_cv"] = cv_out
+                    payload["preview_cv_source_fp"] = source_fp
+                else:
+                    payload.pop("preview_cv", None)
+                    payload.pop("preview_cv_source_fp", None)
+                payload["output_language"] = lang_meta.get("output_language") or "cv"
+                _save_adapt_plan(pid, user_id, payload)
+    return {"cv": cv_out, "source_fp": source_fp, **lang_meta}
 
 
 @app.get("/api/adapt-plan/{plan_id}")
@@ -2966,6 +3755,30 @@ def api_adapt_plan_explain(request: Request, body: AdaptPlanExplainBody):
     return {"summary": summary, "details": details}
 
 
+def _cv_working_from_lang_meta(cv_base: dict, lang_meta: dict, user_id: str | None) -> dict:
+    """CV dans la langue choisie, sans adaptation ATS. Police / template inchangés."""
+    from backend.services.cv_language import (
+        apply_deterministic_localization,
+        preserve_template_appearance,
+    )
+
+    target = lang_meta.get("output_language_code") or "fr"
+    if lang_meta.get("translate_cv"):
+        from backend.services.adapter import localize_cv_for_language
+
+        try:
+            cv_out = localize_cv_for_language(cv_base, target or "en", user_id)
+        except GeminiQuotaExceeded:
+            raise
+        except Exception:
+            cv_out = apply_deterministic_localization(cv_base, target or "en")
+    else:
+        cv_out = deepcopy(cv_base) if isinstance(cv_base, dict) else {}
+        if target in {"fr", "en"}:
+            cv_out["langue"] = target
+    return preserve_template_appearance(cv_base, cv_out)
+
+
 def _adapt_run_prepare(request: Request, body: AdaptRunBody) -> dict:
     user_id = _get_user_id(request)
     check_rate_limit(user_id, rate_limit_max_adapt())
@@ -3017,15 +3830,52 @@ def _adapt_run_prepare(request: Request, body: AdaptRunBody) -> dict:
     entreprise_request = (body.entreprise or "").strip() or str(
         (plan_payload or {}).get("entreprise") or ""
     ).strip()
-    offre = _offre_from_description(
+    documents_context = (body.documents_context or "").strip() or str(
+        (plan_payload or {}).get("documents_context") or ""
+    ).strip()
+    documents_context = _checked_documents_context(documents_context)
+    offre = _offre_for_adapt(
         description,
         titre=titre_request,
         entreprise=entreprise_request,
+        documents_context=documents_context,
+    )
+    from backend.services.cv_language import (
+        adaptation_language_payload,
+        cached_localized_cv_is_reusable,
+        preserve_template_appearance,
     )
     from backend.services.rules import appliquer_regles
 
     cv_enrichi = appliquer_regles(cv_base, offre)
     rapport = cv_enrichi.get("rapport", {})
+    output_policy = getattr(body, "output_language", None)
+    lang_meta = adaptation_language_payload(cv_base, offre, output_policy)
+    cv_working = deepcopy(cv_base)
+    if lang_meta.get("translate_cv"):
+        cached = (plan_payload or {}).get("preview_cv") if isinstance(plan_payload, dict) else None
+        stored_fp = (
+            (plan_payload or {}).get("preview_cv_source_fp")
+            if isinstance(plan_payload, dict)
+            else None
+        )
+        if cached_localized_cv_is_reusable(
+            cached,
+            cv_base,
+            lang_meta.get("output_language_code"),
+            stored_fp if isinstance(stored_fp, str) else None,
+        ):
+            cv_working = preserve_template_appearance(cv_base, cached)
+        else:
+            try:
+                cv_working = _cv_working_from_lang_meta(cv_base, lang_meta, user_id)
+            except GeminiQuotaExceeded:
+                raise HTTPException(
+                    status_code=429, detail="Quota temporairement atteint. Réessaie plus tard."
+                )
+    canvas_plan = _prepare_canvas_source(cv_working)
+    if canvas_plan and not (cv_working.get("layout") or {}).get("pages") and cv_base.get("layout"):
+        cv_working["layout"] = deepcopy(cv_base.get("layout"))
     return {
         "user_id": user_id,
         "plan_payload": plan_payload,
@@ -3033,10 +3883,14 @@ def _adapt_run_prepare(request: Request, body: AdaptRunBody) -> dict:
         "selected_steps": selected_steps,
         "uid": uid,
         "cv_base": cv_base,
+        "cv_working": cv_working,
         "offre": offre,
         "rapport": rapport,
         "titre_request": titre_request,
         "entreprise_request": entreprise_request,
+        "lang_meta": lang_meta,
+        "output_policy": lang_meta.get("output_language") or "cv",
+        "canvas_plan": canvas_plan,
     }
 
 
@@ -3051,6 +3905,12 @@ def _adapt_run_finalize_result(
     selected_steps = prep["selected_steps"]
     titre_request = prep["titre_request"]
     entreprise_request = prep["entreprise_request"]
+    lang_meta = prep.get("lang_meta") or {}
+    out_code = lang_meta.get("output_language_code")
+    if out_code in {"fr", "en"}:
+        merged["langue"] = out_code
+    _paint_adapted_canvas(merged, prep.get("canvas_plan"), cv_base)
+    _log_cv_adapt_delta(cv_base, merged)
     adaptation_id = _adaptation_id_from_user_and_offer(user_id, description)
     poste_offre = (tweaks.get("poste_offre") or "").strip()
     entreprise_offre = (offre.get("entreprise") or "").strip()
@@ -3108,6 +3968,7 @@ def _adapt_run_finalize_result(
         "template_id": tid,
         "template_options": topt,
         "todo_selected_steps": sorted(selected_steps),
+        "context_documents": list(offre.get("context_documents") or []),
     }
     save_adaptation(adaptation_id, initial_payload, user_id=user_id)
     _invalidate_usage_cache(user_id)
@@ -3137,6 +3998,11 @@ def _adapt_run_finalize_result(
         )
     if (body.plan_id or "").strip():
         _delete_adapt_plan((body.plan_id or "").strip())
+    from backend.services.cv_language import adaptation_language_payload
+
+    lang_meta = prep.get("lang_meta") or adaptation_language_payload(
+        cv_base, offre, getattr(body, "output_language", None)
+    )
     return {
         "cv": merged,
         "rapport": rapport_after or rapport,
@@ -3146,6 +4012,7 @@ def _adapt_run_finalize_result(
         "selection_a4": selection_a4,
         "export_hints": export_hints,
         "todo_selected_steps": sorted(selected_steps),
+        **lang_meta,
     }
 
 
@@ -3234,12 +4101,13 @@ def api_adapt_run(request: Request, body: AdaptRunBody):
 
     try:
         tweaks = adapter_cv_by_selected_steps(
-            prep["cv_base"],
+            prep["cv_working"],
             prep["offre"],
             prep["rapport"],
             prep["selected_steps"],
             prep["user_id"],
             operation="adapt",
+            output_policy=prep.get("output_policy"),
         )
     except GeminiQuotaExceeded:
         raise HTTPException(
@@ -3251,20 +4119,24 @@ def api_adapt_run(request: Request, body: AdaptRunBody):
             request, event_log.EVENT_ADAPTATION_FAILED, prep["user_id"], {"error": str(e)}
         )
         raise HTTPException(status_code=500, detail="Erreur lors de l'adaptation. Réessaie.")
+    cv_working = prep.get("cv_working") or prep["cv_base"]
     if "rewrite_resume" not in prep["selected_steps"]:
-        tweaks["resume"] = prep["cv_base"].get("resume", "")
+        tweaks["resume"] = cv_working.get("resume", "")
     if "rewrite_experiences" not in prep["selected_steps"]:
-        tweaks["experiences"] = _keep_original_experiences_tweaks(prep["cv_base"])
+        tweaks["experiences"] = _keep_original_experiences_tweaks(cv_working)
     if "optimize_ats" not in prep["selected_steps"]:
-        tweaks["mots_cles_cache"] = prep["cv_base"].get("mots_cles_cache", "")
-    merged = _apply_tweaks(prep["cv_base"], tweaks)
+        tweaks["mots_cles_cache"] = cv_working.get("mots_cles_cache", "")
+    merged = _apply_tweaks(
+        cv_working,
+        tweaks,
+        output_policy=prep.get("output_policy"),
+        offre=prep["offre"],
+    )
     return _adapt_run_finalize_result(request, body, prep, merged, tweaks)
 
 
 @app.post("/api/adapt-run-stream")
 async def api_adapt_run_stream(request: Request, body: AdaptRunBody):
-    from copy import deepcopy
-
     from backend.services.adapter import (
         ADAPT_STEPS_ORDER,
         _tweaks_snapshot_from_cv,
@@ -3310,11 +4182,12 @@ async def api_adapt_run_stream(request: Request, body: AdaptRunBody):
         step_labels = [step_lookup.get(sid, sid) for sid in steps_to_run] + ["Finalisation"]
         yield _line({"type": "started", "step_labels": step_labels})
 
-        merged = deepcopy(prep["cv_base"])
-        cv_base = prep["cv_base"]
+        merged = deepcopy(prep.get("cv_working") or prep["cv_base"])
+        cv_working = prep.get("cv_working") or prep["cv_base"]
         offre = prep["offre"]
         rapport = prep["rapport"]
         user_id = prep["user_id"]
+        output_policy = prep.get("output_policy")
         poste_acc = ""
 
         try:
@@ -3339,6 +4212,7 @@ async def api_adapt_run_stream(request: Request, body: AdaptRunBody):
                         sid,
                         user_id,
                         f"adapt_{sid}",
+                        output_policy,
                     )
                 except GeminiQuotaExceeded:
                     yield _line(
@@ -3365,7 +4239,13 @@ async def api_adapt_run_stream(request: Request, body: AdaptRunBody):
                         }
                     )
                     return
-                merged = apply_partial_tweaks(merged, delta, cv_base)
+                merged = apply_partial_tweaks(
+                    merged,
+                    delta,
+                    cv_working,
+                    output_policy=output_policy,
+                    offre=offre,
+                )
                 if str((delta or {}).get("poste_offre") or "").strip():
                     poste_acc = str(delta.get("poste_offre")).strip()
                 yield _line(
@@ -3374,6 +4254,7 @@ async def api_adapt_run_stream(request: Request, body: AdaptRunBody):
                         "step_id": sid,
                         "step_index": i,
                         "step_label": step_lookup.get(sid, sid),
+                        "cv": {k: v for k, v in merged.items() if k != "layout"},
                     }
                 )
                 try:
@@ -3395,14 +4276,19 @@ async def api_adapt_run_stream(request: Request, body: AdaptRunBody):
 
             if not poste_acc.strip():
                 poste_acc = (offre.get("titre") or "").strip()
-            tweaks = _tweaks_snapshot_from_cv(cv_base, merged, poste_acc)
+            tweaks = _tweaks_snapshot_from_cv(cv_working, merged, poste_acc)
             if "rewrite_resume" not in selected_steps:
-                tweaks["resume"] = cv_base.get("resume", "")
+                tweaks["resume"] = cv_working.get("resume", "")
             if "rewrite_experiences" not in selected_steps:
-                tweaks["experiences"] = _keep_original_experiences_tweaks(cv_base)
+                tweaks["experiences"] = _keep_original_experiences_tweaks(cv_working)
             if "optimize_ats" not in selected_steps:
-                tweaks["mots_cles_cache"] = cv_base.get("mots_cles_cache", "")
-            merged_final = _apply_tweaks(cv_base, tweaks)
+                tweaks["mots_cles_cache"] = cv_working.get("mots_cles_cache", "")
+            merged_final = _apply_tweaks(
+                cv_working,
+                tweaks,
+                output_policy=output_policy,
+                offre=offre,
+            )
             # Finalize fait des DB writes + Storage uploads (PDF snapshot) → off-loop.
             data = await asyncio.to_thread(
                 _adapt_run_finalize_result, request, body, prep, merged_final, tweaks
@@ -3496,20 +4382,41 @@ def api_adapt(request: Request, body: AdaptBody):
     except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
-    offre = _offre_from_description(
+    documents_context = _checked_documents_context(body.documents_context)
+    offre = _offre_for_adapt(
         description,
         titre=(body.titre or "").strip(),
         entreprise=(body.entreprise or "").strip(),
+        documents_context=documents_context,
     )
+    from backend.services.adapter import adapter_cv
+    from backend.services.cv_language import adaptation_language_payload
     from backend.services.rules import appliquer_regles
 
     cv_enrichi = appliquer_regles(cv_base, offre)
     rapport = cv_enrichi.get("rapport", {})
-
-    from backend.services.adapter import adapter_cv
+    lang_meta = adaptation_language_payload(cv_base, offre, body.output_language)
+    cv_working = deepcopy(cv_base)
+    if lang_meta.get("translate_cv"):
+        try:
+            cv_working = _cv_working_from_lang_meta(cv_base, lang_meta, user_id)
+        except GeminiQuotaExceeded:
+            raise HTTPException(
+                status_code=429, detail="Quota temporairement atteint. Réessaie plus tard."
+            )
+    canvas_plan = _prepare_canvas_source(cv_working)
+    if canvas_plan and not (cv_working.get("layout") or {}).get("pages") and cv_base.get("layout"):
+        cv_working["layout"] = deepcopy(cv_base.get("layout"))
 
     try:
-        tweaks = adapter_cv(cv_base, offre, rapport=rapport, user_id=user_id, operation="adapt")
+        tweaks = adapter_cv(
+            cv_working,
+            offre,
+            rapport=rapport,
+            user_id=user_id,
+            operation="adapt",
+            output_policy=lang_meta.get("output_language"),
+        )
     except GeminiQuotaExceeded:
         raise HTTPException(
             status_code=429, detail="Quota temporairement atteint. Réessaie plus tard."
@@ -3519,7 +4426,17 @@ def api_adapt(request: Request, body: AdaptBody):
         _track_analytics(request, event_log.EVENT_ADAPTATION_FAILED, user_id, {"error": str(e)})
         raise HTTPException(status_code=500, detail="Erreur lors de l'adaptation. Réessaie.")
 
-    merged = _apply_tweaks(cv_base, tweaks)
+    merged = _apply_tweaks(
+        cv_working,
+        tweaks,
+        output_policy=lang_meta.get("output_language"),
+        offre=offre,
+    )
+    out_code = lang_meta.get("output_language_code")
+    if out_code in {"fr", "en"}:
+        merged["langue"] = out_code
+    _paint_adapted_canvas(merged, canvas_plan, cv_base)
+    _log_cv_adapt_delta(cv_base, merged)
     poste_offre = (tweaks.get("poste_offre") or "").strip()
     entreprise_offre = (offre.get("entreprise") or "").strip()
     user_titre = (body.titre or "").strip()
@@ -3579,6 +4496,7 @@ def api_adapt(request: Request, body: AdaptBody):
         "created_at": datetime.now(timezone.utc).isoformat(),
         "template_id": tid,
         "template_options": topt,
+        "context_documents": list(offre.get("context_documents") or []),
     }
     save_adaptation(adaptation_id, initial_payload, user_id=user_id)
     _invalidate_usage_cache(user_id)
@@ -3605,6 +4523,9 @@ def api_adapt(request: Request, body: AdaptBody):
         _track_analytics(
             request, event_log.EVENT_ADAPTATION_COMPLETED, user_id, {"adaptation_id": adaptation_id}
         )
+    from backend.services.cv_language import adaptation_language_payload
+
+    lang_meta = adaptation_language_payload(cv_base, offre, body.output_language)
     return {
         "cv": merged,
         "rapport": rapport_after or rapport,
@@ -3613,7 +4534,25 @@ def api_adapt(request: Request, body: AdaptBody):
         "adaptation_id": adaptation_id,
         "selection_a4": selection_a4,
         "export_hints": export_hints,
+        **lang_meta,
     }
+
+
+@app.post("/api/adapt-fit-text")
+def api_adapt_fit_text(request: Request, body: AdaptFitTextBody):
+    """Raccourcit un passage qui déborderait sur la ligne suivante du canvas."""
+    user_id = _get_user_id(request)
+    check_rate_limit(user_id, rate_limit_max_adapt())
+    text = (body.text or "").strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="Texte requis.")
+    try:
+        check_user_input_for_injection(description=text)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    from backend.services.adapter import shorten_text_to_fit
+
+    return shorten_text_to_fit(text, body.max_chars, user_id=user_id)
 
 
 @app.post("/api/adapt-refine")
@@ -3634,7 +4573,14 @@ def api_adapt_refine(request: Request, body: AdaptRefineBody):
     try:
         from backend.services.adapter import apply_tweaks_to_cv, refine_cv
 
-        tweaks = refine_cv(cv_current, instruction, user_id=user_id, operation="refine")
+        documents_context = _checked_documents_context(body.documents_context)
+        tweaks = refine_cv(
+            cv_current,
+            instruction,
+            user_id=user_id,
+            operation="refine",
+            documents_context=documents_context,
+        )
         merged = apply_tweaks_to_cv(cv_current, tweaks)
         return {"cv": merged, "tweaks": tweaks}
     except GeminiQuotaExceeded:
@@ -4167,6 +5113,10 @@ _ALLOWED_FRONTEND_EVENTS = {
     event_log.EVENT_ADAPTATION_RATED,
     event_log.EVENT_TEMPLATE_CHANGED,
     event_log.EVENT_ADAPT_CTA_CLICKED,
+    event_log.EVENT_BASE_CV_PDF_DOWNLOADED,
+    event_log.EVENT_FIRST_OFFER_NUDGE_CTA,
+    event_log.EVENT_NEW_CANDIDATURE_WORKSPACE,
+    event_log.EVENT_LOGIN,
 }
 
 

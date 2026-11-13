@@ -1,6 +1,30 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import { apiPost } from '../api';
+import { userFacingAuthError } from '../lib/userFacingError.js';
+import { analyticsAttrs } from '../lib/analyticsAttrs.js';
+import {
+  currentLoginRedirectTo,
+  emitSignUpOnce,
+  emitSignUpStartOnce,
+  hydratePlanIntentFromSearch,
+} from '../../public/signupAttribution.js';
+import { AUTH_PATHS, authModeFromPath } from '../lib/authPaths.js';
+import Button from './ui/Button.jsx';
+import Input from './ui/Input.jsx';
+import PasswordInput from './ui/PasswordInput.jsx';
 import '../styles/AuthForm.css';
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function RequiredMark() {
+  return (
+    <abbr className="auth-required" title="Obligatoire">
+      *
+    </abbr>
+  );
+}
 
 function GoogleIcon() {
   return (
@@ -21,17 +45,77 @@ function LinkedInIcon({ className }) {
   );
 }
 
+const AUTH_ASIDE_POINTS = ['3 adaptations de CV offertes', 'Score ATS sur chaque candidature', 'Sans carte bancaire'];
+
+/** Panneau encre à droite des pages de connexion / inscription (ordre DOM : après le formulaire). */
+export function AuthAside() {
+  return (
+    <aside className="auth-aside" aria-label="Pourquoi AxeL Job">
+      <img src="/favicon.svg" alt="" width="96" height="96" className="auth-aside-mascot" />
+      <h2 className="auth-aside-title">
+        Ton CV, <em>adapté</em> à chaque offre.
+      </h2>
+      <p className="auth-aside-text">Colle l&apos;annonce, AxeL Job réécrit ton CV avec les bons mots-clés et suit tes candidatures.</p>
+      <ul className="auth-aside-list">
+        {AUTH_ASIDE_POINTS.map((point) => (
+          <li key={point}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true"><polyline points="20 6 9 17 4 12" /></svg>
+            {point}
+          </li>
+        ))}
+      </ul>
+    </aside>
+  );
+}
+
+/**
+ * Mise en page 2 colonnes (formulaire crème | panneau encre).
+ * À poser autour de la carte `.login-screen-card.auth-layout-card` :
+ *   <AuthLayout><div className="login-screen-card auth-layout-card">…</div></AuthLayout>
+ */
+export function AuthLayout({ children }) {
+  return (
+    <div className="auth-layout">
+      <div className="auth-layout-main">{children}</div>
+      <AuthAside />
+    </div>
+  );
+}
+
 export default function AuthForm({ onSuccess, linkedInOnly = false }) {
+  const navigate = useNavigate();
+  const { pathname } = useLocation();
+  const mode = authModeFromPath(pathname) || 'signin';
+  const isSignUp = mode === 'signup';
+  const resetMode = mode === 'reset';
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [isSignUp, setIsSignUp] = useState(false);
+  const [passwordConfirm, setPasswordConfirm] = useState('');
   const [loading, setLoading] = useState(false);
   const [linkedInLoading, setLinkedInLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
-  const [resetMode, setResetMode] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [showAlreadyHadAccountPopup, setShowAlreadyHadAccountPopup] = useState(false);
+  const [submitAttempted, setSubmitAttempted] = useState(false);
+
+  useEffect(() => {
+    setError('');
+    setMessage('');
+    setPasswordConfirm('');
+    setSubmitAttempted(false);
+  }, [mode]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    hydratePlanIntentFromSearch(window.location.search);
+    emitSignUpStartOnce('form');
+    const onConsent = (ev) => {
+      if (ev && ev.detail && ev.detail.analytics) emitSignUpStartOnce('form');
+    };
+    window.addEventListener('axel_consent_update', onConsent);
+    return () => window.removeEventListener('axel_consent_update', onConsent);
+  }, []);
 
   const handleGoogle = async () => {
     setError('');
@@ -40,12 +124,12 @@ export default function AuthForm({ onSuccess, linkedInOnly = false }) {
       const { error: err } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: typeof window !== 'undefined' ? window.location.origin + '/login' : undefined,
+          redirectTo: currentLoginRedirectTo(),
         },
       });
       if (err) throw err;
     } catch (err) {
-      setError(err.message || 'Connexion Google impossible.');
+      setError(userFacingAuthError(err) || 'Connexion Google impossible.');
       setGoogleLoading(false);
     }
   };
@@ -57,12 +141,12 @@ export default function AuthForm({ onSuccess, linkedInOnly = false }) {
       const { error: err } = await supabase.auth.signInWithOAuth({
         provider: 'linkedin_oidc',
         options: {
-          redirectTo: typeof window !== 'undefined' ? window.location.origin + '/login' : undefined,
+          redirectTo: currentLoginRedirectTo(),
         },
       });
       if (err) throw err;
     } catch (err) {
-      setError(err.message || 'Connexion LinkedIn impossible.');
+      setError(userFacingAuthError(err) || 'Connexion LinkedIn impossible.');
       setLinkedInLoading(false);
     }
   };
@@ -75,32 +159,58 @@ export default function AuthForm({ onSuccess, linkedInOnly = false }) {
       setError('Entre ton email pour réinitialiser le mot de passe.');
       return;
     }
+    if (!EMAIL_RE.test(email.trim())) return;
     setLoading(true);
     try {
       const { error: err } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-        redirectTo: typeof window !== 'undefined' ? window.location.origin + '/login' : undefined,
+        redirectTo: currentLoginRedirectTo(),
       });
       if (err) throw err;
       setMessage('Email de réinitialisation envoyé. Vérifie ta boîte mail.');
     } catch (err) {
-      const msg = err?.message || '';
-      if (msg.toLowerCase().includes('rate limit') || msg.toLowerCase().includes('rate_limit') || err?.status === 429) {
-        setError('Trop de demandes d\'email envoyées (limite Supabase). Réessaie dans environ 1 heure ou utilise une autre adresse. Pour augmenter la limite : Supabase Dashboard → Authentication → SMTP (configurer un fournisseur personnalisé).');
-      } else {
-        setError(msg || 'Impossible d\'envoyer l\'email.');
-      }
+      setError(userFacingAuthError(err) || 'Impossible d\'envoyer l\'email.');
     } finally {
       setLoading(false);
     }
   };
 
+  const SAME_ACCOUNT_MESSAGE = 'Un compte existe déjà avec cette adresse (Google ou LinkedIn). On t’a envoyé un email pour créer un mot de passe. Ensuite, les deux méthodes ouvrent le même compte.';
+  const ALREADY_SENT_MESSAGE = 'Un compte existe déjà avec cette adresse (Google ou LinkedIn). Le lien pour créer ton mot de passe a déjà été envoyé : vérifie ta boîte mail.';
+
+  const offerPasswordForSocialAccount = async () => {
+    try {
+      const result = await apiPost('/api/auth/password-setup', { email: email.trim() });
+      if (!result?.sent) return false;
+      if (result.channel === 'already') {
+        setMessage(ALREADY_SENT_MESSAGE);
+        setError('');
+        return true;
+      }
+      if (result.channel === 'supabase') {
+        const { error: resetErr } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+          redirectTo: currentLoginRedirectTo(),
+        });
+        if (resetErr) return false;
+      }
+      setMessage(SAME_ACCOUNT_MESSAGE);
+      setError('');
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setSubmitAttempted(true);
     setError('');
     setMessage('');
     if (resetMode) return handleResetPassword(e);
     if (!email.trim() || !password) {
       setError('Email et mot de passe requis.');
+      return;
+    }
+    if (!EMAIL_RE.test(email.trim()) || password.length < 6 || (isSignUp && password !== passwordConfirm)) {
       return;
     }
     setLoading(true);
@@ -114,26 +224,45 @@ export default function AuthForm({ onSuccess, linkedInOnly = false }) {
           const { error: signInErr } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
           if (!signInErr) {
             setShowAlreadyHadAccountPopup(true);
+          } else if (await offerPasswordForSocialAccount()) {
+            navigate(AUTH_PATHS.signin);
           } else {
-            setIsSignUp(false);
+            navigate(AUTH_PATHS.signin);
             setError('Vous avez déjà un compte mais le mot de passe saisi est incorrect.');
           }
           setLoading(false);
           return;
         }
         if (err) throw err;
+        emitSignUpOnce('email');
         setMessage('Compte créé. Un email de confirmation a été envoyé - clique sur le lien pour activer ton compte.');
       } else {
         const { error: err } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
-        if (err) throw err;
+        if (err) {
+          if (await offerPasswordForSocialAccount()) {
+            setLoading(false);
+            return;
+          }
+          const raw = (err.message || '').toLowerCase();
+          if (raw.includes('invalid login') || raw.includes('invalid credentials')) {
+            setError('E-mail ou mot de passe incorrect.');
+            setLoading(false);
+            return;
+          }
+          throw err;
+        }
         onSuccess?.();
       }
     } catch (err) {
-      setError(err.message || 'Erreur connexion.');
+      setError(userFacingAuthError(err) || 'Erreur connexion.');
     } finally {
       setLoading(false);
     }
   };
+
+  const emailInvalid = email.trim().length > 0 && !EMAIL_RE.test(email.trim());
+  const passwordTooShort = password.length > 0 && password.length < 6;
+  const passwordMismatch = isSignUp && password !== passwordConfirm && (passwordConfirm.length > 0 || submitAttempted);
 
   if (linkedInOnly) {
     return (
@@ -143,6 +272,7 @@ export default function AuthForm({ onSuccess, linkedInOnly = false }) {
           className="auth-linkedin-btn"
           onClick={handleLinkedIn}
           disabled={linkedInLoading}
+          {...analyticsAttrs('login-cta-linkedin', 'login', 'secondary', 'cta')}
         >
           <LinkedInIcon />
           <span>{linkedInLoading ? 'Redirection…' : 'Continuer avec LinkedIn'}</span>
@@ -159,18 +289,21 @@ export default function AuthForm({ onSuccess, linkedInOnly = false }) {
           <div className="auth-popup">
             <h2 id="auth-popup-title" className="auth-popup-title">Vous aviez déjà un compte</h2>
             <p className="auth-popup-message">Nous vous avons connecté(e).</p>
-            <button type="button" className="button button-primary auth-popup-ok" onClick={() => { setShowAlreadyHadAccountPopup(false); onSuccess?.(); }}>
+            <Button type="button" variant="primary" className="auth-popup-ok" onClick={() => { setShowAlreadyHadAccountPopup(false); onSuccess?.(); }}>
               OK
-            </button>
+            </Button>
           </div>
         </div>
       )}
-    <form className="auth-form" onSubmit={handleSubmit}>
+    <form className="auth-form" noValidate onSubmit={handleSubmit}>
+      {!resetMode && (
+        <>
       <button
         type="button"
         className="auth-google-btn"
         onClick={handleGoogle}
         disabled={googleLoading}
+        {...analyticsAttrs('login-cta-google', 'login', 'secondary', 'cta')}
       >
         <GoogleIcon />
         <span>{googleLoading ? 'Redirection…' : 'Continuer avec Google'}</span>
@@ -180,40 +313,94 @@ export default function AuthForm({ onSuccess, linkedInOnly = false }) {
         className="auth-linkedin-btn"
         onClick={handleLinkedIn}
         disabled={linkedInLoading}
+        {...analyticsAttrs('login-cta-linkedin', 'login', 'secondary', 'cta')}
       >
         <LinkedInIcon />
         <span>{linkedInLoading ? 'Redirection…' : 'Continuer avec LinkedIn'}</span>
       </button>
       <span className="auth-divider">ou</span>
-      <input
-        type="email"
-        placeholder="Email"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-        className="auth-input"
-        autoComplete="email"
-      />
-      {!resetMode && (
-        <input
-          type="password"
-          placeholder="Mot de passe"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
+        </>
+      )}
+      <div className="auth-field">
+        <label className="auth-field-label" htmlFor="auth-email">
+          Email
+          <RequiredMark />
+        </label>
+        <Input
+          type="email"
+          id="auth-email"
+          placeholder="toi@email.fr"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
           className="auth-input"
-          autoComplete={isSignUp ? 'new-password' : 'current-password'}
+          autoComplete="email"
+          required
+          invalid={emailInvalid}
+          aria-describedby={emailInvalid ? 'auth-email-error' : undefined}
+          {...analyticsAttrs('login-input-email', 'login', 'tertiary', 'input')}
         />
+        {emailInvalid && (
+          <p className="ds-field-error" id="auth-email-error" role="alert">Adresse e-mail invalide.</p>
+        )}
+      </div>
+      {!resetMode && (
+        <>
+        <div className="auth-field">
+          <label className="auth-field-label" htmlFor="auth-password">
+            Mot de passe
+            <RequiredMark />
+          </label>
+          <PasswordInput
+            id="auth-password"
+            placeholder="6 caractères minimum"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="auth-input"
+            autoComplete={isSignUp ? 'new-password' : 'current-password'}
+            required
+            minLength={6}
+            invalid={passwordTooShort}
+            aria-describedby={passwordTooShort ? 'auth-password-error' : undefined}
+          />
+          {passwordTooShort && (
+            <p className="ds-field-error" id="auth-password-error" role="alert">Au moins 6 caractères.</p>
+          )}
+        </div>
+        {isSignUp && (
+          <div className="auth-field">
+            <label className="auth-field-label" htmlFor="auth-password-confirm">
+              Confirmer le mot de passe
+              <RequiredMark />
+            </label>
+            <PasswordInput
+              id="auth-password-confirm"
+              placeholder="Le même mot de passe"
+              value={passwordConfirm}
+              onChange={(e) => setPasswordConfirm(e.target.value)}
+              className="auth-input"
+              autoComplete="new-password"
+              required
+              invalid={passwordMismatch}
+              aria-describedby={passwordMismatch ? 'auth-password-confirm-error' : undefined}
+            />
+            {passwordMismatch && (
+              <p className="ds-field-error" id="auth-password-confirm-error" role="alert">Doit être identique au mot de passe.</p>
+            )}
+          </div>
+        )}
+        </>
       )}
       {error && <div className="auth-error">{error}</div>}
       {message && <div className="auth-message">{message}</div>}
-      <button type="submit" className="button button-primary auth-submit" disabled={loading}>
+      <Button type="submit" variant="primary" className="auth-submit" disabled={loading} loading={loading} {...analyticsAttrs('login-cta-submit', 'login', 'primary', 'cta')}>
         {loading ? '…' : resetMode ? 'Envoyer le lien' : isSignUp ? 'Créer un compte' : 'Se connecter'}
-      </button>
-      {!resetMode && (
-        <button type="button" className="auth-toggle" onClick={() => { setResetMode(true); setError(''); setMessage(''); }}>
+      </Button>
+      {!resetMode && !isSignUp && (
+        <button type="button" className="auth-toggle" onClick={() => navigate(AUTH_PATHS.reset)} {...analyticsAttrs('login-link-forgot', 'login', 'tertiary', 'nav')}>
           Mot de passe oublié ?
         </button>
       )}
-      <button type="button" className="auth-toggle" onClick={() => { setIsSignUp((v) => !v); setResetMode(false); setError(''); setMessage(''); }}>
+      <button type="button" className="auth-toggle" onClick={() => navigate(resetMode || isSignUp ? AUTH_PATHS.signin : AUTH_PATHS.signup)} {...analyticsAttrs('login-link-toggle', 'login', 'tertiary', 'nav')}>
         {resetMode ? '← Retour à la connexion' : isSignUp ? 'Déjà un compte ? Se connecter' : 'Pas de compte ? Créer un compte'}
       </button>
     </form>

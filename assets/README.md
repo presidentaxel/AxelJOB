@@ -5,7 +5,7 @@ Ce dossier contient la photo locale utilisee pour le CV quand `photo_url` n'est 
 ## Sommaire
 
 1. Ordre de selection
-2. Comportement avec `cv_base.json`
+2. Photo et profil
 3. Optimisation image
 
 ## 1) Ordre de selection des fichiers
@@ -17,10 +17,11 @@ Un seul fichier est utilise, selon l'ordre :
 3. `photo.webp`
 4. sinon, la premiere image supportee du dossier (`jpg`, `png`, `webp`, `gif`)
 
-## 2) Comportement avec `cv_base.json`
+## 2) Photo et profil
 
-- Si `photo_url` est defini, cette URL est prioritaire.
+- Si `photo_url` est defini dans le profil (Supabase), cette URL est prioritaire.
 - Si `photo_url` est vide, l'application utilise l'image locale detectee dans ce dossier.
+
 
 ## 3) Optimisation image
 

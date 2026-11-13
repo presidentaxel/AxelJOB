@@ -186,6 +186,8 @@ _CPU_HIGH_AVG_MIN_PCT = float(
 )
 # Un pic isolé (une fenêtre de 150 ms) ne suffit plus : il doit tenir plusieurs ticks.
 _cpu_spike_streak = 0
+_cpu_sample_seq = 0
+_cpu_spike_seen_seq = 0
 _cpu_percent_primed = False
 _CPU_SPIKE_REQUIRED_TICKS = max(1, int(os.getenv("MONITORING_ALERT_SPIKE_REQUIRED_TICKS", "2")))
 _last_alert_at: dict[str, float] = {}
@@ -428,6 +430,12 @@ def take_system_cpu_percent(measured: float) -> float | None:
     return measured
 
 
+def note_fresh_cpu_sample() -> None:
+    """Marque un relevé CPU enregistré. evaluate_alerts ne le compte qu'une fois."""
+    global _cpu_sample_seq
+    _cpu_sample_seq += 1
+
+
 def _checkout_database(pool: Any) -> Any:
     """Attend au plus 2 s une connexion, pour ne pas bloquer la boucle HTTP."""
     try:
@@ -436,39 +444,32 @@ def _checkout_database(pool: Any) -> Any:
         return pool.connection()
 
 
-def _drop_dead_connection(pool: Any) -> None:
-    """Le pool prod garde au moins une connexion. Sans ça, le second essai reprend la même, morte."""
-    check = getattr(pool, "check", None)
-    if not callable(check):
-        return
-    try:
-        check()
-    except Exception:
-        logger.debug("pool check after failed ping skipped", exc_info=True)
-
-
 def _select_one(pool: Any) -> tuple[bool, str]:
-    """SELECT 1, retenté une fois après avoir écarté la connexion morte."""
+    """SELECT 1, retenté une fois : une connexion rendue au pool est souvent morte."""
     last = ""
-    for attempt in (1, 2):
+    for _ in (1, 2):
         try:
             with _checkout_database(pool) as conn, conn.cursor() as cur:
                 cur.execute("SELECT 1")
             return True, ""
         except Exception as exc:
             last = type(exc).__name__
-            if attempt == 1:
-                _drop_dead_connection(pool)
     return False, last
 
 
 def _probe_database() -> None:
+    try:
+        from backend import supabase_pg
+    except Exception as exc:
+        _store_db_check(False, type(exc).__name__, 0.0)
+        return
+    # Une autre requête a déjà noté la coupure (8 s). On ne la recompte pas comme un ping raté.
+    if supabase_pg.pg_connect_cooling_down():
+        return
     t_db = time.perf_counter()
     ok = False
     err = ""
     try:
-        from backend import supabase_pg
-
         pool = supabase_pg.get_pool()
         if pool is None:
             err = "pool_absent"
@@ -477,7 +478,10 @@ def _probe_database() -> None:
     except Exception as exc:
         ok = False
         err = type(exc).__name__
-    ms = (time.perf_counter() - t_db) * 1000.0
+    _store_db_check(ok, err, (time.perf_counter() - t_db) * 1000.0)
+
+
+def _store_db_check(ok: bool, err: str, ms: float) -> None:
     _last_db_check["ok"] = ok
     _last_db_check["ms"] = round(ms, 2)
     _last_db_check["ts"] = time.time()
@@ -545,6 +549,7 @@ def tick_system_and_db() -> None:
                 _last_snap["process_open_fds"] = float(nfd)
             if sys_cpu is not None:
                 _cpu_samples.append(sys_cpu)
+                note_fresh_cpu_sample()
             _record_capacity_sample()
         except Exception as e:
             logger.debug("psutil tick skipped: %s", e)
@@ -553,9 +558,20 @@ def tick_system_and_db() -> None:
         _probe_database()
 
 
+def _dispatch_gemini_down_alert() -> None:
+    from backend.gemini_health import take_gemini_down_alert
+
+    message = take_gemini_down_alert()
+    if not message or not _alert_can_send("gemini_down"):
+        return
+    _send_alert_email("[AxeL Job] Gemini indisponible", message)
+    _append_alert_log("gemini_down", message)
+
+
 def evaluate_alerts() -> None:
     if not MONITORING_ALERT_ENABLED:
         return
+    _dispatch_gemini_down_alert()
 
     now = time.time()
     win = max(30.0, float(MONITORING_ALERT_5XX_WINDOW_SEC))
@@ -568,7 +584,10 @@ def evaluate_alerts() -> None:
     n5 = sum(1 for _t, c, _r, _d in recent if c >= 500)
     n_slow = sum(1 for _t, _c, _r, d in recent if d >= MONITORING_ALERT_SLOW_REQUEST_SEC)
 
-    global _cpu_high_streak, _cpu_spike_streak
+    global _cpu_high_streak, _cpu_spike_streak, _cpu_spike_seen_seq
+    fresh_cpu = _cpu_sample_seq != _cpu_spike_seen_seq
+    if fresh_cpu:
+        _cpu_spike_seen_seq = _cpu_sample_seq
     if sys_cpu >= MONITORING_ALERT_CPU_PCT:
         _cpu_high_streak += 1
     else:
@@ -638,10 +657,11 @@ def evaluate_alerts() -> None:
             and sys_cpu >= avg * MONITORING_ALERT_SPIKE_CPU_RATIO
             and sys_cpu >= MONITORING_ALERT_SPIKE_MIN_CPU
         )
-        if spike:
-            _cpu_spike_streak += 1
-        else:
-            _cpu_spike_streak = 0
+        if fresh_cpu:
+            if spike:
+                _cpu_spike_streak += 1
+            else:
+                _cpu_spike_streak = 0
         if _cpu_spike_streak >= _CPU_SPIKE_REQUIRED_TICKS and _alert_can_send("cpu_spike"):
             proc_cpu = float(_last_snap.get("process_cpu", 0.0))
             msg = (
@@ -653,7 +673,7 @@ def evaluate_alerts() -> None:
             )
             _send_alert_email("[AxeL Job] Pic CPU suspect", msg)
             _append_alert_log("cpu_spike", msg)
-    else:
+    elif fresh_cpu:
         _cpu_spike_streak = 0
 
 
@@ -853,6 +873,31 @@ def recent_error_summary(window_sec: float = 300.0) -> dict[str, Any]:
     }
 
 
+def _gemini_health_for_snapshot() -> dict[str, Any]:
+    try:
+        from backend.gemini_health import probe_gemini
+
+        return probe_gemini()
+    except Exception:
+        logger.exception("gemini health snapshot skipped")
+        return {
+            "status": "down",
+            "reason": "unknown",
+            "detail": "Sonde indisponible.",
+            "checked_at": None,
+            "model": "",
+        }
+
+
+def _probe_gemini_quietly() -> None:
+    try:
+        from backend.gemini_health import probe_gemini
+
+        probe_gemini()
+    except Exception:
+        logger.exception("gemini health probe skipped")
+
+
 def get_admin_snapshot() -> dict[str, Any]:
     with _lock:
         active = len(_active_sub_last_seen)
@@ -904,6 +949,7 @@ def get_admin_snapshot() -> dict[str, Any]:
             "latency_ms": _last_db_check.get("ms"),
             "last_check_ts": _last_db_check.get("ts"),
         },
+        "gemini_health": _gemini_health_for_snapshot(),
         "http_since_process_start": {
             "top_routes": top_routes(35),
             "last_5m": recent_error_summary(300),
@@ -937,6 +983,7 @@ async def monitoring_ticker_loop() -> None:
     while True:
         try:
             tick_system_and_db()
+            _probe_gemini_quietly()
             evaluate_alerts()
             await asyncio.sleep(45)
         except asyncio.CancelledError:

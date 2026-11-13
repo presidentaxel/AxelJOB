@@ -6,6 +6,7 @@ export const APP_BASE = '/app';
 
 export const APP_ROUTES = {
   cv: `${APP_BASE}/cv`,
+  bienvenue: `${APP_BASE}/bienvenue`,
   postule: `${APP_BASE}/postule`,
   profil: `${APP_BASE}/profil`,
   linkedin: `${APP_BASE}/linkedin`,
@@ -27,6 +28,7 @@ export function isKnownAppPathname(pathname) {
  */
 export function getViewFromPathname(pathname) {
   if (!pathname) return 'cv';
+  if (pathname.startsWith(APP_ROUTES.bienvenue)) return 'bienvenue';
   if (pathname.startsWith(APP_ROUTES.cv)) return 'cv';
   if (pathname.startsWith(APP_ROUTES.postule)) return 'candidatures';
   if (pathname.startsWith(APP_ROUTES.profil)) return 'profil';

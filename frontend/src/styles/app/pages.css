@@ -14,7 +14,7 @@
   display: flex;
   flex-direction: column;
   gap: var(--ds-space-sm);
-  /* DESIGN-cohere + ds tokens : chrome compact (md/xl), pas 1.25rem aéré */
+  /* ds tokens (docs/design-system.md) : chrome compact (md/xl), pas 1.25rem aéré */
   padding: var(--ds-space-md) var(--ds-space-xl);
   border-bottom: 1px solid var(--color-hairline);
   background: var(--color-canvas);
@@ -141,11 +141,16 @@
   padding: 0;
 }
 
+.view-profil .page-header {
+  padding-left: var(--ds-space-md);
+  padding-right: var(--ds-space-md);
+}
+
 .view-profil .page-content {
   overflow: hidden;
   flex: 1;
   min-height: 0;
-  padding-bottom: 2rem;
+  padding: var(--ds-space-md) var(--ds-space-md) 1rem;
   display: flex;
   flex-direction: column;
 }
@@ -181,7 +186,7 @@
   flex-wrap: wrap;
 }
 
-.free-plan-banner .button,
+.free-plan-banner .ds-button,
 .free-plan-banner .btn {
   font-size: 0.78rem;
   padding: 0.3rem 0.75rem;

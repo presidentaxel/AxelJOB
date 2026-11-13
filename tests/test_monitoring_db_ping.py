@@ -70,25 +70,6 @@ def _arm(monkeypatch: pytest.MonkeyPatch):
     return m, sent
 
 
-def test_dead_connection_is_dropped_before_retry() -> None:
-    import backend.monitoring_ops as m
-
-    class _Pool(_FlakyPool):
-        def __init__(self) -> None:
-            super().__init__()
-            self.checks = 0
-
-        def check(self) -> None:
-            self.checks += 1
-
-    pool = _Pool()
-    ok, err = m._select_one(pool)
-    assert ok is True
-    assert err == ""
-    assert pool.checks == 1
-    assert pool.calls == 2
-
-
 def test_retry_succeeds_after_a_dead_connection() -> None:
     import backend.monitoring_ops as m
 
@@ -105,6 +86,19 @@ def test_two_failures_keep_the_error_class_only() -> None:
     ok, err = m._select_one(_DownPool())
     assert ok is False
     assert err == "TimeoutError"
+
+
+def test_cooldown_does_not_count_as_a_failed_ping(monkeypatch: pytest.MonkeyPatch) -> None:
+    import backend.supabase_pg as pg
+
+    m, sent = _arm(monkeypatch)
+    m._last_db_check.update({"ok": True, "ms": 18.0, "error": ""})
+    monkeypatch.setattr(pg, "pg_connect_cooling_down", lambda: True)
+    m._probe_database()
+    m.evaluate_alerts()
+    assert m._last_db_check["ok"] is True
+    assert m._db_down_streak == 0
+    assert sent == []
 
 
 def test_one_failed_ping_does_not_email(monkeypatch: pytest.MonkeyPatch) -> None:

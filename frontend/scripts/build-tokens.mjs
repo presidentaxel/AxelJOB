@@ -11,7 +11,14 @@ import { fileURLToPath } from 'node:url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
 const TOKENS_PATH = join(ROOT, 'src/design/tokens.json');
-const OUT_PATH = join(ROOT, 'src/styles/ds-tokens.generated.css');
+/** Sortie consommée par le bundle React. */
+export const OUT_PATH = join(ROOT, 'src/styles/ds-tokens.generated.css');
+/**
+ * Même contenu, servi tel quel aux pages statiques (public/*.html, hors bundle Vite).
+ * Un seul tokens.json, deux fichiers générés identiques : pas de hex dupliqué à la main.
+ */
+export const PUBLIC_OUT_PATH = join(ROOT, 'public/ds-tokens.css');
+export const OUT_PATHS = [OUT_PATH, PUBLIC_OUT_PATH];
 
 const REF_RE = /^\{([a-z0-9.-]+)\}$/i;
 
@@ -92,8 +99,10 @@ export function buildTokensCss(jsonText) {
 function main() {
   const jsonText = readFileSync(TOKENS_PATH, 'utf8');
   const { css, entries } = buildTokensCss(jsonText);
-  writeFileSync(OUT_PATH, css);
-  process.stdout.write(`Wrote ${entries.length} tokens → ${OUT_PATH}\n`);
+  for (const out of OUT_PATHS) {
+    writeFileSync(out, css);
+    process.stdout.write(`Wrote ${entries.length} tokens → ${out}\n`);
+  }
 }
 
 const isDirect = process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1];

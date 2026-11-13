@@ -1,7 +1,19 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { cvFromImportPayload, extractImportApiResponse } from '../../src/lib/cvImportUtils.js';
+import {
+  applyImportedProfileCv,
+  cvFromImportPayload,
+  CV_IMPORT_STEPS,
+  CV_IMPORT_STEP_DURATIONS_MS,
+  extractImportApiResponse,
+  finishImportLoadingAnimation,
+  importProgressForElapsed,
+  importStepForElapsed,
+  isSparseImportedCv,
+  ONBOARDING_IMPORT_STEPS,
+  onboardingImportErrorMessage,
+} from '../../src/lib/cvImportUtils.js';
 
 test('extractImportApiResponse : import_policy exposé', () => {
   const result = extractImportApiResponse({
@@ -50,4 +62,63 @@ test('AXE-344: cvFromImportPayload aplatit identity/contact imbriqués', () => {
   assert.equal(cv.titre_professionnel, 'Mathématicienne');
   assert.equal(cv.ville, 'Londres');
   assert.equal(cv.experiences.length, 1);
+});
+
+test('AXE-341: CV importé vide = sparse', () => {
+  assert.equal(isSparseImportedCv(null), true);
+  assert.equal(isSparseImportedCv({}), true);
+  assert.equal(isSparseImportedCv({ prenom: 'Ada' }), false);
+  assert.equal(isSparseImportedCv({ experiences: [{ poste: 'Analyste' }] }), false);
+});
+
+test('AXE-341: messages d’erreur d’analyse à l’onboarding', () => {
+  assert.match(onboardingImportErrorMessage({ status: 429 }), /Trop de tentatives/);
+  assert.match(onboardingImportErrorMessage({ status: 502 }), /n'a pas répondu/);
+  assert.equal(
+    onboardingImportErrorMessage({ status: 400, message: 'PDF scanné.' }),
+    'PDF scanné.',
+  );
+});
+
+test('import : les premières étapes durent plus longtemps et la barre ne se fige pas à 83 %', () => {
+  const holdAt = CV_IMPORT_STEP_DURATIONS_MS.slice(0, CV_IMPORT_STEPS.length - 2)
+    .reduce((sum, ms) => sum + ms, 0);
+  assert.ok(holdAt >= 35000);
+  assert.equal(importStepForElapsed(1000), 0);
+  assert.equal(importStepForElapsed(holdAt - 1), CV_IMPORT_STEPS.length - 3);
+  assert.equal(importStepForElapsed(holdAt + 5000), CV_IMPORT_STEPS.length - 2);
+  const atHold = importProgressForElapsed(holdAt);
+  const later = importProgressForElapsed(holdAt + 20000);
+  assert.ok(atHold < 90);
+  assert.ok(later > atHold);
+  assert.ok(later < 100);
+});
+
+test('AXE-341: finishImportLoadingAnimation respecte la liste d’étapes', () => {
+  let idx = 0;
+  finishImportLoadingAnimation((value) => { idx = value; }, {
+    steps: ONBOARDING_IMPORT_STEPS,
+  });
+  assert.equal(idx, ONBOARDING_IMPORT_STEPS.length - 1);
+});
+
+test('applyImportedProfileCv pose les postes et ne vide pas une section absente de l’import', () => {
+  const current = {
+    prenom: 'Louis',
+    experiences: [{ id: 'exp_old', poste: 'Ancien', entreprise: 'Avant' }],
+    formations: [{ id: 'form_old', diplome: 'Ancien diplôme' }],
+    layout: { pages: [{}] },
+    template_id: 'executive',
+  };
+  const next = applyImportedProfileCv(current, cvFromImportPayload({
+    prenom: 'Louis',
+    nom: 'Vedovato',
+    experiences: [{ id: 'exp_1', poste: "Chargé d'étude junior", entreprise: 'Harris Interactive' }],
+    formations: [],
+  }));
+  assert.equal(next.nom, 'Vedovato');
+  assert.equal(next.experiences[0].entreprise, 'Harris Interactive');
+  assert.equal(next.formations[0].diplome, 'Ancien diplôme');
+  assert.equal(next.template_id, 'executive');
+  assert.deepEqual(next.layout, current.layout);
 });

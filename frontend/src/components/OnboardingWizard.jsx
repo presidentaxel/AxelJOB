@@ -1,7 +1,18 @@
-import { useState, useRef } from 'react';
-import { apiPost, apiPostFile, apiPut, trackEvent } from '../api';
-import { cvFromImportPayload } from '../lib/cvImportUtils.js';
+import { useEffect, useRef, useState } from 'react';
+import { apiGet, apiPostFile, apiPut, trackEvent } from '../api';
+import { CV_IMPORT_REQUEST_TIMEOUT_MS } from '../lib/fetchWithDeadline.js';
+import { analyticsAttrs } from '../lib/analyticsAttrs.js';
+import {
+  finishImportLoadingAnimation,
+  isSparseImportedCv,
+  ONBOARDING_IMPORT_STEPS,
+  onboardingImportErrorMessage,
+  startImportLoadingAnimation,
+} from '../lib/cvImportUtils.js';
+import { buildOnboardingImportPersist } from '../lib/onboardingImportPersist.js';
 import '../styles/OnboardingWizard.css';
+import CvImportLoadingOverlay from './CvImportLoadingOverlay.jsx';
+import Button from './ui/Button.jsx';
 
 const STEPS = ['Importer', 'Vérifier', 'C\'est parti'];
 
@@ -25,47 +36,89 @@ function StepIndicator({ current }) {
   );
 }
 
-export default function OnboardingWizard({ session, onComplete }) {
+export default function OnboardingWizard({
+  session,
+  onComplete,
+  templatesList = [],
+  onImportedTemplate,
+}) {
   const [step, setStep] = useState(0);
   const [method, setMethod] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [sparseHint, setSparseHint] = useState(false);
   const [parsedCv, setParsedCv] = useState(null);
-  const [cvText, setCvText] = useState('');
+  const [persistBody, setPersistBody] = useState(null);
+  const [layoutCopied, setLayoutCopied] = useState(false);
+  const [layoutHint, setLayoutHint] = useState('');
+  const [importStepIndex, setImportStepIndex] = useState(0);
+  const [importProgress, setImportProgress] = useState(0);
   const fileRef = useRef(null);
+  const importCleanupRef = useRef(null);
+
+  useEffect(() => () => {
+    if (importCleanupRef.current) importCleanupRef.current();
+  }, []);
+
+  const runCvAnalysis = async (requestFn, importMethod) => {
+    setError('');
+    setSparseHint(false);
+    setLayoutHint('');
+    setLayoutCopied(false);
+    setPersistBody(null);
+    setLoading(true);
+    setImportStepIndex(0);
+    setImportProgress(0);
+    if (importCleanupRef.current) importCleanupRef.current();
+    importCleanupRef.current = startImportLoadingAnimation(setImportStepIndex, {
+      steps: ONBOARDING_IMPORT_STEPS,
+      setProgress: setImportProgress,
+    });
+    try {
+      const data = await requestFn();
+      finishImportLoadingAnimation(setImportStepIndex, { steps: ONBOARDING_IMPORT_STEPS });
+      let templates = Array.isArray(templatesList) ? templatesList : [];
+      if (templates.length === 0) {
+        try {
+          const fetched = await apiGet('/api/templates');
+          templates = Array.isArray(fetched) ? fetched : [];
+        } catch {
+          templates = [];
+        }
+      }
+      const built = buildOnboardingImportPersist(data, templates, {
+        method: importMethod,
+      });
+      setParsedCv(built.cv);
+      setPersistBody(built.persistBody);
+      setLayoutCopied(built.layoutCopied);
+      setLayoutHint(built.layoutHint);
+      setSparseHint(isSparseImportedCv(built.cv));
+      await new Promise((resolve) => window.setTimeout(resolve, 280));
+      setStep(1);
+    } catch (err) {
+      setError(onboardingImportErrorMessage(err));
+    } finally {
+      if (importCleanupRef.current) {
+        importCleanupRef.current();
+        importCleanupRef.current = null;
+      }
+      setLoading(false);
+    }
+  };
 
   const handleFileUpload = async (e) => {
     const file = e?.target?.files?.[0];
     if (!file) return;
     setMethod('upload');
-    setError('');
-    setLoading(true);
     trackEvent('onboarding_method_chosen', { method: 'file_upload' });
     try {
-      const data = await apiPostFile('/api/cv/import', file);
-      setParsedCv(cvFromImportPayload(data?.cv || data));
-      setStep(1);
-    } catch (err) {
-      setError(err.message || 'Impossible de lire le CV. Essaie le copier-coller.');
+      await runCvAnalysis(
+        () => apiPostFile('/api/cv/import', file, 'file', { timeoutMs: CV_IMPORT_REQUEST_TIMEOUT_MS }),
+        'upload',
+      );
     } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleTextImport = async () => {
-    if (!cvText.trim()) return;
-    setMethod('text');
-    setError('');
-    setLoading(true);
-    trackEvent('onboarding_method_chosen', { method: 'text_paste' });
-    try {
-      const data = await apiPost('/api/cv/import-text', { text: cvText.trim() });
-      setParsedCv(cvFromImportPayload(data?.cv || data));
-      setStep(1);
-    } catch (err) {
-      setError(err.message || 'Impossible de parser le texte.');
-    } finally {
-      setLoading(false);
+      if (fileRef.current) fileRef.current.value = '';
     }
   };
 
@@ -80,7 +133,12 @@ export default function OnboardingWizard({ session, onComplete }) {
     setError('');
     setLoading(true);
     try {
-      await apiPut('/api/cv', parsedCv);
+      const body = persistBody || parsedCv;
+      await apiPut('/api/cv', body);
+      const tid = String(body?.template_id || '').trim();
+      if (tid && typeof onImportedTemplate === 'function') {
+        onImportedTemplate(tid);
+      }
       setStep(2);
     } catch (err) {
       setError(err.message || 'Erreur de sauvegarde.');
@@ -101,7 +159,12 @@ export default function OnboardingWizard({ session, onComplete }) {
   const handleGoToProfile = async () => {
     if (parsedCv) {
       try {
-        await apiPut('/api/cv', parsedCv);
+        const body = persistBody || parsedCv;
+        await apiPut('/api/cv', body);
+        const tid = String(body?.template_id || '').trim();
+        if (tid && typeof onImportedTemplate === 'function') {
+          onImportedTemplate(tid);
+        }
       } catch {
         /* import optional on navigation */
       }
@@ -109,8 +172,10 @@ export default function OnboardingWizard({ session, onComplete }) {
     onComplete('profil');
   };
 
+  const analyzing = loading && step === 0 && method === 'upload';
+
   return (
-    <div className="onb-overlay">
+    <div className="onb-overlay" aria-busy={analyzing || undefined}>
       <div className="onb-card">
         <StepIndicator current={step} />
 
@@ -120,10 +185,10 @@ export default function OnboardingWizard({ session, onComplete }) {
             <p className="onb-subtitle">
               Pour commencer, on a besoin de tes informations. Choisis comment les importer :
             </p>
-            {error && <div className="onb-error">{error}</div>}
+            {error && <div className="onb-error" role="alert">{error}</div>}
 
             <div className="onb-methods">
-              <button type="button" className="onb-method-card" onClick={() => fileRef.current?.click()} disabled={loading}>
+              <button type="button" className="onb-method-card" onClick={() => fileRef.current?.click()} disabled={loading} {...analyticsAttrs('onboarding-methods-cta-import', 'methods', 'primary', 'cta')}>
                 <div className="onb-method-icon">
                   <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                     <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M12 18v-6"/><path d="M9 15l3-3 3 3"/>
@@ -133,7 +198,7 @@ export default function OnboardingWizard({ session, onComplete }) {
                 <span className="onb-method-desc">PDF texte ou Word (.docx) — pas de PDF scanné</span>
               </button>
 
-              <button type="button" className="onb-method-card" onClick={handleManual} disabled={loading}>
+              <button type="button" className="onb-method-card" onClick={handleManual} disabled={loading} {...analyticsAttrs('onboarding-methods-cta-manual', 'methods', 'secondary', 'cta')}>
                 <div className="onb-method-icon">
                   <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                     <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
@@ -144,40 +209,14 @@ export default function OnboardingWizard({ session, onComplete }) {
               </button>
             </div>
 
-            <div className="onb-text-import">
-              <details>
-                <summary>Ou colle le texte de ton CV ici</summary>
-                <textarea
-                  className="onb-textarea"
-                  value={cvText}
-                  onChange={(e) => setCvText(e.target.value)}
-                  placeholder="Copie-colle le contenu de ton CV ici..."
-                  rows={6}
-                />
-                <button
-                  type="button"
-                  className="button button-primary onb-btn-parse"
-                  onClick={handleTextImport}
-                  disabled={loading || !cvText.trim()}
-                >
-                  {loading && method === 'text' ? 'Analyse en cours…' : 'Analyser mon CV'}
-                </button>
-              </details>
-            </div>
-
             <input
               ref={fileRef}
               type="file"
               accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
               className="onb-file-hidden"
               onChange={handleFileUpload}
+              disabled={loading}
             />
-            {loading && method === 'upload' && (
-              <div className="onb-loading">
-                <span className="onb-spinner" />
-                <span>Analyse du CV en cours…</span>
-              </div>
-            )}
           </div>
         )}
 
@@ -187,7 +226,20 @@ export default function OnboardingWizard({ session, onComplete }) {
             <p className="onb-subtitle">
               Voici ce qu'on a extrait. Tu pourras tout modifier en détail après.
             </p>
-            {error && <div className="onb-error">{error}</div>}
+            {error && <div className="onb-error" role="alert">{error}</div>}
+            {sparseHint && (
+              <div className="onb-sparse" role="status">
+                Peu d’infos extraites. Tu peux continuer, puis compléter ton profil à la main.
+              </div>
+            )}
+            {layoutHint && (
+              <div
+                className={`onb-sparse${layoutCopied ? ' onb-sparse--copied' : ''}`}
+                role="status"
+              >
+                {layoutHint}
+              </div>
+            )}
 
             <div className="onb-review">
               <div className="onb-review-section">
@@ -237,9 +289,9 @@ export default function OnboardingWizard({ session, onComplete }) {
             </div>
 
             <div className="onb-actions">
-              <button type="button" className="button button-primary" onClick={handleConfirmProfile} disabled={loading}>
+              <Button type="button" variant="primary" onClick={handleConfirmProfile} disabled={loading} loading={loading} {...analyticsAttrs('onboarding-review-cta-confirm', 'review', 'primary', 'cta')}>
                 {loading ? 'Sauvegarde…' : 'On continue'}
-              </button>
+              </Button>
             </div>
           </div>
         )}
@@ -257,22 +309,38 @@ export default function OnboardingWizard({ session, onComplete }) {
               Colle une annonce et l'IA fera le reste.
             </p>
             <div className="onb-actions">
-              <button type="button" className="button button-primary button--lg" onClick={handleLaunch}>
+              <Button type="button" variant="primary" size="lg" onClick={handleLaunch} {...analyticsAttrs('onboarding-done-cta-launch', 'done', 'primary', 'cta')}>
                 Créer mon CV adapté
-              </button>
-              <button type="button" className="button ds-button ds-button--link onb-actions__link" onClick={handleGoToProfile}>
+              </Button>
+              <Button type="button" variant="link" className="onb-actions__link" onClick={handleGoToProfile} {...analyticsAttrs('onboarding-done-cta-profil', 'done', 'secondary', 'cta')}>
                 Compléter mon profil d&apos;abord
-              </button>
+              </Button>
             </div>
           </div>
         )}
 
         {step === 0 && (
-          <button type="button" className="onb-skip" onClick={() => { trackEvent('onboarding_skipped', {}); onComplete('candidatures'); }}>
+          <button
+            type="button"
+            className="onb-skip"
+            disabled={loading}
+            onClick={() => { trackEvent('onboarding_skipped', {}); onComplete('candidatures'); }}
+            {...analyticsAttrs('onboarding-cta-skip', 'overlay', 'tertiary', 'cta')}
+          >
             Passer pour l'instant
           </button>
         )}
       </div>
+
+      {analyzing && (
+        <CvImportLoadingOverlay
+          stepIndex={importStepIndex}
+          progress={importProgress}
+          steps={ONBOARDING_IMPORT_STEPS}
+          title="Analyse de ton CV en cours"
+          subtitle="On lit ton document, puis on structure le profil. Ça peut prendre jusqu’à une minute."
+        />
+      )}
     </div>
   );
 }

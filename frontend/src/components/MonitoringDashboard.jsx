@@ -2,8 +2,33 @@ import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { apiGet } from '../api';
 import { HiChartBarSquare } from 'react-icons/hi2';
+import { analyticsAttrs } from '../lib/analyticsAttrs.js';
+import Button from './ui/Button.jsx';
+import InactivityReminders from './InactivityReminders.jsx';
+import MonitoringAccounts from './MonitoringAccounts.jsx';
 
 const DAY_OPTIONS = [7, 14, 30];
+
+const GEMINI_STATUS = { ok: 'OK', degraded: 'Dégradé', down: 'Indisponible' };
+const GEMINI_REASON = {
+  ok: 'sonde réussie',
+  billing_prepay: 'crédit Prepay',
+  quota: 'quota',
+  auth: 'clé ou permission',
+  model: 'modèle',
+  unknown: 'raison inconnue',
+  disabled: 'IA désactivée',
+  not_configured: 'clé absente',
+};
+
+function geminiStatusLabel(status) {
+  return GEMINI_STATUS[status] || 'Pas encore sondé';
+}
+
+function geminiReasonLabel(reason) {
+  if (!reason) return '';
+  return GEMINI_REASON[reason] || reason;
+}
 
 function formatBytes(n) {
   if (n == null || Number.isNaN(n)) return '-';
@@ -76,6 +101,7 @@ export default function MonitoringDashboard({ usage }) {
   const cap = op?.capacity_estimate;
   const http = op?.http_since_process_start;
   const dbPing = op?.database_ping;
+  const gemini = op?.gemini_health;
   const alerts = op?.alerts;
 
   const renderBars = (agg) => {
@@ -123,12 +149,15 @@ export default function MonitoringDashboard({ usage }) {
               ))}
             </select>
           </label>
-          <button type="button" className="button button-secondary monitoring-refresh" onClick={load} disabled={loading}>
+          <Button type="button" variant="secondary" className="monitoring-refresh" onClick={load} disabled={loading} loading={loading} {...analyticsAttrs('monitoring-header-cta-refresh', 'header', 'secondary', 'cta')}>
             {loading ? 'Chargement…' : 'Actualiser'}
-          </button>
+          </Button>
         </div>
 
         {error && <p className="monitoring-error">{error}</p>}
+
+        <MonitoringAccounts />
+        <InactivityReminders />
 
         {!loading && !error && summary && (
           <>
@@ -238,6 +267,16 @@ export default function MonitoringDashboard({ usage }) {
                   <p className="monitoring-muted">
                     {dbPing?.latency_ms != null ? `${dbPing.latency_ms} ms` : ''}
                     {dbPing?.last_check_ts ? ` · dernier check ${new Date(dbPing.last_check_ts * 1000).toLocaleString()}` : ''}
+                  </p>
+                </div>
+                <div className="monitoring-card monitoring-card--wide">
+                  <h3>Gemini</h3>
+                  <p className="monitoring-card-metric">{geminiStatusLabel(gemini?.status)}</p>
+                  <p className="monitoring-muted">
+                    {geminiReasonLabel(gemini?.reason)}
+                    {gemini?.detail ? ` · ${gemini.detail}` : ''}
+                    {gemini?.model ? ` · ${gemini.model}` : ''}
+                    {gemini?.checked_at ? ` · ${new Date(gemini.checked_at * 1000).toLocaleString()}` : ''}
                   </p>
                 </div>
               </div>

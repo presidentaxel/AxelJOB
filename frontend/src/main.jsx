@@ -4,6 +4,9 @@ import { BrowserRouter, useLocation } from 'react-router-dom'
 import './index.css'
 import App from './App.jsx'
 import { AppErrorBoundary } from './components/AppErrorBoundary.jsx'
+import { initSentry } from './lib/sentry.js'
+
+initSentry()
 
 export function ScrollToTop() {
   const { pathname } = useLocation()
@@ -13,22 +16,10 @@ export function ScrollToTop() {
   return null
 }
 
-export function ChunkErrorReloadReset() {
-  useEffect(() => {
-    try {
-      sessionStorage.removeItem('chunkErrorReload')
-    } catch {
-      /* ignore */
-    }
-  }, [])
-  return null
-}
-
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <BrowserRouter>
       <ScrollToTop />
-      <ChunkErrorReloadReset />
       <AppErrorBoundary>
         <App />
       </AppErrorBoundary>

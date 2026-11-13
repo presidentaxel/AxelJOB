@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { apiGet } from '../api';
+import { apiGet, apiPost } from '../api';
 import { supabase } from '../lib/supabase';
 import {
   STORAGE_EXPORT_DIR,
@@ -22,6 +22,7 @@ import {
 } from '../lib/settingsLocalData.js';
 import BetaModeToggle from './BetaModeToggle.jsx';
 import Button from './ui/Button.jsx';
+import { analyticsAttrs } from '../lib/analyticsAttrs.js';
 import '../styles/app/settings.css';
 
 const PDF_VARIABLES = ['{prenom}', '{nom}', '{poste}', '{entreprise}'];
@@ -104,13 +105,23 @@ export default function SettingsView({
     }
   }, []);
 
-  const [localSummary, setLocalSummary] = useState(() => getLocalDataSummary());
+  const draftUserId = session?.user?.id || '';
+  const [localSummary, setLocalSummary] = useState(() => getLocalDataSummary(draftUserId));
 
   const [setPasswordOpen, setSetPasswordOpen] = useState(false);
   const [setPasswordNew, setSetPasswordNew] = useState('');
   const [setPasswordConfirm, setSetPasswordConfirm] = useState('');
   const [setPasswordLoading, setSetPasswordLoading] = useState(false);
   const [setPasswordError, setSetPasswordError] = useState('');
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState('');
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
+  const [cancelSubOpen, setCancelSubOpen] = useState(false);
+  const [cancelSubChecked, setCancelSubChecked] = useState(false);
+  const [cancelSubAck, setCancelSubAck] = useState(false);
+  const [deleteCopied, setDeleteCopied] = useState(false);
+  const deleteCopiedTimer = useRef(null);
 
   const pdfPatternInputRef = useRef(null);
   const messageTimerRef = useRef(null);
@@ -123,8 +134,12 @@ export default function SettingsView({
   );
 
   const refreshLocalSummary = useCallback(() => {
-    setLocalSummary(getLocalDataSummary());
-  }, []);
+    setLocalSummary(getLocalDataSummary(draftUserId));
+  }, [draftUserId]);
+
+  useEffect(() => {
+    setLocalSummary(getLocalDataSummary(draftUserId));
+  }, [draftUserId]);
 
   useEffect(() => {
     if (!navItems.length) return undefined;
@@ -297,6 +312,51 @@ export default function SettingsView({
 
   const accountEmail = session?.user?.email || '-';
   const isPro = usage?.plan === 'pro' || usage?.paywall_disabled;
+  const proSubscriptionActive = ['active', 'trialing'].includes(
+    String(usage?.stripe_subscription?.status || '').toLowerCase(),
+  );
+
+  const resetDelete = useCallback(() => {
+    setDeleteOpen(false);
+    setDeleteConfirm('');
+    setDeleteError('');
+    setCancelSubOpen(false);
+    setCancelSubChecked(false);
+    setCancelSubAck(false);
+    setDeleteCopied(false);
+    window.clearTimeout(deleteCopiedTimer.current);
+  }, []);
+
+  const copyDeleteWord = useCallback(async () => {
+    const word = 'SUPPRIMER';
+    try {
+      await navigator.clipboard.writeText(word);
+    } catch {
+      const area = document.createElement('textarea');
+      area.value = word;
+      area.setAttribute('readonly', '');
+      area.style.position = 'fixed';
+      area.style.left = '-9999px';
+      document.body.appendChild(area);
+      area.select();
+      document.execCommand('copy');
+      area.remove();
+    }
+    setDeleteCopied(true);
+    window.clearTimeout(deleteCopiedTimer.current);
+    deleteCopiedTimer.current = window.setTimeout(() => setDeleteCopied(false), 2000);
+  }, []);
+
+  const startDelete = useCallback(() => {
+    setDeleteError('');
+    setDeleteConfirm('');
+    if (proSubscriptionActive && !cancelSubAck) {
+      setCancelSubChecked(false);
+      setCancelSubOpen(true);
+      return;
+    }
+    setDeleteOpen(true);
+  }, [proSubscriptionActive, cancelSubAck]);
 
   return (
     <div className="settings-page">
@@ -369,16 +429,17 @@ export default function SettingsView({
               setSetPasswordConfirm('');
               setSetPasswordError('');
             }}
+            {...analyticsAttrs('settings-account-cta-password', 'account', 'secondary', 'cta')}
           >
             Mot de passe
           </Button>
           {usage && !isPro && typeof onUpgradeClick === 'function' && (
-            <Button type="button" variant="primary" size="sm" onClick={onUpgradeClick}>
+            <Button type="button" variant="primary" size="sm" onClick={onUpgradeClick} {...analyticsAttrs('settings-account-cta-upgrade', 'account', 'primary', 'cta')}>
               Passer Pro
             </Button>
           )}
           {usage && isPro && usage.stripe_subscription && typeof onBillingPortalClick === 'function' && (
-            <Button type="button" variant="secondary" size="sm" onClick={onBillingPortalClick}>
+            <Button type="button" variant="secondary" size="sm" onClick={onBillingPortalClick} {...analyticsAttrs('settings-account-cta-billing', 'account', 'secondary', 'cta')}>
               Gérer l&apos;abonnement
             </Button>
           )}
@@ -389,6 +450,106 @@ export default function SettingsView({
             <span className="settings-inline-meta__muted">Modèle&nbsp;: {templateName}</span>
           )}
         </p>
+        <div className="settings-delete">
+          {!deleteOpen ? (
+            <Button
+              type="button"
+              variant="danger"
+              size="sm"
+              onClick={startDelete}
+              {...analyticsAttrs('settings-account-cta-delete', 'account', 'danger', 'cta')}
+            >
+              Supprimer mon compte
+            </Button>
+          ) : (
+            <>
+              <div className="settings-field">
+                <span className="settings-delete-confirm" id="settings-delete-prompt">
+                  Écris
+                  <span className="settings-delete-word">
+                    <button type="button" className="settings-delete-token" onClick={copyDeleteWord}>
+                      SUPPRIMER
+                    </button>
+                    <button
+                      type="button"
+                      className="settings-delete-copy"
+                      aria-label="Copier SUPPRIMER"
+                      onClick={copyDeleteWord}
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <rect x="9" y="9" width="13" height="13" rx="2" />
+                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                      </svg>
+                    </button>
+                  </span>
+                  pour confirmer
+                  <span className="settings-delete-copied" role="status" aria-live="polite">
+                    {deleteCopied ? 'Copié' : ''}
+                  </span>
+                </span>
+                <input
+                  id="settings-delete-confirm"
+                  className="ds-input"
+                  type="text"
+                  value={deleteConfirm}
+                  onChange={(e) => setDeleteConfirm(e.target.value)}
+                  autoComplete="off"
+                  aria-labelledby="settings-delete-prompt"
+                  aria-invalid={deleteError ? 'true' : undefined}
+                />
+              </div>
+              {deleteError && <p className="ds-field-error">{deleteError}</p>}
+              <div className="settings-actions">
+                <Button
+                  type="button"
+                  variant="danger"
+                  size="sm"
+                  loading={deleteLoading}
+                  disabled={deleteLoading || deleteConfirm.trim() !== 'SUPPRIMER'}
+                  onClick={async () => {
+                    if (proSubscriptionActive && !cancelSubAck) {
+                      setCancelSubChecked(false);
+                      setCancelSubOpen(true);
+                      return;
+                    }
+                    setDeleteError('');
+                    setDeleteLoading(true);
+                    try {
+                      await apiPost('/api/account/delete', {
+                        cancel_subscription: Boolean(proSubscriptionActive && cancelSubAck),
+                      });
+                      clearCanvasLayoutDrafts(session?.user?.id);
+                      clearLayoutProposals();
+                      clearUserCanvasImageLibrary();
+                      if (supabase) await supabase.auth.signOut();
+                      window.location.assign('/');
+                    } catch (err) {
+                      const message = err?.message || 'Suppression impossible. Réessaie.';
+                      setDeleteError(message);
+                      if (String(message).toLowerCase().includes('abonnement')) {
+                        setCancelSubAck(false);
+                        setCancelSubChecked(false);
+                        setCancelSubOpen(true);
+                      }
+                      setDeleteLoading(false);
+                    }
+                  }}
+                >
+                  Confirmer la suppression
+                </Button>
+                <Button
+                  type="button"
+                  variant="tertiary"
+                  size="sm"
+                  disabled={deleteLoading}
+                  onClick={resetDelete}
+                >
+                  Annuler
+                </Button>
+              </div>
+            </>
+          )}
+        </div>
       </SettingsSection>
 
       <SettingsSection
@@ -440,7 +601,7 @@ export default function SettingsView({
           </div>
         </div>
         <div className="settings-actions">
-          <Button type="button" variant="primary" size="sm" onClick={saveExportPrefs}>
+          <Button type="button" variant="primary" size="sm" onClick={saveExportPrefs} {...analyticsAttrs('settings-export-cta-save', 'export', 'primary', 'cta')}>
             Enregistrer
           </Button>
           <Button
@@ -489,7 +650,7 @@ export default function SettingsView({
               label="Brouillons canvas"
               detail={localSummary.draftCount ? `${localSummary.draftCount} brouillon(s)` : 'Vide'}
               disabled={!localSummary.draftCount}
-              onClear={() => runLocalClear('les brouillons canvas', clearCanvasLayoutDrafts)}
+              onClear={() => runLocalClear('les brouillons canvas', () => clearCanvasLayoutDrafts(draftUserId))}
             />
             <SettingsListRow
               label="Modèles canvas enregistrés"
@@ -527,7 +688,7 @@ export default function SettingsView({
       <SettingsSection id="settings-privacy-title" title="Confidentialité" lead="Cookies et documents légaux.">
         {typeof onCookieSettingsClick === 'function' && (
           <div className="settings-actions settings-actions--spaced">
-            <Button type="button" variant="secondary" size="sm" onClick={onCookieSettingsClick}>
+            <Button type="button" variant="secondary" size="sm" onClick={onCookieSettingsClick} {...analyticsAttrs('settings-privacy-cta-cookies', 'privacy', 'tertiary', 'cta')}>
               Paramètres cookies
             </Button>
           </div>
@@ -541,6 +702,50 @@ export default function SettingsView({
 
         </div>
       </div>
+
+      {cancelSubOpen && (
+        <div
+          className="settings-modal-overlay"
+          onClick={resetDelete}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="settings-cancel-sub-title"
+        >
+          <div className="settings-modal" onClick={(e) => e.stopPropagation()}>
+            <h3 id="settings-cancel-sub-title">Abonnement Pro</h3>
+            <p className="settings-section__lead">
+              Supprimer ce compte annule aussi l&apos;abonnement Pro.
+            </p>
+            <label className="settings-delete-check">
+              <input
+                type="checkbox"
+                checked={cancelSubChecked}
+                onChange={(e) => setCancelSubChecked(e.target.checked)}
+              />
+              <span>J&apos;annule mon abonnement Pro.</span>
+            </label>
+            <div className="settings-modal__actions">
+              <Button
+                type="button"
+                variant="danger"
+                size="sm"
+                disabled={!cancelSubChecked}
+                onClick={() => {
+                  if (!cancelSubChecked) return;
+                  setCancelSubAck(true);
+                  setCancelSubOpen(false);
+                  setDeleteOpen(true);
+                }}
+              >
+                Continuer
+              </Button>
+              <Button type="button" variant="tertiary" size="sm" onClick={resetDelete}>
+                Annuler
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {setPasswordOpen && (
         <div

@@ -17,6 +17,8 @@ def _arm(monkeypatch: pytest.MonkeyPatch):
     m._last_alert_at.clear()
     m._cpu_high_streak = 0
     m._cpu_spike_streak = 0
+    m._cpu_sample_seq = 0
+    m._cpu_spike_seen_seq = 0
     m._cpu_samples.clear()
     m._recent_http.clear()
     m._last_snap["system_cpu"] = 6.0
@@ -40,6 +42,8 @@ def test_single_spike_does_not_email(monkeypatch: pytest.MonkeyPatch) -> None:
         m._cpu_samples.append(6.0)
     m._cpu_samples.append(100.0)
     m._last_snap["system_cpu"] = 100.0
+    m.note_fresh_cpu_sample()
+    m.evaluate_alerts()
     m.evaluate_alerts()
     assert sent == []
     assert m._cpu_spike_streak == 1
@@ -52,7 +56,10 @@ def test_spike_held_two_ticks_emails_with_process_cpu(monkeypatch: pytest.Monkey
     m._cpu_samples.append(93.8)
     m._last_snap["system_cpu"] = 93.8
     m._last_snap["process_cpu"] = 80.0
+    m.note_fresh_cpu_sample()
     m.evaluate_alerts()
+    m._cpu_samples.append(93.8)
+    m.note_fresh_cpu_sample()
     m.evaluate_alerts()
     assert len(sent) == 1
     subject, body = sent[0]
@@ -68,9 +75,11 @@ def test_quiet_cpu_resets_the_streak(monkeypatch: pytest.MonkeyPatch) -> None:
         m._cpu_samples.append(6.0)
     m._last_snap["system_cpu"] = 100.0
     m._cpu_samples.append(100.0)
+    m.note_fresh_cpu_sample()
     m.evaluate_alerts()
     m._last_snap["system_cpu"] = 6.0
     m._cpu_samples.append(6.0)
+    m.note_fresh_cpu_sample()
     m.evaluate_alerts()
     assert sent == []
     assert m._cpu_spike_streak == 0

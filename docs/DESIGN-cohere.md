@@ -4,7 +4,8 @@ name: Cohere-design-analysis
 description: Cohere's 2026 web system is a controlled enterprise AI interface built from stark white editorial space, deep green-black product bands, soft mineral surfaces, rounded media cards, and a distinctive type split between monospaced-feeling display headlines and precise Unica77 UI text.
 
 # NOTE
-# Ceci est une analyse visuelle (planche d'inspiration).
+# ARCHIVE (AXE-468) : ancienne planche d'inspiration Cohere, remplacée par la palette Axel
+# (référence : site public du CRM). Ne décrit plus le produit.
 # Contrat de build AxeL Job : docs/design-system.md + frontend/src/design/tokens.json
 
 colors:

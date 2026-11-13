@@ -1,5 +1,5 @@
 /**
- * Alias legacy → tokens sémantiques Cohere.
+ * Alias legacy → tokens sémantiques Axel.
  * Les composants existants (`--color-primary`, `--radius-pill`) consomment
  * encore ces noms. Ne plus ajouter de hex ici : pointer vers --ds-*.
  */
@@ -29,7 +29,8 @@
   --color-border-light: var(--ds-color-border-subtle);
   --color-card-border: var(--ds-color-border-subtle);
 
-  --color-deep-green: var(--ds-color-bg-inverse);
+  --color-deep-green: var(--ds-color-feedback-success);
+  --color-ink-band: var(--ds-color-bg-inverse);
   --color-dark-navy: var(--ds-color-bg-inverse-alt);
   --color-pale-green: var(--ds-color-feedback-success-subtle);
   --color-pale-blue: var(--ds-color-bg-accent);

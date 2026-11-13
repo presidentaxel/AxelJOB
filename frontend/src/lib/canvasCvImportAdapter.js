@@ -29,6 +29,7 @@ import {
   setBlockPosition,
 } from './cvLayoutModelV3.js';
 import { syncCvDualKeys } from './cvDualKey.js';
+import { bindStructuralTextToSemanticBlocks } from './structuralSemanticBind.js';
 import {
   resolveBoundText,
   resolveCertifications,
@@ -39,7 +40,7 @@ import {
   resolvePhotoUrl,
   resolveProjets,
 } from './freeCanvasContent.js';
-import { bindStructuralTextToSemanticBlocks } from './structuralSemanticBind.js';
+import { cleanupCanvasHeaderOverlays } from './canvasHeaderOverlayCleanup.js';
 
 const DECORATIVE_TYPES = new Set(['shape:rect', 'shape:line']);
 
@@ -60,6 +61,11 @@ export function countContentBlocks(layout) {
 export function ensureImportLayoutHasContent(layout, cv) {
   if (!layout?.pages?.length) return layout;
   if (countContentBlocks(layout) > 0) return layout;
+  // Copie PDF : ne pas coller identity/XP générés sous une géométrie extraite
+  // (même décorative-only). Les répliques template gardent le seed AXE-344.
+  if (layout.freeform === true && layout.replica_cascade !== true) {
+    return layout;
+  }
   return optimizeAddMissingProfileSections(layout, cv || {});
 }
 
@@ -528,8 +534,10 @@ export function cleanupImportedImageOverlays(layout) {
     if (!targets.length) return page;
 
     for (const img of images) {
+      if (img.style?.vector_fill) continue;
       for (const other of blocks) {
         if (other.type !== 'icon' && other.type !== 'shape:circle') continue;
+        if (other.style?.photo_plate) continue;
         const side = Math.max(Number(other.w) || 0, Number(other.h) || 0);
         if (other.type === 'shape:circle' && side < 12) continue;
         if (blockOverlapRatio(other, img, 0.18) >= 0.18) {
@@ -543,6 +551,8 @@ export function cleanupImportedImageOverlays(layout) {
         return false;
       }
       if (block.type === 'shape:circle') {
+        // Pastille claire plus grande que le portrait : l'anneau autour de la photo.
+        if (block.style?.photo_plate) return true;
         const side = Math.max(Number(block.w) || 0, Number(block.h) || 0);
         if (side >= 12 && targets.some((img) => blockOverlapRatio(block, img, 0.18) >= 0.18)) {
           return false;
@@ -564,7 +574,8 @@ export function applyImportedRoundImageShapes(layout) {
     ...page,
     blocks: (page.blocks || []).map((block) => {
       if (block.type !== 'image' && block.type !== 'photo') return block;
-      if (block.style?.shape === 'circle') return block;
+      if (block.style?.vector_fill) return block;
+      if (block.style?.shape === 'circle' || block.style?.shape === 'rect') return block;
       const w = Number(block.w) || 0;
       const h = Number(block.h) || 0;
       if (!isSquarePhotoSized(w, h)) return block;
@@ -649,9 +660,12 @@ export function buildLayoutFromVisionDetection(cv, visionMeta = {}, templatesLis
   layout = applyVisionPhotoShape(layout, visionMeta);
 
   const analysis2 = analyzeCvProfile(cv);
-  layout = reorderSemanticBlocksByPriority(layout, cv, analysis2, mergedHints);
-  for (let pi = 0; pi < (layout.pages?.length || 0); pi += 1) {
-    layout = reflowColumnBlocksOnPage(layout, pi);
+  // Répliques freeform (elegant/minimal) : ne pas réordonner / reflow ATS.
+  if (!layout.freeform) {
+    layout = reorderSemanticBlocksByPriority(layout, cv, analysis2, mergedHints);
+    for (let pi = 0; pi < (layout.pages?.length || 0); pi += 1) {
+      layout = reflowColumnBlocksOnPage(layout, pi);
+    }
   }
   layout = applyLayoutPagination(layout);
 
@@ -733,35 +747,47 @@ function blockHasRenderableContent(block, cv, analysis) {
 function estimateExperiencesHeight(cv) {
   const exps = resolveExperiences(cv);
   if (!exps.length) return 0;
-  let h = 14;
+  let h = 8; // titre de section
   for (const e of exps) {
     const bullets = (e.bullet_points || []).filter((b) => String(b || '').trim()).length;
-    h += 10 + bullets * 3.8;
+    h += 8 + bullets * 3.2;
   }
-  return Math.min(220, Math.max(28, h));
+  return Math.min(220, Math.max(18, h));
 }
 
-function estimateListHeight(count, itemHmm = 4.2, base = 10, max = 80) {
+function estimateListHeight(count, itemHmm = 4.2, base = 8, max = 80) {
   if (!count) return 0;
-  return Math.min(max, Math.max(14, base + count * itemHmm));
+  // Floor bas : le padding CSS twin + auto-height finalisent la hauteur réelle.
+  return Math.min(max, Math.max(7, base + count * itemHmm));
 }
 
 function estimateSkillsHeight(block, cv) {
   const items = resolveCompetenceList(cv, block.bind || 'competences.techniques');
-  if (!items.length) return 0;
+  const outils = block.style?.skills_nested_outils
+    ? resolveCompetenceList(cv, 'competences.logiciels')
+    : [];
+  const total = items.length + outils.length;
+  if (!total) return 0;
   const isChips = block.style?.format === 'chips';
   if (isChips) {
-    const rows = Math.ceil(items.length / 5);
+    const rows = Math.ceil(total / 5);
     return Math.min(55, Math.max(16, 12 + rows * 5.5));
   }
-  return estimateListHeight(items.length, 3.8, 10, 50);
+  // Sidebar catégorie seule (sans titre COMPÉTENCES) : base plus basse.
+  const baseHmm = block.style?.section_label ? 9 : 5.5;
+  const base = estimateListHeight(items.length, 3.4, baseHmm, 50);
+  return outils.length ? Math.min(60, base + 6) : base;
 }
 
 const SEMANTIC_MIN_HEIGHT_MM = 10;
+/** Floor bas quand on shrink-to-content (répliques) — évite des blocs sidebar trop hauts. */
+const SEMANTIC_SHRINK_FLOOR_MM = 7;
 
 /** Hauteur estimée (mm) d'un bloc sémantique selon le CV. */
 export function estimateSemanticBlockHeight(block, cv, { respectCurrentMin = false } = {}) {
-  const floor = respectCurrentMin ? (Number(block.h) || SEMANTIC_MIN_HEIGHT_MM) : SEMANTIC_MIN_HEIGHT_MM;
+  const floor = respectCurrentMin
+    ? (Number(block.h) || SEMANTIC_MIN_HEIGHT_MM)
+    : SEMANTIC_SHRINK_FLOOR_MM;
   if (!block || DECORATIVE_TYPES.has(block.type)) return floor;
 
   switch (block.type) {
@@ -779,18 +805,22 @@ export function estimateSemanticBlockHeight(block, cv, { respectCurrentMin = fal
       if (block.style?.zone === 'header') {
         return Math.min(14, Math.max(10, 8 + chars * 0.06));
       }
-      return Math.max(16, Math.min(52, 12 + chars * 0.22));
+      // Titre section + corps 9pt : ancien 0.22 mm/char gonflait Profil→Expérience.
+      return Math.max(11, Math.min(40, 8 + chars * 0.12));
     }
     case 'experiences':
       return Math.max(floor, estimateExperiencesHeight(cv));
     case 'formations':
-      return Math.max(floor, estimateListHeight(resolveFormations(cv).length, 9, 12, 70));
-    case 'certifications':
-      return Math.max(floor, estimateListHeight(resolveCertifications(cv).length, 7, 10, 45));
+      return Math.max(floor, estimateListHeight(resolveFormations(cv).length, 6, 8, 70));
+    case 'certifications': {
+      const n = resolveCertifications(cv).length;
+      const base = block.style?.sidebar_category && !block.style?.section_label ? 5 : 7;
+      return Math.max(floor, estimateListHeight(n, 4.5, base, 45));
+    }
     case 'projets':
-      return Math.max(floor, estimateListHeight(resolveProjets(cv).length, 11, 12, 65));
+      return Math.max(floor, estimateListHeight(resolveProjets(cv).length, 8, 8, 65));
     case 'languages':
-      return Math.max(floor, estimateListHeight(resolveLangues(cv).length, 4.5, 10, 35));
+      return Math.max(floor, estimateListHeight(resolveLangues(cv).length, 3.6, 7, 35));
     case 'skills':
       return Math.max(floor, estimateSkillsHeight(block, cv));
     default:
@@ -806,6 +836,59 @@ function patchBlockHeight(layout, blockId, h) {
     )),
   }));
   return { ...layout, pages };
+}
+
+const REPLICA_CASCADE_GAP_MM = 0;
+
+/**
+ * Réplique Stable (freeform) : ajuste h au contenu et empile sans chevauchement,
+ * en respectant `lock_geometry` / photo (header figé).
+ * Cascade **par lane** (header / main / sidebar) — un seul curseur vertical
+ * cassait Classic (sidebar-right) et poussait le texte en page 2.
+ * Ne réordonne PAS les types (contrairement à ATS spatial).
+ */
+export function fitReplicaLayoutToContent(layout, cv) {
+  if (!layout?.pages?.length) return layout;
+  let next = layout;
+  for (let pageIndex = 0; pageIndex < next.pages.length; pageIndex += 1) {
+    const page = next.pages[pageIndex];
+    const blocks = [...(page.blocks || [])];
+    const lanes = new Map();
+    for (const block of blocks) {
+      if (DECORATIVE_TYPES.has(block.type)) continue;
+      const lane = blockLane(block);
+      if (!lanes.has(lane)) lanes.set(lane, []);
+      lanes.get(lane).push(block);
+    }
+    for (const laneBlocks of lanes.values()) {
+      const sorted = [...laneBlocks].sort((a, b) => (Number(a.y) || 0) - (Number(b.y) || 0));
+      let cursorBottom = null;
+      for (const block of sorted) {
+        const locked = Boolean(block.style?.lock_geometry) || block.type === 'photo';
+        let h = Number(block.h) || 0;
+        let y = Number(block.y) || 0;
+        if (!locked) {
+          const est = estimateSemanticBlockHeight(block, cv, { respectCurrentMin: false });
+          if (est > 0 && Math.abs(est - h) > 0.8) {
+            h = est;
+            next = patchBlockHeight(next, block.id, h);
+          }
+        }
+        if (!locked && cursorBottom != null) {
+          // Snap (monter ou descendre) — sinon les y preset trop bas laissent des trous
+          // après shrink (sidebar Classic : Logiciels/Certifs/Langues trop espacés).
+          const targetY = cursorBottom + REPLICA_CASCADE_GAP_MM;
+          if (Math.abs(y - targetY) > 0.05) {
+            y = targetY;
+            next = setBlockPosition(next, block.id, { x: Number(block.x) || 0, y });
+          }
+        }
+        const bottom = y + Math.max(h, 0.2);
+        cursorBottom = cursorBottom == null ? bottom : Math.max(cursorBottom, bottom);
+      }
+    }
+  }
+  return next;
 }
 
 function blockLane(block) {
@@ -839,6 +922,7 @@ export function reorderSemanticBlocksByPriority(layout, cv, analysis, layoutHint
       if (DECORATIVE_TYPES.has(block.type)) continue;
       const zone = block.style?.zone;
       if (zone === 'header') continue;
+      if (block.style?.lock_geometry) continue;
       const lane = blockLane(block);
       if (HEADER_ZONE_TYPES.has(lane)) continue;
       if (!lanes.has(lane)) lanes.set(lane, []);
@@ -878,6 +962,7 @@ export function adaptCanvasLayoutForCv(cv, layout, {
   layoutHints = {},
   fromVision = false,
   forImport = false,
+  preserveReplicaGeometry = false,
 } = {}) {
   const analysis = analyzeCvProfile(cv);
   const recommendedTemplateId = recommendTemplateId(
@@ -899,6 +984,7 @@ export function adaptCanvasLayoutForCv(cv, layout, {
   }
 
   let next = sanitizeLayoutV3(layout);
+  const keepGeometry = Boolean(preserveReplicaGeometry || next.freeform);
   let removedBlockCount = 0;
   let resizedBlockCount = 0;
 
@@ -909,6 +995,7 @@ export function adaptCanvasLayoutForCv(cv, layout, {
         removedBlockCount += 1;
         continue;
       }
+      if (keepGeometry || block.style?.lock_geometry) continue;
       const est = estimateSemanticBlockHeight(block, cv, { respectCurrentMin: false });
       const cur = Number(block.h) || 0;
       if (est > 0 && Math.abs(est - cur) > 1.5) {
@@ -918,16 +1005,29 @@ export function adaptCanvasLayoutForCv(cv, layout, {
     }
   }
 
-  if (!fromVision && !forImport) {
+  if (!keepGeometry && !fromVision && !forImport) {
     next = reorderSemanticBlocksByPriority(next, cv, analysis, layoutHints);
   }
 
-  for (let pi = 0; pi < (next.pages?.length || 0); pi += 1) {
-    next = reflowColumnBlocksOnPage(next, pi);
+  if (!keepGeometry) {
+    for (let pi = 0; pi < (next.pages?.length || 0); pi += 1) {
+      next = reflowColumnBlocksOnPage(next, pi);
+    }
   }
 
-  next = applyLayoutPagination(next);
-  next = applyAtsLayoutOptimizations(next);
+  // ATS spatial réordonne identity→contact→photo et casse les répliques Stable
+  // (ex. Élégant : photo centrée au-dessus du nom). Skip si géométrie préservée.
+  // Cascade verticale uniquement pour les répliques déclarées (`replica_cascade`),
+  // pas pour un freeform PDF multi-colonnes.
+  if (keepGeometry) {
+    if (next.replica_cascade === true) {
+      next = fitReplicaLayoutToContent(next, cv);
+    }
+    next = applyLayoutPagination(next);
+  } else {
+    next = applyLayoutPagination(next);
+    next = applyAtsLayoutOptimizations(next);
+  }
 
   if (!fromVision && !forImport) {
     const themePatch = inferThemeFromProfile(analysis, layoutHints);
@@ -940,6 +1040,8 @@ export function adaptCanvasLayoutForCv(cv, layout, {
   if (forImport) {
     next = ensureImportLayoutHasContent(next, cv);
   }
+
+  next = cleanupCanvasHeaderOverlays(next, cv);
 
   return {
     layout: next,
@@ -956,16 +1058,27 @@ export function adaptCanvasLayoutForCv(cv, layout, {
  * Pipeline complet : template → layout → adaptation au CV importé.
  */
 export function buildAdaptedCanvasLayoutForCv(cv, template, options = {}) {
-  const base = createCanvasLayoutForTemplate(template);
+  const base = createCanvasLayoutForTemplate(
+    template,
+    options.optionValues || options.templateOptions || null,
+  );
   const templateId = template?.id || options.templateId || '';
+  const preserveReplicaGeometry = Boolean(
+    options.preserveReplicaGeometry
+    || templateId === 'minimal'
+    || templateId === 'elegant'
+    || templateId === 'classic'
+    || base?.freeform,
+  );
   const result = adaptCanvasLayoutForCv(cv, base, {
     templatesList: options.templatesList,
     templateId,
     layoutHints: options.layoutHints || {},
     forImport: Boolean(options.forImport),
+    preserveReplicaGeometry,
   });
   let layout = result.layout;
-  if (!options.skipAdaptReorder) {
+  if (!options.skipAdaptReorder && !preserveReplicaGeometry) {
     for (let pi = 0; pi < (layout.pages?.length || 0); pi += 1) {
       layout = reflowColumnBlocksOnPage(layout, pi);
     }
@@ -1113,14 +1226,15 @@ export function buildStructuralImportLayout(cv, structuralLayout, {
   const analysis = analyzeCvProfile(cv);
   // `freeform` : positions absolues figées (cf. reflow/pagination) → copie
   // fidèle du PDF, jamais ré-empilée en colonnes par l'auto-height.
+  //
+  // Mix juin + août : bind in-place (identité / contact éditables, titres
+  // annotés) sans fusionner le corps en widgets experiences.
   const sanitized = sanitizeLayoutV3({ ...structuralLayout, freeform: true });
-  // AXE-329 / AXE-332 : annotations API > heuristiques locales.
-  const { layout: boundLayout } = bindStructuralTextToSemanticBlocks(sanitized, cv, {
+  const { layout } = bindStructuralTextToSemanticBlocks(sanitized, cv, {
     annotations: annotations
       ?? structuralLayout?.semantic_annotations
       ?? null,
   });
-  const layout = applyLayoutPagination(boundLayout);
   // Python extrait les couleurs thème directement depuis page.get_drawings()
   // (fiable quel que soit le chemin de rendu). Le JS n'intervient qu'en
   // fallback pour les couleurs que Python n'a pas trouvées.
@@ -1145,6 +1259,7 @@ export function buildStructuralImportLayout(cv, structuralLayout, {
     }
   }
   finalLayout = ensureImportLayoutHasContent(finalLayout, cv);
+  finalLayout = cleanupCanvasHeaderOverlays(finalLayout, cv);
   const persistedTemplateId = resolveImportPersistTemplateId(
     templateId || finalLayout.theme?.template_id,
     'minimal',

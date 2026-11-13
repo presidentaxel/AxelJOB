@@ -1,13 +1,17 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef } from 'react';
+import { fontStyleForText } from '../../lib/embeddedFontCoverage.js';
 // useRef also used by EditableRichText
 import { HiEnvelope, HiLink, HiPhone, HiLockClosed } from 'react-icons/hi2';
 import { apiUrl } from '../../api';
 import {
   findCvArrayIndex,
   getFieldDisplayValue,
+  htmlToPlainText,
   isCanvasInlineEditableType,
   normalizeRichTextHtml,
   handleRichTextPaste,
+  repairCanvasPlaceholderGlue,
+  repairCanvasPlaceholderHtml,
   sanitizeRichTextHtml,
   fieldValueLooksLikeHtml,
 } from '../../lib/canvasInlineEdit.js';
@@ -27,7 +31,9 @@ import {
   resolvePhotoUrl,
   resolveProjets,
 } from '../../lib/freeCanvasContent.js';
+import { diffHighlightParts } from '../../lib/cvChangeHighlight.js';
 import { blockHasTypographyOverride, blockStyleToCss } from '../../lib/canvasBlockToolbar.js';
+import { colorFromPdfRuns, stripPdfMarkup } from '../../lib/structuralSemanticBind.js';
 import { MM_TO_PX } from '../../lib/freeCanvasScale.js';
 import { isAutoHeightBlockType, isNonSemanticBlockType } from '../../lib/cvLayoutModelV3.js';
 import { getBlockDisplayName } from '../../lib/blockInspectorSchema.js';
@@ -39,23 +45,51 @@ import CanvasIconGlyph from './CanvasIconGlyph.jsx';
 import { isVectorShapeType } from '../../lib/canvasShapePresets.js';
 import { blockEffectToCss } from '../../lib/canvasBlockEffects.js';
 import { getBlockPdfFidelity } from '../../lib/canvasPdfFidelity.js';
+import { cvTemplateCopy } from '../../lib/cvTemplateCopy.js';
 import CanvasImageFrame from './CanvasImageFrame.jsx';
 import CanvasShapeSvg from './CanvasShapeSvg.jsx';
 
-const SECTION_LABELS = {
-  experiences: 'Expérience professionnelle',
-  formations: 'Formation',
-  certifications: 'Certifications',
-  projets: 'Projets',
-  skills: 'Compétences',
-  languages: 'Langues',
-};
+function defaultSectionLabel(type, langue) {
+  const st = cvTemplateCopy(langue);
+  return {
+    experiences: st.experience_title,
+    formations: st.education_title,
+    certifications: st.certs_title,
+    projets: st.projects_title,
+    skills: st.skills_title,
+    languages: st.languages_title,
+  }[type] || '';
+}
 
 function photoSrc(cv) {
   const raw = resolvePhotoUrl(cv);
   if (!raw) return null;
   if (raw.startsWith('http')) return raw;
   return apiUrl(`/api/assets/${raw.replace(/^assets\//, '')}`);
+}
+
+function HighlightedValue({ base, value }) {
+  const text = typeof value === 'string' ? value : (value == null ? '' : String(value));
+  if (typeof base !== 'string') return text;
+  const parts = diffHighlightParts(base, text);
+  if (!parts.some((part) => part.changed)) return text;
+  return parts.map((part, index) => {
+    if (part.text === '\n') return <br key={index} />;
+    const prev = parts[index - 1];
+    const spacer = prev && prev.text !== '\n' ? ' ' : '';
+    return part.changed
+      ? <span key={index} className="cv-changed">{spacer}{part.text}</span>
+      : <span key={index}>{spacer}{part.text}</span>;
+  });
+}
+
+function findBaseExperience(baseCv, exp, idx) {
+  const list = Array.isArray(baseCv?.experiences) ? baseCv.experiences : [];
+  if (exp?.id) {
+    const found = list.find((item) => item && item.id === exp.id);
+    if (found) return found;
+  }
+  return list[idx] || null;
 }
 
 function BlockText({ children, className = '' }) {
@@ -87,7 +121,7 @@ function SidebarCategoryHeading({ label, titleStyle }) {
   return <h4 className={cls}>{label}</h4>;
 }
 
-function SemanticBlockBody({ block, cv, editing = false }) {
+function SemanticBlockBody({ block, cv, baseCv = null, editing = false }) {
   const { type, bind, limit, style = {} } = block;
   const format = style.format || style.list_format || 'default';
 
@@ -101,6 +135,9 @@ function SemanticBlockBody({ block, cv, editing = false }) {
       const title = showTitle ? getFieldDisplayValue(cv, 'titre_professionnel') : '';
       const inlineTitle = style.header_layout === 'inline-title';
       const nameBind = ['prenom', 'nom'].filter((p) => bindIncludesPath(bind, p));
+      const prenomColor = colorFromPdfRuns(style.color_runs, prenom);
+      const nomColor = colorFromPdfRuns(style.color_runs, nom);
+      const titleColor = colorFromPdfRuns(style.color_runs, title);
       const nameEl = (showPrenom || showNom) ? (
         editing ? (
           <>
@@ -116,6 +153,12 @@ function SemanticBlockBody({ block, cv, editing = false }) {
               </CanvasEditableField>
             ) : null}
           </>
+        ) : (prenomColor || nomColor) ? (
+          <>
+            {showPrenom ? <span style={prenomColor ? { color: prenomColor } : undefined}>{prenom}</span> : null}
+            {showPrenom && showNom ? ' ' : null}
+            {showNom ? <span style={nomColor ? { color: nomColor } : undefined}>{nom}</span> : null}
+          </>
         ) : (
           <BlockText>
             {resolveBoundText(cv, nameBind) || identityNameEmptyLabel(bind)}
@@ -129,7 +172,13 @@ function SemanticBlockBody({ block, cv, editing = false }) {
             {title || 'Titre professionnel'}
           </CanvasEditableField>
         ) : title ? (
-          <BlockText>{title}</BlockText>
+          titleColor ? (
+            <span style={{ color: titleColor }}>
+              <HighlightedValue base={baseCv ? (baseCv.titre_professionnel || '') : undefined} value={title} />
+            </span>
+          ) : (
+            <HighlightedValue base={baseCv ? (baseCv.titre_professionnel || '') : undefined} value={title} />
+          )
         ) : (
           <span className="free-canvas-block__field-placeholder">Titre professionnel</span>
         )
@@ -204,19 +253,28 @@ function SemanticBlockBody({ block, cv, editing = false }) {
       const email = showEmail ? getFieldDisplayValue(cv, 'email') : '';
       const linkedin = showLinkedin ? getFieldDisplayValue(cv, 'linkedin') : '';
       const showIcons = Boolean(style.contact_icons);
+      // Alignement explicite : défaut gauche (Minimal). Élégant/Bold = center via style.align.
+      // Évite qu’un justify-content global centre tous les header-bar.
+      const contactAlign = style.align === 'center' || style.align === 'right' || style.align === 'left'
+        ? style.align
+        : 'left';
       const contactCls = [
         'free-canvas-block__contact',
         style.contact_divider ? 'free-canvas-block__contact--divider' : '',
         style.contact_uppercase ? 'free-canvas-block__contact--uppercase' : '',
         showIcons ? 'free-canvas-block__contact--icons' : '',
         style.contact_layout === 'header-bar' ? 'free-canvas-block__contact--header-bar' : '',
+        style.contact_layout === 'header-bar' ? `free-canvas-block__contact--align-${contactAlign}` : '',
       ].filter(Boolean).join(' ');
 
       const renderContactValue = (path, value, placeholder) => {
         if (editing) {
           return <CanvasEditableField path={path} editing>{value || placeholder}</CanvasEditableField>;
         }
-        if (value) return <BlockText>{value}</BlockText>;
+        if (value) {
+          const color = colorFromPdfRuns(style.color_runs, value);
+          return color ? <span style={{ color }}>{value}</span> : <BlockText>{value}</BlockText>;
+        }
         return <span className="free-canvas-block__field-placeholder">{placeholder}</span>;
       };
       const maybeIcon = (Icon) => (
@@ -224,40 +282,61 @@ function SemanticBlockBody({ block, cv, editing = false }) {
       );
 
       if (style.contact_layout === 'header-bar') {
-        const segments = [];
+        const separator = style.contact_separator != null ? String(style.contact_separator) : ' ';
+        /** @type {{ id: string, node: import('react').ReactNode }[]} */
+        const parts = [];
         if (showTel) {
-          segments.push(
-            <span key="tel" className="free-canvas-block__contact-segment">
-              {maybeIcon(HiPhone)}
-              {showIcons ? ' ' : null}
-              {renderContactValue('telephone', tel, 'Téléphone')}
-            </span>,
-          );
+          parts.push({
+            id: 'tel',
+            node: (
+              <>
+                {maybeIcon(HiPhone)}
+                {showIcons ? ' ' : null}
+                {renderContactValue('telephone', tel, 'Téléphone')}
+              </>
+            ),
+          });
         }
         if (showEmail) {
-          segments.push(
-            <span key="email" className="free-canvas-block__contact-segment">
-              {maybeIcon(HiEnvelope)}
-              {showIcons ? ' ' : null}
-              {renderContactValue('email', email, 'Email')}
-            </span>,
-          );
+          parts.push({
+            id: 'email',
+            node: (
+              <>
+                {maybeIcon(HiEnvelope)}
+                {showIcons ? ' ' : null}
+                {renderContactValue('email', email, 'Email')}
+              </>
+            ),
+          });
         }
         if (showLinkedin) {
-          segments.push(
-            <span key="linkedin" className="free-canvas-block__contact-segment">
-              {maybeIcon(HiLink)}
-              {showIcons ? ' ' : null}
-              {renderContactValue('linkedin', linkedin, 'LinkedIn')}
-            </span>,
-          );
+          parts.push({
+            id: 'linkedin',
+            node: (
+              <>
+                {maybeIcon(HiLink)}
+                {showIcons ? ' ' : null}
+                {renderContactValue('linkedin', linkedin, 'LinkedIn')}
+              </>
+            ),
+          });
         }
         return (
-          <p className={contactCls}>
-            {segments.map((seg, i) => (
-              <span key={seg.key}>
-                {i > 0 ? <span className="free-canvas-block__contact-spacer"> </span> : null}
-                {seg}
+          <p
+            className={contactCls}
+            style={{
+              justifyContent: contactAlign === 'right'
+                ? 'flex-end'
+                : contactAlign === 'center'
+                  ? 'center'
+                  : 'flex-start',
+              textAlign: contactAlign,
+            }}
+          >
+            {parts.map((part, i) => (
+              <span key={part.id}>
+                {i > 0 ? <span className="free-canvas-block__contact-spacer">{separator}</span> : null}
+                <span className="free-canvas-block__contact-segment">{part.node}</span>
               </span>
             ))}
           </p>
@@ -298,18 +377,20 @@ function SemanticBlockBody({ block, cv, editing = false }) {
       const resumeText = resolveBoundText(cv, resumeBind);
       return (
         <div className="free-canvas-block__section-list">
-          <SectionHeading
-            label={style.section_label || 'PROFIL'}
-            titleStyle={style.title_style}
-            zone={style.zone}
-          />
+          {style.show_section_title === false ? null : (
+            <SectionHeading
+              label={style.section_label || 'PROFIL'}
+              titleStyle={style.title_style}
+              zone={style.zone}
+            />
+          )}
           <p className="free-canvas-block__resume">
             {editing ? (
               <CanvasEditableField path={resumePath} editing tag="span">
                 {resumeText || 'Résumé professionnel'}
               </CanvasEditableField>
             ) : resumeText ? (
-              <BlockText>{resumeText}</BlockText>
+              <HighlightedValue base={baseCv ? (baseCv.resume || '') : undefined} value={resumeText} />
             ) : (
               <span className="free-canvas-block__field-placeholder">Résumé professionnel</span>
             )}
@@ -320,94 +401,180 @@ function SemanticBlockBody({ block, cv, editing = false }) {
     case 'experiences': {
       const items = resolveExperiences(cv, limit);
       if (items.length === 0) return <p className="free-canvas-block__placeholder">Expériences</p>;
-      const boldExp = style.exp_style === 'bold';
+      const boldExp = style.exp_style === 'bold'
+        || style.exp_style === 'elegant'
+        || style.exp_style === 'classic'
+        || style.exp_style === 'modern'
+        || style.exp_style === 'executive'
+        || style.exp_style === 'creative';
+      const elegantExp = style.exp_style === 'elegant';
+      const minimalExp = style.exp_style === 'minimal';
+      const classicExp = style.exp_style === 'classic';
+      const impactExp = style.exp_style === 'bold';
+      const modernExp = style.exp_style === 'modern';
+      const executiveExp = style.exp_style === 'executive';
+      const creativeExp = style.exp_style === 'creative';
+      const atsLabels = boldExp || minimalExp;
+      const hyphenDates = minimalExp || elegantExp || impactExp || modernExp || executiveExp || creativeExp;
+      const dashBullets = minimalExp || elegantExp || classicExp || impactExp || modernExp || executiveExp || creativeExp;
+      const clientsAfterBullets = classicExp || impactExp || modernExp || executiveExp || creativeExp;
+      const secteurInline = impactExp || modernExp || executiveExp || creativeExp;
       return (
-        <div className={`free-canvas-block__section-list${boldExp ? ' free-canvas-block__section-list--bold-exp' : ''}`}>
+        <div className={`free-canvas-block__section-list${boldExp ? ' free-canvas-block__section-list--bold-exp' : ''}${minimalExp ? ' free-canvas-block__section-list--minimal-exp' : ''}${elegantExp ? ' free-canvas-block__section-list--elegant-exp' : ''}${modernExp ? ' free-canvas-block__section-list--modern-exp' : ''}${executiveExp ? ' free-canvas-block__section-list--executive-exp' : ''}${creativeExp ? ' free-canvas-block__section-list--creative-exp' : ''}`}>
           <SectionHeading
-            label={style.section_label || SECTION_LABELS.experiences}
+            label={style.section_label || defaultSectionLabel('experiences', cv?.langue)}
             titleStyle={style.title_style}
             zone={style.zone}
           />
           {items.map((exp, i) => {
             const idx = findCvArrayIndex(cv, 'experiences', exp);
             if (idx < 0) return null;
-            const dateParts = [exp.date_debut, exp.date_fin].filter(Boolean).join(' – ');
-            const dateLine = [dateParts, exp.lieu].filter(Boolean).join(' · ');
+            const baseExp = baseCv ? findBaseExperience(baseCv, exp, idx) : null;
+            const dateParts = [exp.date_debut, exp.date_fin].filter(Boolean).join(hyphenDates ? ' - ' : ' – ');
+            const dateLine = minimalExp
+              ? dateParts
+              : [dateParts, exp.lieu].filter(Boolean).join(' · ');
+            const entrepriseNode = editing ? (
+              <CanvasEditableField path={`experiences.${idx}.entreprise`} editing tag="strong">
+                {exp.entreprise || exp.poste || 'Organisation'}
+              </CanvasEditableField>
+            ) : (
+              <strong>
+                <HighlightedValue
+                  base={baseCv ? (baseExp?.entreprise || '') : undefined}
+                  value={exp.entreprise || exp.poste || ''}
+                />
+              </strong>
+            );
+            const posteNode = editing ? (
+              <CanvasEditableField path={`experiences.${idx}.poste`} editing>
+                {exp.poste || 'Poste'}
+              </CanvasEditableField>
+            ) : (
+              <HighlightedValue base={baseCv ? (baseExp?.poste || '') : undefined} value={exp.poste || ''} />
+            );
+            const datesNode = (editing || dateLine) && (
+              <span className="free-canvas-block__exp-dates">
+                {editing ? (
+                  <>
+                    <CanvasEditableField path={`experiences.${idx}.date_debut`} editing>
+                      {exp.date_debut || 'Début'}
+                    </CanvasEditableField>
+                    {hyphenDates ? ' - ' : ' – '}
+                    <CanvasEditableField path={`experiences.${idx}.date_fin`} editing>
+                      {exp.date_fin || 'Fin'}
+                    </CanvasEditableField>
+                    {minimalExp ? null : (
+                      <>
+                        {' · '}
+                        <CanvasEditableField path={`experiences.${idx}.lieu`} editing>
+                          {exp.lieu || 'Lieu'}
+                        </CanvasEditableField>
+                      </>
+                    )}
+                  </>
+                ) : (
+                  dateLine
+                )}
+              </span>
+            );
+            const clientsNode = (editing || (exp.clients || '').trim()) ? (
+              <p className="free-canvas-block__exp-clients">
+                Clients :{' '}
+                {editing ? (
+                  <CanvasEditableField path={`experiences.${idx}.clients`} editing>
+                    {exp.clients || 'Clients'}
+                  </CanvasEditableField>
+                ) : (
+                  exp.clients
+                )}
+              </p>
+            ) : null;
+            const bulletsNode = (
+              <ul className={`free-canvas-block__bullets${dashBullets ? ' free-canvas-block__bullets--dash' : ''}`}>
+                {(exp.bullet_points || []).filter((b) => editing || (b || '').trim()).map((b, j) => (
+                  <li key={j}>
+                    {editing ? (
+                      <CanvasEditableField path={`experiences.${idx}.bullet_points.${j}`} editing tag="span">
+                        {(b || '').trim() || 'Point clé'}
+                      </CanvasEditableField>
+                    ) : (
+                      <HighlightedValue
+                        base={baseCv ? ((baseExp?.bullet_points || [])[j] || '') : undefined}
+                        value={b || ''}
+                      />
+                    )}
+                  </li>
+                ))}
+              </ul>
+            );
             return (
               <div
                 key={exp.id || i}
-                className={`free-canvas-block__exp${format === 'compact' ? ' free-canvas-block__exp--compact' : ''}${boldExp ? ' free-canvas-block__exp--bold' : ''}`}
+                className={`free-canvas-block__exp${format === 'compact' ? ' free-canvas-block__exp--compact' : ''}${boldExp ? ' free-canvas-block__exp--bold' : ''}${minimalExp ? ' free-canvas-block__exp--minimal' : ''}${elegantExp ? ' free-canvas-block__exp--elegant' : ''}${classicExp ? ' free-canvas-block__exp--classic' : ''}${modernExp ? ' free-canvas-block__exp--modern' : ''}${executiveExp ? ' free-canvas-block__exp--executive' : ''}${creativeExp ? ' free-canvas-block__exp--creative' : ''}`}
               >
-                <div className="free-canvas-block__exp-header">
-                  <span className="free-canvas-block__exp-entreprise">
-                    {boldExp ? <span className="free-canvas-block__ats-label">Organisation : </span> : null}
-                    {editing ? (
-                      <CanvasEditableField path={`experiences.${idx}.entreprise`} editing tag="strong">
-                        {exp.entreprise || exp.poste || 'Organisation'}
-                      </CanvasEditableField>
+                {minimalExp ? (
+                  <>
+                    <div className="free-canvas-block__exp-header">
+                      <span className="free-canvas-block__exp-left">
+                        <span className="free-canvas-block__exp-entreprise">
+                          <span className="free-canvas-block__ats-label">Organisation : </span>
+                          {entrepriseNode}
+                        </span>
+                        {(editing || exp.poste) ? (
+                          <span className="free-canvas-block__exp-poste-inline">
+                            {' - '}
+                            <span className="free-canvas-block__ats-label">Fonction : </span>
+                            {posteNode}
+                          </span>
+                        ) : null}
+                      </span>
+                      {datesNode}
+                    </div>
+                    {bulletsNode}
+                    {clientsNode}
+                  </>
+                ) : (
+                  <>
+                    <div className="free-canvas-block__exp-header">
+                      <span className="free-canvas-block__exp-entreprise">
+                        {atsLabels ? <span className="free-canvas-block__ats-label">Organisation : </span> : null}
+                        {entrepriseNode}
+                      </span>
+                      {datesNode}
+                    </div>
+                    {(editing || exp.poste) ? (
+                      <p className="free-canvas-block__exp-role">
+                        {atsLabels ? <span className="free-canvas-block__ats-label">Fonction : </span> : null}
+                        {posteNode}
+                        {secteurInline && (editing || (exp.secteur || '').trim()) ? (
+                          <>
+                            {' - '}
+                            {editing ? (
+                              <CanvasEditableField path={`experiences.${idx}.secteur`} editing>
+                                {exp.secteur || 'Secteur'}
+                              </CanvasEditableField>
+                            ) : (
+                              exp.secteur
+                            )}
+                          </>
+                        ) : null}
+                      </p>
+                    ) : null}
+                    {/* Stable Bold/Classic : bullets puis Clients */}
+                    {clientsAfterBullets ? (
+                      <>
+                        {bulletsNode}
+                        {clientsNode}
+                      </>
                     ) : (
-                      <strong>{exp.entreprise || exp.poste}</strong>
+                      <>
+                        {clientsNode}
+                        {bulletsNode}
+                      </>
                     )}
-                  </span>
-                  {(editing || dateLine) && (
-                    <span className="free-canvas-block__exp-dates">
-                      {editing ? (
-                        <>
-                          <CanvasEditableField path={`experiences.${idx}.date_debut`} editing>
-                            {exp.date_debut || 'Début'}
-                          </CanvasEditableField>
-                          {' – '}
-                          <CanvasEditableField path={`experiences.${idx}.date_fin`} editing>
-                            {exp.date_fin || 'Fin'}
-                          </CanvasEditableField>
-                          {' · '}
-                          <CanvasEditableField path={`experiences.${idx}.lieu`} editing>
-                            {exp.lieu || 'Lieu'}
-                          </CanvasEditableField>
-                        </>
-                      ) : (
-                        dateLine
-                      )}
-                    </span>
-                  )}
-                </div>
-                {(editing || exp.poste) ? (
-                  <p className="free-canvas-block__exp-role">
-                    {boldExp ? <span className="free-canvas-block__ats-label">Fonction : </span> : null}
-                    {editing ? (
-                      <CanvasEditableField path={`experiences.${idx}.poste`} editing>
-                        {exp.poste || 'Poste'}
-                      </CanvasEditableField>
-                    ) : (
-                      exp.poste
-                    )}
-                  </p>
-                ) : null}
-                {(editing || (exp.clients || '').trim()) ? (
-                  <p className="free-canvas-block__exp-clients">
-                    Clients :{' '}
-                    {editing ? (
-                      <CanvasEditableField path={`experiences.${idx}.clients`} editing>
-                        {exp.clients || 'Clients'}
-                      </CanvasEditableField>
-                    ) : (
-                      exp.clients
-                    )}
-                  </p>
-                ) : null}
-                <ul className="free-canvas-block__bullets">
-                  {(exp.bullet_points || []).filter((b) => editing || (b || '').trim()).map((b, j) => (
-                    <li key={j}>
-                      {editing ? (
-                        <CanvasEditableField path={`experiences.${idx}.bullet_points.${j}`} editing tag="span">
-                          {(b || '').trim() || 'Point clé'}
-                        </CanvasEditableField>
-                      ) : (
-                        b
-                      )}
-                    </li>
-                  ))}
-                </ul>
+                  </>
+                )}
               </div>
             );
           })}
@@ -417,16 +584,66 @@ function SemanticBlockBody({ block, cv, editing = false }) {
     case 'formations': {
       const items = resolveFormations(cv, limit);
       if (items.length === 0) return <p className="free-canvas-block__placeholder">Formations</p>;
+      const minimalForm = style.formation_style === 'minimal' || style.formation_style === 'classic';
       return (
         <div className="free-canvas-block__section-list">
           <SectionHeading
-            label={style.section_label || SECTION_LABELS.formations}
+            label={style.section_label || defaultSectionLabel('formations', cv?.langue)}
             titleStyle={style.title_style}
             zone={style.zone}
           />
           {items.map((f, i) => {
             const idx = findCvArrayIndex(cv, 'formations', f);
             if (idx < 0) return null;
+            if (minimalForm) {
+              const leftLabel = [f.etablissement, f.diplome].filter(Boolean).join(' - ')
+                || f.diplome
+                || f.etablissement
+                || 'Formation';
+              return (
+                <div key={f.id || i} className="free-canvas-block__formation free-canvas-block__formation--minimal">
+                  <div className="free-canvas-block__formation-header">
+                    <span className="free-canvas-block__formation-diplome">
+                      {editing ? (
+                        <>
+                          <CanvasEditableField path={`formations.${idx}.etablissement`} editing>
+                            {f.etablissement || 'Établissement'}
+                          </CanvasEditableField>
+                          {(editing || (f.etablissement && f.diplome)) ? ' - ' : null}
+                          <CanvasEditableField path={`formations.${idx}.diplome`} editing>
+                            {f.diplome || 'Diplôme'}
+                          </CanvasEditableField>
+                        </>
+                      ) : (
+                        leftLabel
+                      )}
+                    </span>
+                    {(editing || f.date) ? (
+                      <span className="free-canvas-block__formation-date">
+                        {editing ? (
+                          <CanvasEditableField path={`formations.${idx}.date`} editing>
+                            {f.date || 'Année'}
+                          </CanvasEditableField>
+                        ) : (
+                          f.date
+                        )}
+                      </span>
+                    ) : null}
+                  </div>
+                  {(editing || (f.mention || '').trim()) ? (
+                    <p className="free-canvas-block__formation-mention">
+                      {editing ? (
+                        <CanvasEditableField path={`formations.${idx}.mention`} editing>
+                          {f.mention || 'Mention'}
+                        </CanvasEditableField>
+                      ) : (
+                        f.mention
+                      )}
+                    </p>
+                  ) : null}
+                </div>
+              );
+            }
             return (
               <p key={f.id || i} className="free-canvas-block__formation-line">
                 {editing ? (
@@ -467,7 +684,7 @@ function SemanticBlockBody({ block, cv, editing = false }) {
             <SidebarCategoryHeading label={style.sidebar_category} titleStyle={style.title_style} />
           ) : (
             <SectionHeading
-              label={style.section_label || SECTION_LABELS.certifications}
+              label={style.section_label || defaultSectionLabel('certifications', cv?.langue)}
               titleStyle={style.title_style}
               zone={style.zone}
             />
@@ -478,13 +695,16 @@ function SemanticBlockBody({ block, cv, editing = false }) {
             return editing ? (
               <p key={c.id || i}>
                 <CanvasEditableField path={`certifications.${idx}.nom`} editing>{c.nom || 'Nom'}</CanvasEditableField>
-                {' · '}
+                {' - '}
                 <CanvasEditableField path={`certifications.${idx}.organisme`} editing>{c.organisme || 'Organisme'}</CanvasEditableField>
                 {' · '}
                 <CanvasEditableField path={`certifications.${idx}.date`} editing>{c.date || 'Date'}</CanvasEditableField>
               </p>
             ) : (
-              <p key={c.id || i} className="free-canvas-block__sidebar-item">{[c.nom, c.organisme, c.date].filter(Boolean).join(' · ')}</p>
+              <p key={c.id || i} className="free-canvas-block__sidebar-item">
+                {[c.nom, c.organisme].filter(Boolean).join(' - ')}
+                {c.date ? `${c.nom || c.organisme ? ' · ' : ''}${c.date}` : ''}
+              </p>
             );
           })}
         </div>
@@ -496,7 +716,7 @@ function SemanticBlockBody({ block, cv, editing = false }) {
       return (
         <div className="free-canvas-block__section-list">
           <SectionHeading
-            label={style.section_label || SECTION_LABELS.projets}
+            label={style.section_label || defaultSectionLabel('projets', cv?.langue)}
             titleStyle={style.title_style}
             zone={style.zone}
           />
@@ -518,11 +738,15 @@ function SemanticBlockBody({ block, cv, editing = false }) {
     }
     case 'skills': {
       const items = resolveCompetenceList(cv, bind);
-      if (items.length === 0 && !style.section_label && !style.sidebar_category) {
+      const outils = style.skills_nested_outils
+        ? resolveCompetenceList(cv, 'competences.logiciels')
+        : [];
+      if (items.length === 0 && outils.length === 0 && !style.section_label && !style.sidebar_category) {
         return <p className="free-canvas-block__placeholder">Compétences</p>;
       }
       const chips = format === 'chips';
       const asList = format === 'list' || style.list_format === 'list';
+      const asInline = style.list_format === 'inline' || (!chips && !asList);
       return (
         <div className="free-canvas-block__section-list">
           {style.section_label ? (
@@ -533,31 +757,50 @@ function SemanticBlockBody({ block, cv, editing = false }) {
           ) : null}
           {chips ? (
             <div className="free-canvas-block__chips">
-              {items.map((s, i) => <span key={i} className="free-canvas-block__chip">{s}</span>)}
+              {items.map((s, i) => <span key={`t-${i}`} className="free-canvas-block__chip">{s}</span>)}
+              {outils.map((s, i) => (
+                <span key={`o-${i}`} className="free-canvas-block__chip free-canvas-block__chip--tool">{s}</span>
+              ))}
             </div>
           ) : asList ? (
             items.map((s, i) => <p key={i} className="free-canvas-block__sidebar-item">{s}</p>)
           ) : (
-            <p>{items.join(', ')}</p>
+            <p className={asInline ? 'free-canvas-block__skills-line' : undefined}>
+              {items.join(', ')}
+            </p>
           )}
+          {!chips && outils.length > 0 ? (
+            <p className="free-canvas-block__skills-outils">
+              <strong>Outils :</strong>
+              {' '}
+              {outils.join(', ')}
+            </p>
+          ) : null}
         </div>
       );
     }
     case 'languages': {
       const items = resolveLangues(cv);
       if (items.length === 0) return <p className="free-canvas-block__placeholder">Langues</p>;
+      const asInline = style.list_format === 'inline';
       return (
         <div className="free-canvas-block__section-list">
           <SectionHeading
-            label={style.section_label || SECTION_LABELS.languages}
+            label={style.section_label || defaultSectionLabel('languages', cv?.langue)}
             titleStyle={style.title_style}
             zone={style.zone}
           />
-          {items.map((l, i) => (
-            <p key={i} className="free-canvas-block__sidebar-item">
-              {`${l.langue}${l.niveau ? ` - ${l.niveau}` : ''}`}
+          {asInline ? (
+            <p className="free-canvas-block__skills-line">
+              {items.map((l) => `${l.langue}${l.niveau ? ` (${l.niveau})` : ''}`).join(', ')}
             </p>
-          ))}
+          ) : (
+            items.map((l, i) => (
+              <p key={i} className="free-canvas-block__sidebar-item">
+                {`${l.langue}${l.niveau ? ` - ${l.niveau}` : ''}`}
+              </p>
+            ))
+          )}
         </div>
       );
     }
@@ -566,15 +809,31 @@ function SemanticBlockBody({ block, cv, editing = false }) {
   }
 }
 
-function EditableRichText({ tag, className, style, editing, html, onAutoHeight }) {
+function EditableRichText({
+  tag, className, style, editing, html, onAutoHeight, directEdit = false, onCommit,
+}) {
   const Tag = tag;
   const ref = useRef(null);
+  const seededRef = useRef(false);
+  const focusedRef = useRef(false);
   const richHtml = sanitizeRichTextHtml(normalizeRichTextHtml(html || ''));
-  useEffect(() => {
-    if (editing && ref.current) {
-      ref.current.innerHTML = richHtml;
+  const plain = repairCanvasPlaceholderGlue(htmlToPlainText(richHtml));
+  useLayoutEffect(() => {
+    if (directEdit) {
+      const el = ref.current;
+      if (!el || focusedRef.current) return;
+      if (el.innerHTML !== richHtml) el.innerHTML = richHtml;
+      return;
     }
-  }, [editing, richHtml]);
+    if (!editing) {
+      seededRef.current = false;
+      return;
+    }
+    if (!ref.current || seededRef.current) return;
+    seededRef.current = true;
+    ref.current.textContent = plain;
+    ref.current.focus();
+  }, [directEdit, editing, plain, richHtml]);
 
   const reportHeight = () => {
     if (!editing || !ref.current || typeof onAutoHeight !== 'function') return;
@@ -587,9 +846,35 @@ function EditableRichText({ tag, className, style, editing, html, onAutoHeight }
     if (editing) reportHeight();
   }, [editing]);
 
+  if (directEdit) {
+    return (
+      <Tag
+        key="canvas-direct"
+        ref={ref}
+        className={className}
+        style={{
+          ...style,
+          overflow: 'visible',
+        }}
+        contentEditable
+        suppressContentEditableWarning
+        data-canvas-block-content="1"
+        onBlur={(e) => {
+          focusedRef.current = false;
+          if (typeof onCommit === 'function') onCommit(e.currentTarget);
+        }}
+        onFocus={() => { focusedRef.current = true; }}
+        onPaste={handleRichTextPaste}
+        onPointerDown={(e) => e.stopPropagation()}
+        onMouseDown={(e) => e.stopPropagation()}
+      />
+    );
+  }
+
   if (editing) {
     return (
       <Tag
+        key="canvas-edit"
         ref={ref}
         className={className}
         style={style}
@@ -605,11 +890,44 @@ function EditableRichText({ tag, className, style, editing, html, onAutoHeight }
   }
   return (
     <Tag
+      key="canvas-view"
       className={className}
       style={style}
       dangerouslySetInnerHTML={{ __html: richHtml }}
     />
   );
+}
+
+function paintedPlainText(block, cv) {
+  if (!block || typeof block !== 'object') return '';
+  if (block.type === 'identity' && cv && typeof cv === 'object') {
+    const bits = [];
+    if (bindIncludesPath(block.bind, 'prenom')) bits.push(getFieldDisplayValue(cv, 'prenom'));
+    if (bindIncludesPath(block.bind, 'nom')) bits.push(getFieldDisplayValue(cv, 'nom'));
+    if (bindIncludesPath(block.bind, 'titre_professionnel')) {
+      bits.push(getFieldDisplayValue(cv, 'titre_professionnel'));
+    }
+    return bits.filter(Boolean).join(' ');
+  }
+  if (block.type === 'contact' && cv && typeof cv === 'object') {
+    const bits = [];
+    for (const path of ['email', 'telephone', 'ville', 'linkedin']) {
+      if (bindIncludesPath(block.bind, path)) bits.push(getFieldDisplayValue(cv, path));
+    }
+    return bits.filter(Boolean).join(' ');
+  }
+  return stripPdfMarkup(block.content);
+}
+
+function paragraphAlign(style = {}, content = '') {
+  if (style.align === 'center' || style.align === 'right' || style.align === 'justify') {
+    return style.align;
+  }
+  // Les lignes Canva réécrites remplissent la largeur, comme avant l'adaptation.
+  if (/cv-changed/.test(String(content || '')) && /<br\b/i.test(String(content || ''))) {
+    return 'justify';
+  }
+  return style.align || 'left';
 }
 
 function inlineTypographyStyle(style = {}) {
@@ -618,31 +936,45 @@ function inlineTypographyStyle(style = {}) {
   if (style.font_family) css.fontFamily = style.font_family;
   if (style.color) css.color = style.color;
   if (style.color_body) css.color = style.color_body;
-  if (style.bold) css.fontWeight = '700';
+  if (style.font_weight) css.fontWeight = String(style.font_weight);
+  else if (style.bold) css.fontWeight = '700';
   if (style.italic || style.font_style === 'italic') css.fontStyle = 'italic';
+  if (style.line_height) css.lineHeight = style.line_height;
   const deco = [];
   if (style.underline) deco.push('underline');
   if (style.strikethrough) deco.push('line-through');
   if (deco.length) css.textDecoration = deco.join(' ');
   // Import "copie fidèle" : une ligne PDF reste sur une ligne (pas de wrap qui
   // chevaucherait le bloc suivant, les positions étant figées).
-  if (style.nowrap) css.whiteSpace = 'nowrap';
+  if (style.nowrap) {
+    css.whiteSpace = 'nowrap';
+    css.lineHeight = 1;
+  }
   return css;
 }
 
-function NonSemanticBlockBody({ block, editing = false, onAutoHeight }) {
-  const { type, content = '', style = {} } = block;
+function NonSemanticBlockBody({
+  block, editing = false, onAutoHeight, livePreview = false, onCommit,
+}) {
+  const { type, content: rawContent = '', style = {} } = block;
+  const content = livePreview ? repairCanvasPlaceholderHtml(rawContent) : rawContent;
+  const editStyle = editing
+    ? { whiteSpace: 'pre-wrap', lineHeight: 1.35 }
+    : null;
   switch (type) {
     case 'text': {
       const textStyle = {
-        ...inlineTypographyStyle(style),
-        textAlign: style.align || 'left',
+        ...inlineTypographyStyle(editing ? { ...style, nowrap: false } : style),
+        textAlign: paragraphAlign(style, content),
         opacity: style.opacity ?? 1,
         margin: 0,
-        minHeight: '1em',
+        minHeight: style.nowrap || style.multiline ? 0 : '1em',
         height: 'auto',
         overflow: 'visible',
+        ...editStyle,
       };
+      const shown = content || (livePreview ? '' : 'Texte libre');
+      if (livePreview && !editing && !htmlToPlainText(shown).trim()) return null;
       return (
         <EditableRichText
           tag="p"
@@ -653,20 +985,25 @@ function NonSemanticBlockBody({ block, editing = false, onAutoHeight }) {
           }
           style={textStyle}
           editing={editing}
-          html={content || 'Texte libre'}
+          html={shown}
           onAutoHeight={onAutoHeight}
+          directEdit={livePreview && !editing}
+          onCommit={onCommit}
         />
       );
     }
     case 'title': {
       const titleStyle = {
-        ...inlineTypographyStyle(style),
-        textAlign: style.align || 'left',
+        ...inlineTypographyStyle(editing ? { ...style, nowrap: false } : style),
+        textAlign: paragraphAlign(style, content),
         opacity: style.opacity ?? 1,
         margin: 0,
         height: 'auto',
         overflow: 'visible',
+        ...editStyle,
       };
+      const shown = content || (livePreview ? '' : 'Titre');
+      if (livePreview && !editing && !htmlToPlainText(shown).trim()) return null;
       return (
         <EditableRichText
           tag="h3"
@@ -677,8 +1014,10 @@ function NonSemanticBlockBody({ block, editing = false, onAutoHeight }) {
           }
           style={titleStyle}
           editing={editing}
-          html={content || 'Titre'}
+          html={shown}
           onAutoHeight={onAutoHeight}
+          directEdit={livePreview && !editing}
+          onCommit={onCommit}
         />
       );
     }
@@ -797,11 +1136,13 @@ function blockClassName({ selected, dragging, resizing, interactable, editing, l
 export default function FreeCanvasBlock({
   block,
   cv,
+  baseCv = null,
   selected = false,
   editing = false,
   dragging = false,
   resizing = false,
   interactable = false,
+  textEditable = false,
   onPointerDown,
   onPointerMove,
   onPointerUp,
@@ -817,6 +1158,7 @@ export default function FreeCanvasBlock({
   onBlockAutoHeight,
   onSelect,
   locked = false,
+  embeddedFonts = [],
 }) {
   const innerRef = useRef(null);
   const validBlock = block && typeof block === 'object';
@@ -828,7 +1170,12 @@ export default function FreeCanvasBlock({
   const h = validBlock ? block.h : 0;
   const z = validBlock ? block.z : 0;
   const blockStyle = validBlock ? block.style : undefined;
-  const autoHeight = validBlock && isAutoHeightBlockType(type);
+  // Répliques figées (Bold/Classic header) : garder h preset pour centrer vs photo.
+  const autoHeight = validBlock
+    && isAutoHeightBlockType(type)
+    && !blockStyle?.lock_geometry
+    && !blockStyle?.nowrap
+    && !blockStyle?.lock_height;
 
   const reportHeight = useCallback((newHmm) => {
     if (!autoHeight || typeof onBlockAutoHeight !== 'function' || !id) return;
@@ -859,8 +1206,16 @@ export default function FreeCanvasBlock({
 
   if (!validBlock) return null;
 
-  const innerTypography = blockStyleToCss(blockStyle);
-  const typographyOverride = blockHasTypographyOverride(blockStyle);
+  const renderStyle = fontStyleForText(
+    blockStyle,
+    block?.type === 'text' || block?.type === 'title'
+      ? String(block.content || '')
+      : paintedPlainText(block, cv),
+    embeddedFonts,
+  );
+  const renderBlock = renderStyle === blockStyle ? block : { ...block, style: renderStyle };
+  const innerTypography = blockStyleToCss(renderStyle);
+  const typographyOverride = blockHasTypographyOverride(renderStyle);
   const zone = blockStyle?.zone;
   const isNonSemantic = isNonSemanticBlockType(type);
   const canEdit = isCanvasInlineEditableType(type);
@@ -882,7 +1237,7 @@ export default function FreeCanvasBlock({
   };
 
   const handleDoubleClick = (e) => {
-    if (!interactable) return;
+    if (!interactable && !textEditable) return;
     e.stopPropagation();
     if ((type === 'image' || type === 'photo') && typeof onImageEdit === 'function') {
       onImageEdit(block.id);
@@ -890,6 +1245,23 @@ export default function FreeCanvasBlock({
     }
     if (!canEdit) return;
     if (typeof onDoubleClickEdit === 'function') onDoubleClickEdit(block.id);
+  };
+
+  const handleTextClick = (e) => {
+    if (!textEditable || interactable || editing) return;
+    if (type === 'text' || type === 'title') {
+      const field = e.currentTarget.querySelector?.('[data-canvas-block-content="1"]');
+      if (field && document.activeElement !== field) field.focus();
+      return;
+    }
+    if (!canEdit) return;
+    e.stopPropagation();
+    if (typeof onDoubleClickEdit === 'function') onDoubleClickEdit(block.id);
+  };
+
+  const commitPreviewText = (rootEl) => {
+    if (!textEditable || typeof onInnerBlur !== 'function') return;
+    onInnerBlur(block.id, rootEl);
   };
 
   const handleInnerPointerDown = (e) => {
@@ -936,6 +1308,12 @@ export default function FreeCanvasBlock({
     locked ? 'verrouillé' : null,
     'Flèches pour déplacer, Suppr pour supprimer, Entrée pour éditer.',
   ].filter(Boolean).join('. ');
+  const visibleText = repairCanvasPlaceholderGlue(htmlToPlainText(validBlock?.content || ''));
+  const previewGhost = textEditable
+    && !editing
+    && (type === 'text' || type === 'title')
+    && !visibleText.trim();
+  const passPreviewClick = textEditable && !interactable && !canEdit;
 
   return (
     <div
@@ -945,6 +1323,10 @@ export default function FreeCanvasBlock({
       className={blockClassName({ selected, dragging, resizing, interactable, editing, locked })}
       data-block-id={id}
       data-block-type={type}
+      data-nowrap={blockStyle?.nowrap ? 'true' : undefined}
+      data-multiline={blockStyle?.multiline ? 'true' : undefined}
+      data-preview-clip={blockStyle?.preview_clip ? 'true' : undefined}
+      data-text-editable={textEditable ? 'true' : undefined}
       tabIndex={interactable && !editing ? 0 : undefined}
       aria-label={interactable ? a11yLabel : undefined}
       aria-disabled={interactable && locked ? true : undefined}
@@ -954,6 +1336,7 @@ export default function FreeCanvasBlock({
         width: `${w}mm`,
         height: `${h}mm`,
         zIndex: dragging || resizing || editing ? 9999 : z,
+        pointerEvents: previewGhost || passPreviewClick ? 'none' : undefined,
         ...blockEffectStyle,
       }}
       title={
@@ -970,6 +1353,7 @@ export default function FreeCanvasBlock({
       onPointerUp={interactable && !editing && onPointerUp ? onPointerUp : undefined}
       onPointerCancel={interactable && !editing && onPointerCancel ? onPointerCancel : undefined}
       onDoubleClick={handleDoubleClick}
+      onClick={textEditable && !interactable ? handleTextClick : undefined}
     >
       <div
         ref={innerRef}
@@ -980,6 +1364,7 @@ export default function FreeCanvasBlock({
           editing ? 'free-canvas-block__inner--editing' : '',
           autoHeight ? 'free-canvas-block__inner--content-fit' : '',
           supportsBlockEffects ? 'free-canvas-block__inner--shape-effects' : '',
+          (type === 'title' || blockStyle?.role === 'heading') ? 'free-canvas-block__inner--heading' : '',
         ].filter(Boolean).join(' ')}
         style={innerTypography}
         onPointerDown={editing ? handleInnerPointerDown : undefined}
@@ -988,12 +1373,14 @@ export default function FreeCanvasBlock({
         {isNonSemantic
           ? (
             <NonSemanticBlockBody
-              block={block}
+              block={renderBlock}
               editing={editing}
+              livePreview={textEditable}
               onAutoHeight={autoHeight ? reportHeight : undefined}
+              onCommit={textEditable ? commitPreviewText : undefined}
             />
           )
-          : <SemanticBlockBody block={block} cv={cv} editing={editing} />}
+          : <SemanticBlockBody block={renderBlock} cv={cv} baseCv={baseCv} editing={editing} />}
       </div>
       {locked && (
         <span className="free-canvas-block__lock-badge" title="Position verrouillée - utilisez la barre d’actions pour déverrouiller" aria-hidden>

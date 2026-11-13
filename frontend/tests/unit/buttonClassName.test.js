@@ -27,14 +27,25 @@ const GENERATED_CSS = path.join(SRC_ROOT, 'styles/ds-tokens.generated.css');
 
 const LEGACY_CTA_CLASS_RE = /\b(?:className|class)\s*=\s*["'`][^"'`]*\bbtn-(?:primary|secondary|tertiary|success|ghost|outline)\b/;
 
-const PRIMITIVE_COLOR_ROOTS = new Set(['neutral', 'green', 'navy', 'blue', 'coral', 'purple', 'red', 'amber']);
+const PRIMITIVE_COLOR_ROOTS = new Set(['neutral', 'orange', 'sun', 'green', 'blue', 'red', 'amber']);
+
+function classTokens(cls) {
+  return cls.split(/\s+/).filter(Boolean);
+}
 
 test('buttonClassName compose ds-button + primary + md par défaut', () => {
-  const cls = buttonClassName();
-  assert.match(cls, /\bds-button\b/);
-  assert.match(cls, /\bds-button--primary\b/);
-  assert.match(cls, /\bds-button--md\b/);
-  assert.match(cls, /\bbutton-primary\b/);
+  const tokens = classTokens(buttonClassName());
+  assert.deepEqual(tokens, ['ds-button', 'ds-button--primary', 'ds-button--md']);
+});
+
+test('buttonClassName ne pose plus button ni button-primary', () => {
+  for (const variant of Object.keys(BUTTON_VARIANTS)) {
+    for (const size of Object.keys(BUTTON_SIZES)) {
+      const tokens = classTokens(buttonClassName({ variant, size, tone: 'inverse' }));
+      assert.equal(tokens.includes('button'), false, `${variant}/${size}`);
+      assert.equal(tokens.some((token) => token.startsWith('button-')), false, `${variant}/${size}`);
+    }
+  }
 });
 
 test('buttonClassName accepte size, tone et className extra', () => {
@@ -87,12 +98,12 @@ test('les tokens sémantiques se résolvent sans hex dans la référence', async
   const jsonText = await readFile(TOKENS_PATH, 'utf8');
   const tree = loadTokenTree(jsonText);
   const primary = resolveValue(tree, '{color.action.primary.bg}');
-  assert.equal(primary, '#17171c');
+  assert.equal(primary, '#c23709');
   const hover = resolveValue(tree, '{color.action.primary.bg-hover}');
-  assert.equal(hover, '#212121');
+  assert.equal(hover, '#a62f08');
   const entries = flattenResolved(tree);
   const semanticAction = entries.find((e) => e.cssName === '--ds-color-action-primary-bg');
-  assert.equal(semanticAction.value, '#17171c');
+  assert.equal(semanticAction.value, '#c23709');
   const primitiveLeak = entries.filter(
     (e) => e.path[0] === 'color' && PRIMITIVE_COLOR_ROOTS.has(e.path[1]),
   );
@@ -114,6 +125,16 @@ test('size.touch.min est appliqué à sm et md (mobile), hors ghost/link', async
     css,
     /\.ds-button--md:not\(\.ds-button--ghost\):not\(\.ds-button--link\)/,
   );
+});
+
+test('buttons.css ne déclare plus les alias button-primary', async () => {
+  const css = await readFile(path.join(SRC_ROOT, 'styles/app/buttons.css'), 'utf8');
+  assert.doesNotMatch(css, /\.button-primary\b/);
+  assert.doesNotMatch(css, /\.button-secondary\b/);
+  assert.doesNotMatch(css, /\.button-pill-outline\b/);
+  assert.doesNotMatch(css, /\.btn-primary\b/);
+  assert.match(css, /\.ds-button--primary\b/);
+  assert.match(css, /\.ds-button--success\b/);
 });
 
 test('le CSS généré est à jour par rapport à tokens.json', async () => {

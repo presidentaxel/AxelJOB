@@ -2,7 +2,6 @@
  * Classes CSS du bouton — axes séparés (docs/design-system.md).
  *
  * Cible : ds-button ds-button--primary ds-button--md
- * Alias : button button-primary (transition).
  */
 
 export const BUTTON_VARIANTS = Object.freeze({
@@ -24,22 +23,6 @@ export const BUTTON_SIZES = Object.freeze({
 export const BUTTON_TONES = Object.freeze({
   default: '',
   inverse: 'ds-button--inverse',
-});
-
-const LEGACY_VARIANT = Object.freeze({
-  primary: 'button-primary',
-  secondary: 'button-secondary',
-  tertiary: 'button-tertiary',
-  ghost: 'button-ghost',
-  link: '',
-  danger: '',
-  success: 'button-success',
-});
-
-const LEGACY_SIZE = Object.freeze({
-  sm: 'button--sm',
-  md: '',
-  lg: 'button--lg',
 });
 
 const hasOwn = (object, key) => Object.prototype.hasOwnProperty.call(object, key);
@@ -81,9 +64,6 @@ export function buttonClassName({
     BUTTON_TONES[tone],
     iconOnly ? 'ds-button--icon-only' : '',
     fullWidth ? 'ds-button--full-width' : '',
-    'button',
-    LEGACY_VARIANT[variant],
-    LEGACY_SIZE[size],
     className,
   ].filter(Boolean).join(' ');
 }
