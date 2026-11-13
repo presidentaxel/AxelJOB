@@ -70,6 +70,7 @@ const SOURCE_FILES = [
   'src/components/TopbarPartnerCode.jsx',
   'src/components/OnboardingWizard.jsx',
   'src/App.jsx',
+  'src/components/CvChatComposer.jsx',
   'src/components/ProfileView.jsx',
   'src/components/SettingsView.jsx',
   'src/components/MonitoringDashboard.jsx',
