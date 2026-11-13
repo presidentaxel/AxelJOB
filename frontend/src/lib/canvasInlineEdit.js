@@ -58,10 +58,10 @@ function sanitizeSpanStyle(styleValue) {
  */
 const RICH_TEXT_SANITIZE_CONFIG = Object.freeze({
   ALLOWED_TAGS: ['strong', 'em', 'u', 's', 'span', 'br', 'b', 'i', 'strike'],
-  ALLOWED_ATTR: ['style'],
+  ALLOWED_ATTR: ['style', 'class'],
   ALLOW_DATA_ATTR: false,
   FORBID_TAGS: ['script', 'style', 'img', 'iframe', 'object', 'embed', 'svg', 'a', 'font'],
-  FORBID_ATTR: ['onerror', 'onload', 'onclick', 'href', 'src', 'color', 'face', 'class', 'id'],
+  FORBID_ATTR: ['onerror', 'onload', 'onclick', 'href', 'src', 'color', 'face', 'id'],
 });
 
 let _hooksInstalled = false;
@@ -69,6 +69,13 @@ let _hooksInstalled = false;
 function ensureDomPurifyHooks() {
   if (_hooksInstalled || typeof DOMPurify?.addHook !== 'function') return;
   DOMPurify.addHook('uponSanitizeAttribute', (node, data) => {
+    if (data.attrName === 'class') {
+      const isSpan = (node.tagName || '').toLowerCase() === 'span';
+      const onlyChanged = String(data.attrValue || '').trim() === 'cv-changed';
+      data.keepAttr = isSpan && onlyChanged;
+      if (data.keepAttr) data.attrValue = 'cv-changed';
+      return;
+    }
     if (data.attrName !== 'style') return;
     if ((node.tagName || '').toLowerCase() !== 'span') {
       data.keepAttr = false;
@@ -204,6 +211,59 @@ export function normalizeRichTextHtml(value) {
   return decodeHtmlEntities(trimmed);
 }
 
+function tagNameAt(source, ltIndex) {
+  let i = ltIndex + 1;
+  if (source[i] === '/') i += 1;
+  const start = i;
+  while (i < source.length) {
+    const c = source[i];
+    if (c === '>' || c === '/' || c === ' ' || c === '\t' || c === '\n' || c === '\r') break;
+    i += 1;
+  }
+  return source.slice(start, i).toLowerCase();
+}
+
+/** Texte visible. Pas de regex qui retire les balises : elle laisse passer `<script`. */
+function markupToPlainText(source) {
+  let out = '';
+  let i = 0;
+  while (i < source.length) {
+    const lt = source.indexOf('<', i);
+    if (lt < 0) {
+      out += source.slice(i);
+      break;
+    }
+    out += source.slice(i, lt);
+    const gt = source.indexOf('>', lt + 1);
+    if (gt < 0) break;
+    if (tagNameAt(source, lt) === 'br') out += '\n';
+    i = gt + 1;
+  }
+  return out
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&');
+}
+
+export function htmlToPlainText(html) {
+  return markupToPlainText(String(html || ''));
+}
+
+/** Le placeholder d'un bloc vide ne doit pas rester collé au vrai texte. */
+export function repairCanvasPlaceholderGlue(value) {
+  return String(value || '').replace(/^(?:Texte libre|Titre)(?=\S)/, '');
+}
+
+export function repairCanvasPlaceholderHtml(html) {
+  const raw = String(html || '');
+  return raw
+    .replace(/^(<span\b[^>]*>)(?:Texte libre|Titre)(?=\S)/i, '$1')
+    .replace(/^(?:Texte libre|Titre)(?=\S)/, '');
+}
+
 export function fieldValueLooksLikeHtml(value) {
   if (typeof value !== 'string' || !value) return false;
   const normalized = normalizeRichTextHtml(value);
@@ -244,7 +304,9 @@ export function applyCvFieldsFromRoot(cv, rootEl) {
 
 export function readBlockContentFromRoot(rootEl) {
   if (!rootEl) return '';
-  const el = rootEl.querySelector('[data-canvas-block-content="1"]');
+  const el = rootEl.getAttribute?.('data-canvas-block-content') === '1'
+    ? rootEl
+    : rootEl.querySelector?.('[data-canvas-block-content="1"]');
   if (!el) return '';
   return fieldValueFromEditableEl(el);
 }

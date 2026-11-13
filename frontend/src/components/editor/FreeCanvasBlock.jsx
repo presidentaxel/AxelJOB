@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef } from 'react';
 import { fontStyleForText } from '../../lib/embeddedFontCoverage.js';
 // useRef also used by EditableRichText
 import { HiEnvelope, HiLink, HiPhone, HiLockClosed } from 'react-icons/hi2';
@@ -6,9 +6,12 @@ import { apiUrl } from '../../api';
 import {
   findCvArrayIndex,
   getFieldDisplayValue,
+  htmlToPlainText,
   isCanvasInlineEditableType,
   normalizeRichTextHtml,
   handleRichTextPaste,
+  repairCanvasPlaceholderGlue,
+  repairCanvasPlaceholderHtml,
   sanitizeRichTextHtml,
   fieldValueLooksLikeHtml,
 } from '../../lib/canvasInlineEdit.js';
@@ -28,6 +31,7 @@ import {
   resolvePhotoUrl,
   resolveProjets,
 } from '../../lib/freeCanvasContent.js';
+import { diffHighlightParts } from '../../lib/cvChangeHighlight.js';
 import { blockHasTypographyOverride, blockStyleToCss } from '../../lib/canvasBlockToolbar.js';
 import { colorFromPdfRuns, stripPdfMarkup } from '../../lib/structuralSemanticBind.js';
 import { MM_TO_PX } from '../../lib/freeCanvasScale.js';
@@ -64,6 +68,30 @@ function photoSrc(cv) {
   return apiUrl(`/api/assets/${raw.replace(/^assets\//, '')}`);
 }
 
+function HighlightedValue({ base, value }) {
+  const text = typeof value === 'string' ? value : (value == null ? '' : String(value));
+  if (typeof base !== 'string') return text;
+  const parts = diffHighlightParts(base, text);
+  if (!parts.some((part) => part.changed)) return text;
+  return parts.map((part, index) => {
+    if (part.text === '\n') return <br key={index} />;
+    const prev = parts[index - 1];
+    const spacer = prev && prev.text !== '\n' ? ' ' : '';
+    return part.changed
+      ? <span key={index} className="cv-changed">{spacer}{part.text}</span>
+      : <span key={index}>{spacer}{part.text}</span>;
+  });
+}
+
+function findBaseExperience(baseCv, exp, idx) {
+  const list = Array.isArray(baseCv?.experiences) ? baseCv.experiences : [];
+  if (exp?.id) {
+    const found = list.find((item) => item && item.id === exp.id);
+    if (found) return found;
+  }
+  return list[idx] || null;
+}
+
 function BlockText({ children, className = '' }) {
   const text = typeof children === 'string' ? children : '';
   const richText = normalizeRichTextHtml(text);
@@ -93,7 +121,7 @@ function SidebarCategoryHeading({ label, titleStyle }) {
   return <h4 className={cls}>{label}</h4>;
 }
 
-function SemanticBlockBody({ block, cv, editing = false }) {
+function SemanticBlockBody({ block, cv, baseCv = null, editing = false }) {
   const { type, bind, limit, style = {} } = block;
   const format = style.format || style.list_format || 'default';
 
@@ -144,7 +172,13 @@ function SemanticBlockBody({ block, cv, editing = false }) {
             {title || 'Titre professionnel'}
           </CanvasEditableField>
         ) : title ? (
-          titleColor ? <span style={{ color: titleColor }}>{title}</span> : <BlockText>{title}</BlockText>
+          titleColor ? (
+            <span style={{ color: titleColor }}>
+              <HighlightedValue base={baseCv ? (baseCv.titre_professionnel || '') : undefined} value={title} />
+            </span>
+          ) : (
+            <HighlightedValue base={baseCv ? (baseCv.titre_professionnel || '') : undefined} value={title} />
+          )
         ) : (
           <span className="free-canvas-block__field-placeholder">Titre professionnel</span>
         )
@@ -356,7 +390,7 @@ function SemanticBlockBody({ block, cv, editing = false }) {
                 {resumeText || 'Résumé professionnel'}
               </CanvasEditableField>
             ) : resumeText ? (
-              <BlockText>{resumeText}</BlockText>
+              <HighlightedValue base={baseCv ? (baseCv.resume || '') : undefined} value={resumeText} />
             ) : (
               <span className="free-canvas-block__field-placeholder">Résumé professionnel</span>
             )}
@@ -395,6 +429,7 @@ function SemanticBlockBody({ block, cv, editing = false }) {
           {items.map((exp, i) => {
             const idx = findCvArrayIndex(cv, 'experiences', exp);
             if (idx < 0) return null;
+            const baseExp = baseCv ? findBaseExperience(baseCv, exp, idx) : null;
             const dateParts = [exp.date_debut, exp.date_fin].filter(Boolean).join(hyphenDates ? ' - ' : ' – ');
             const dateLine = minimalExp
               ? dateParts
@@ -404,14 +439,19 @@ function SemanticBlockBody({ block, cv, editing = false }) {
                 {exp.entreprise || exp.poste || 'Organisation'}
               </CanvasEditableField>
             ) : (
-              <strong>{exp.entreprise || exp.poste}</strong>
+              <strong>
+                <HighlightedValue
+                  base={baseCv ? (baseExp?.entreprise || '') : undefined}
+                  value={exp.entreprise || exp.poste || ''}
+                />
+              </strong>
             );
             const posteNode = editing ? (
               <CanvasEditableField path={`experiences.${idx}.poste`} editing>
                 {exp.poste || 'Poste'}
               </CanvasEditableField>
             ) : (
-              exp.poste
+              <HighlightedValue base={baseCv ? (baseExp?.poste || '') : undefined} value={exp.poste || ''} />
             );
             const datesNode = (editing || dateLine) && (
               <span className="free-canvas-block__exp-dates">
@@ -459,7 +499,10 @@ function SemanticBlockBody({ block, cv, editing = false }) {
                         {(b || '').trim() || 'Point clé'}
                       </CanvasEditableField>
                     ) : (
-                      b
+                      <HighlightedValue
+                        base={baseCv ? ((baseExp?.bullet_points || [])[j] || '') : undefined}
+                        value={b || ''}
+                      />
                     )}
                   </li>
                 ))}
@@ -766,15 +809,31 @@ function SemanticBlockBody({ block, cv, editing = false }) {
   }
 }
 
-function EditableRichText({ tag, className, style, editing, html, onAutoHeight }) {
+function EditableRichText({
+  tag, className, style, editing, html, onAutoHeight, directEdit = false, onCommit,
+}) {
   const Tag = tag;
   const ref = useRef(null);
+  const seededRef = useRef(false);
+  const focusedRef = useRef(false);
   const richHtml = sanitizeRichTextHtml(normalizeRichTextHtml(html || ''));
-  useEffect(() => {
-    if (editing && ref.current) {
-      ref.current.innerHTML = richHtml;
+  const plain = repairCanvasPlaceholderGlue(htmlToPlainText(richHtml));
+  useLayoutEffect(() => {
+    if (directEdit) {
+      const el = ref.current;
+      if (!el || focusedRef.current) return;
+      if (el.innerHTML !== richHtml) el.innerHTML = richHtml;
+      return;
     }
-  }, [editing, richHtml]);
+    if (!editing) {
+      seededRef.current = false;
+      return;
+    }
+    if (!ref.current || seededRef.current) return;
+    seededRef.current = true;
+    ref.current.textContent = plain;
+    ref.current.focus();
+  }, [directEdit, editing, plain, richHtml]);
 
   const reportHeight = () => {
     if (!editing || !ref.current || typeof onAutoHeight !== 'function') return;
@@ -787,9 +846,35 @@ function EditableRichText({ tag, className, style, editing, html, onAutoHeight }
     if (editing) reportHeight();
   }, [editing]);
 
+  if (directEdit) {
+    return (
+      <Tag
+        key="canvas-direct"
+        ref={ref}
+        className={className}
+        style={{
+          ...style,
+          overflow: 'visible',
+        }}
+        contentEditable
+        suppressContentEditableWarning
+        data-canvas-block-content="1"
+        onBlur={(e) => {
+          focusedRef.current = false;
+          if (typeof onCommit === 'function') onCommit(e.currentTarget);
+        }}
+        onFocus={() => { focusedRef.current = true; }}
+        onPaste={handleRichTextPaste}
+        onPointerDown={(e) => e.stopPropagation()}
+        onMouseDown={(e) => e.stopPropagation()}
+      />
+    );
+  }
+
   if (editing) {
     return (
       <Tag
+        key="canvas-edit"
         ref={ref}
         className={className}
         style={style}
@@ -805,6 +890,7 @@ function EditableRichText({ tag, className, style, editing, html, onAutoHeight }
   }
   return (
     <Tag
+      key="canvas-view"
       className={className}
       style={style}
       dangerouslySetInnerHTML={{ __html: richHtml }}
@@ -833,6 +919,17 @@ function paintedPlainText(block, cv) {
   return stripPdfMarkup(block.content);
 }
 
+function paragraphAlign(style = {}, content = '') {
+  if (style.align === 'center' || style.align === 'right' || style.align === 'justify') {
+    return style.align;
+  }
+  // Les lignes Canva réécrites remplissent la largeur, comme avant l'adaptation.
+  if (/cv-changed/.test(String(content || '')) && /<br\b/i.test(String(content || ''))) {
+    return 'justify';
+  }
+  return style.align || 'left';
+}
+
 function inlineTypographyStyle(style = {}) {
   const css = {};
   if (style.font_size != null) css.fontSize = `${style.font_size}pt`;
@@ -856,19 +953,28 @@ function inlineTypographyStyle(style = {}) {
   return css;
 }
 
-function NonSemanticBlockBody({ block, editing = false, onAutoHeight }) {
-  const { type, content = '', style = {} } = block;
+function NonSemanticBlockBody({
+  block, editing = false, onAutoHeight, livePreview = false, onCommit,
+}) {
+  const { type, content: rawContent = '', style = {} } = block;
+  const content = livePreview ? repairCanvasPlaceholderHtml(rawContent) : rawContent;
+  const editStyle = editing
+    ? { whiteSpace: 'pre-wrap', lineHeight: 1.35 }
+    : null;
   switch (type) {
     case 'text': {
       const textStyle = {
-        ...inlineTypographyStyle(style),
-        textAlign: style.align || 'left',
+        ...inlineTypographyStyle(editing ? { ...style, nowrap: false } : style),
+        textAlign: paragraphAlign(style, content),
         opacity: style.opacity ?? 1,
         margin: 0,
         minHeight: style.nowrap || style.multiline ? 0 : '1em',
         height: 'auto',
         overflow: 'visible',
+        ...editStyle,
       };
+      const shown = content || (livePreview ? '' : 'Texte libre');
+      if (livePreview && !editing && !htmlToPlainText(shown).trim()) return null;
       return (
         <EditableRichText
           tag="p"
@@ -879,20 +985,25 @@ function NonSemanticBlockBody({ block, editing = false, onAutoHeight }) {
           }
           style={textStyle}
           editing={editing}
-          html={content || 'Texte libre'}
+          html={shown}
           onAutoHeight={onAutoHeight}
+          directEdit={livePreview && !editing}
+          onCommit={onCommit}
         />
       );
     }
     case 'title': {
       const titleStyle = {
-        ...inlineTypographyStyle(style),
-        textAlign: style.align || 'left',
+        ...inlineTypographyStyle(editing ? { ...style, nowrap: false } : style),
+        textAlign: paragraphAlign(style, content),
         opacity: style.opacity ?? 1,
         margin: 0,
         height: 'auto',
         overflow: 'visible',
+        ...editStyle,
       };
+      const shown = content || (livePreview ? '' : 'Titre');
+      if (livePreview && !editing && !htmlToPlainText(shown).trim()) return null;
       return (
         <EditableRichText
           tag="h3"
@@ -903,8 +1014,10 @@ function NonSemanticBlockBody({ block, editing = false, onAutoHeight }) {
           }
           style={titleStyle}
           editing={editing}
-          html={content || 'Titre'}
+          html={shown}
           onAutoHeight={onAutoHeight}
+          directEdit={livePreview && !editing}
+          onCommit={onCommit}
         />
       );
     }
@@ -1023,11 +1136,13 @@ function blockClassName({ selected, dragging, resizing, interactable, editing, l
 export default function FreeCanvasBlock({
   block,
   cv,
+  baseCv = null,
   selected = false,
   editing = false,
   dragging = false,
   resizing = false,
   interactable = false,
+  textEditable = false,
   onPointerDown,
   onPointerMove,
   onPointerUp,
@@ -1122,7 +1237,7 @@ export default function FreeCanvasBlock({
   };
 
   const handleDoubleClick = (e) => {
-    if (!interactable) return;
+    if (!interactable && !textEditable) return;
     e.stopPropagation();
     if ((type === 'image' || type === 'photo') && typeof onImageEdit === 'function') {
       onImageEdit(block.id);
@@ -1130,6 +1245,23 @@ export default function FreeCanvasBlock({
     }
     if (!canEdit) return;
     if (typeof onDoubleClickEdit === 'function') onDoubleClickEdit(block.id);
+  };
+
+  const handleTextClick = (e) => {
+    if (!textEditable || interactable || editing) return;
+    if (type === 'text' || type === 'title') {
+      const field = e.currentTarget.querySelector?.('[data-canvas-block-content="1"]');
+      if (field && document.activeElement !== field) field.focus();
+      return;
+    }
+    if (!canEdit) return;
+    e.stopPropagation();
+    if (typeof onDoubleClickEdit === 'function') onDoubleClickEdit(block.id);
+  };
+
+  const commitPreviewText = (rootEl) => {
+    if (!textEditable || typeof onInnerBlur !== 'function') return;
+    onInnerBlur(block.id, rootEl);
   };
 
   const handleInnerPointerDown = (e) => {
@@ -1176,6 +1308,12 @@ export default function FreeCanvasBlock({
     locked ? 'verrouillé' : null,
     'Flèches pour déplacer, Suppr pour supprimer, Entrée pour éditer.',
   ].filter(Boolean).join('. ');
+  const visibleText = repairCanvasPlaceholderGlue(htmlToPlainText(validBlock?.content || ''));
+  const previewGhost = textEditable
+    && !editing
+    && (type === 'text' || type === 'title')
+    && !visibleText.trim();
+  const passPreviewClick = textEditable && !interactable && !canEdit;
 
   return (
     <div
@@ -1187,6 +1325,8 @@ export default function FreeCanvasBlock({
       data-block-type={type}
       data-nowrap={blockStyle?.nowrap ? 'true' : undefined}
       data-multiline={blockStyle?.multiline ? 'true' : undefined}
+      data-preview-clip={blockStyle?.preview_clip ? 'true' : undefined}
+      data-text-editable={textEditable ? 'true' : undefined}
       tabIndex={interactable && !editing ? 0 : undefined}
       aria-label={interactable ? a11yLabel : undefined}
       aria-disabled={interactable && locked ? true : undefined}
@@ -1196,6 +1336,7 @@ export default function FreeCanvasBlock({
         width: `${w}mm`,
         height: `${h}mm`,
         zIndex: dragging || resizing || editing ? 9999 : z,
+        pointerEvents: previewGhost || passPreviewClick ? 'none' : undefined,
         ...blockEffectStyle,
       }}
       title={
@@ -1212,6 +1353,7 @@ export default function FreeCanvasBlock({
       onPointerUp={interactable && !editing && onPointerUp ? onPointerUp : undefined}
       onPointerCancel={interactable && !editing && onPointerCancel ? onPointerCancel : undefined}
       onDoubleClick={handleDoubleClick}
+      onClick={textEditable && !interactable ? handleTextClick : undefined}
     >
       <div
         ref={innerRef}
@@ -1233,10 +1375,12 @@ export default function FreeCanvasBlock({
             <NonSemanticBlockBody
               block={renderBlock}
               editing={editing}
+              livePreview={textEditable}
               onAutoHeight={autoHeight ? reportHeight : undefined}
+              onCommit={textEditable ? commitPreviewText : undefined}
             />
           )
-          : <SemanticBlockBody block={renderBlock} cv={cv} editing={editing} />}
+          : <SemanticBlockBody block={renderBlock} cv={cv} baseCv={baseCv} editing={editing} />}
       </div>
       {locked && (
         <span className="free-canvas-block__lock-badge" title="Position verrouillée - utilisez la barre d’actions pour déverrouiller" aria-hidden>

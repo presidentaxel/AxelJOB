@@ -751,6 +751,17 @@ export function repairExplodedFreeformSemanticOverlays(layout) {
   return { ...layout, pages };
 }
 
+function contactBindPaths(block) {
+  const bind = block?.bind;
+  if (Array.isArray(bind)) return bind.map((item) => String(item || '').trim()).filter(Boolean);
+  if (typeof bind === 'string' && bind.trim()) return [bind.trim()];
+  return [];
+}
+
+function contactDisplaysField(block, field) {
+  return contactBindPaths(block).includes(field);
+}
+
 export function removeTextDuplicatingContact(layout, cv = {}) {
   if (!layout?.pages?.length) return layout;
   const phoneNeedle = String(cv.telephone || cv.phone || '')
@@ -758,17 +769,18 @@ export function removeTextDuplicatingContact(layout, cv = {}) {
   const emailNeedle = String(cv.email || '').trim().toLowerCase();
   const pages = layout.pages.map((page) => {
     const blocks = Array.isArray(page?.blocks) ? page.blocks : [];
-    const contacts = blocks.filter((b) => b?.type === 'contact').map(asBox);
+    const contacts = blocks.filter((b) => b?.type === 'contact');
     if (!contacts.length) return page;
     const nextBlocks = blocks.filter((block) => {
       if (block?.type !== 'text') return true;
       const box = asBox(block);
       if (box.y > 48) return true;
-      const near = contacts.some((cb) => (
-        overlapRatio(box, cb) >= 0.05
-        || (sameHeaderRow(box, cb, 16) && Math.abs(box.x - cb.x) < 80)
-      ));
-      if (!near) return true;
+      const nearContacts = contacts.filter((cb) => {
+        const contactBox = asBox(cb);
+        return overlapRatio(box, contactBox) >= 0.05
+          || (sameHeaderRow(box, contactBox, 16) && Math.abs(box.x - contactBox.x) < 80);
+      });
+      if (!nearContacts.length) return true;
       const raw = stripTagsToText(block.content).toLowerCase();
       const digits = String(block.content || '').replace(/\D/g, '');
       const emailHit = Boolean(emailNeedle && raw.includes(emailNeedle));
@@ -777,10 +789,112 @@ export function removeTextDuplicatingContact(layout, cv = {}) {
         && digits.length >= 8
         && digits.includes(phoneNeedle.slice(-8)),
       );
-      return !(emailHit || phoneHit);
+      // Le widget contact n'affiche que ses bind. Un bloc « email » seul ne
+      // doit pas avaler la ligne du numéro qui est juste à côté.
+      const dropEmail = emailHit && nearContacts.some((cb) => contactDisplaysField(cb, 'email'));
+      const dropPhone = phoneHit && nearContacts.some((cb) => contactDisplaysField(cb, 'telephone'));
+      if (phoneHit && !dropPhone) {
+        console.info(
+          '[cv-import] numéro vu dans le PDF, conservé : aucun bloc contact voisin n’affiche telephone',
+        );
+      }
+      return !(dropEmail || dropPhone);
     });
     return nextBlocks.length === blocks.length ? page : { ...page, blocks: nextBlocks };
   });
+  return { ...layout, pages };
+}
+
+function blockDigits(block) {
+  return String(block?.content || '').replace(/\D/g, '');
+}
+
+function layoutShowsTelephone(blocks, needle) {
+  return blocks.some((block) => {
+    if (block?.type === 'contact' && contactDisplaysField(block, 'telephone')) return true;
+    if (block?.type !== 'text' && block?.type !== 'title') return false;
+    const digits = blockDigits(block);
+    return needle.length >= 8 && digits.includes(needle.slice(-8));
+  });
+}
+
+function isHeaderContactIcon(block) {
+  if (block?.type !== 'image') return false;
+  const w = Number(block.w) || 0;
+  const h = Number(block.h) || 0;
+  const y = Number(block.y) || 0;
+  return y < 50 && w > 0 && h > 0 && w <= 8 && h <= 8;
+}
+
+function headerRowOccupied(blocks, icon) {
+  const iy = Number(icon.y) || 0;
+  const ix = Number(icon.x) || 0;
+  return blocks.some((block) => {
+    if (block === icon) return false;
+    if (block?.type !== 'text' && block?.type !== 'title' && block?.type !== 'contact') return false;
+    const y = Number(block.y) || 0;
+    const x = Number(block.x) || 0;
+    if (x < ix + 1) return false;
+    return Math.abs(y - iy) < 4;
+  });
+}
+
+/** Ligne téléphone remise sur la rangée d’icône vide, quand le widget contact ne l’affiche pas. */
+export function restoreMissingHeaderPhone(layout, cv = {}) {
+  if (!layout?.freeform || !layout?.pages?.length) return layout;
+  const display = String(cv.telephone || cv.phone || '').trim();
+  const needle = display.replace(/\D/g, '');
+  if (needle.length < 8) return layout;
+  let restored = false;
+  const pages = layout.pages.map((page) => {
+    const blocks = Array.isArray(page?.blocks) ? page.blocks : [];
+    if (layoutShowsTelephone(blocks, needle)) return page;
+    if (blocks.some((block) => block?.id === 'import-phone-line')) return page;
+    const icons = blocks.filter((block) => isHeaderContactIcon(block) && !headerRowOccupied(blocks, block));
+    if (!icons.length) return page;
+    const emailContact = blocks.find((block) => (
+      block?.type === 'contact' && contactDisplaysField(block, 'email')
+    ));
+    const icon = emailContact
+      ? icons.slice().sort((a, b) => (
+        Math.abs(Number(a.y) - Number(emailContact.y)) - Math.abs(Number(b.y) - Number(emailContact.y))
+      ))[0]
+      : icons[0];
+    const columnText = blocks
+      .filter((block) => (
+        (block?.type === 'text' || block?.type === 'title')
+        && Number(block.y) < 50
+        && Number(block.x) > Number(icon.x)
+      ))
+      .sort((a, b) => Math.abs(Number(a.y) - Number(icon.y)) - Math.abs(Number(b.y) - Number(icon.y)))[0];
+    const styleSrc = columnText?.style && typeof columnText.style === 'object' ? columnText.style : {};
+    restored = true;
+    return {
+      ...page,
+      blocks: [
+        ...blocks,
+        {
+          id: 'import-phone-line',
+          type: 'text',
+          content: display,
+          x: columnText ? Number(columnText.x) : Number(icon.x) + Number(icon.w) + 1.5,
+          y: Number(icon.y) - 0.4,
+          w: 46,
+          h: Math.max(Number(icon.h) || 0, 5),
+          z: (Number(icon.z) || 2) + 1,
+          style: {
+            font_size: styleSrc.font_size || 9,
+            color: styleSrc.color || '#1e2a3a',
+            align: 'left',
+            nowrap: true,
+          },
+        },
+      ],
+    };
+  });
+  if (restored) {
+    console.info('[cv-import] numéro absent du canvas, ligne ajoutée à côté de l’icône d’en-tête vide');
+  }
   return { ...layout, pages };
 }
 
@@ -800,5 +914,6 @@ export function cleanupCanvasHeaderOverlays(layout, cv = {}) {
   next = expandClippedSectionHeadings(next);
   next = stretchHeaderBandToContent(next);
   next = tagBlocksOnHeaderBand(next);
+  next = restoreMissingHeaderPhone(next, cv);
   return next;
 }

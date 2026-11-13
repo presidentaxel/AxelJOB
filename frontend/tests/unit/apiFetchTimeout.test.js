@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  ADAPT_PLAN_TIMEOUT_MS,
+  ADAPT_RUN_TIMEOUT_MS,
   API_REQUEST_TIMEOUT_MS,
   CV_IMPORT_REQUEST_TIMEOUT_MS,
   fetchWithDeadline,
@@ -21,6 +23,11 @@ function hangingFetch(_url, options) {
 test('l’import CV attend plus longtemps qu’une lecture', () => {
   assert.ok(CV_IMPORT_REQUEST_TIMEOUT_MS > API_REQUEST_TIMEOUT_MS);
   assert.ok(CV_IMPORT_REQUEST_TIMEOUT_MS >= 60_000);
+});
+
+test('l’adaptation attend plus longtemps qu’une lecture', () => {
+  assert.ok(ADAPT_PLAN_TIMEOUT_MS > API_REQUEST_TIMEOUT_MS);
+  assert.ok(ADAPT_RUN_TIMEOUT_MS >= ADAPT_PLAN_TIMEOUT_MS);
 });
 
 test('fetchWithDeadline abandonne une requête qui ne répond pas', async () => {

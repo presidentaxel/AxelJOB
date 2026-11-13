@@ -25,6 +25,8 @@ import { supabase } from './lib/supabase';
 import { supabaseConfigMessage } from './lib/userFacingError.js';
 import { fetchAuthSessionWithTimeout } from './lib/supabaseAuthSession';
 import { analyticsAttrs } from './lib/analyticsAttrs.js';
+import { ADAPT_PLAN_TIMEOUT_MS, ADAPT_RUN_TIMEOUT_MS } from './lib/fetchWithDeadline.js';
+import CvChatComposer from './components/CvChatComposer.jsx';
 import AuthForm, { AuthLayout } from './components/AuthForm';
 import { authModeFromPath } from './lib/authPaths.js';
 import { consumeAuthCallback, decidePublicEntry, hasPendingAuthCallback, isPublicEntryPath, loginNavOptions } from './lib/publicEntry.js';
@@ -61,9 +63,12 @@ import { localizationSourceFingerprint } from './lib/localizationSourceFingerpri
 import { computeApplicationMetrics, isApplicationToFollowUp } from './lib/applicationStats.js';
 import { applyA4PageFramesToDocument, syncCvPreviewIframeHeight } from './lib/cvPreviewA4Pages';
 import {
-  betaCanvasRenderFields,
+  betaCanvasRenderFieldsForCv,
+  hasUsableBetaCanvasLayout,
+  isBetaCanvasTemplateId,
   withBetaCanvasTemplate,
 } from './lib/betaCanvasTemplate.js';
+import BetaCvLivePreview from './components/editor/BetaCvLivePreview.jsx';
 
 const ProfileView = lazyWithChunkReload(() => import('./components/editor/ProfileViewSwitcher'));
 const SettingsView = lazyWithChunkReload(() => import('./components/SettingsView'));
@@ -824,6 +829,8 @@ export default function App() {
   ]);
   /** true quand l’API a répondu ; on n’affiche le résultat qu’une fois l’animation à la dernière étape */
   const [apiAdaptDone, setApiAdaptDone] = useState(false);
+  /** CV partiel reçu à chaque étape du flux, pour les zones vertes avant le résultat final. */
+  const [adaptLiveCv, setAdaptLiveCv] = useState(null);
   const pendingAdaptResultRef = useRef(null);
   /** Annule un flux d'adaptation précédent si un nouveau démarre (double clic / relance rapide). */
   const adaptRunAbortRef = useRef(null);
@@ -853,7 +860,6 @@ export default function App() {
   const [pdfEntrepriseModalValue, setPdfEntrepriseModalValue] = useState('');
   const [exportPrepTemplateOptionsNonce, setExportPrepTemplateOptionsNonce] = useState(0);
   const [chatMessages, setChatMessages] = useState([]);
-  const [chatInput, setChatInput] = useState('');
   const [adaptTodoPlan, setAdaptTodoPlan] = useState(null);
   const [, setAdaptTodoExplain] = useState('');
   const [, setAdaptTodoExplainLoading] = useState(false);
@@ -911,15 +917,27 @@ export default function App() {
   const [profileLayout, setProfileLayout] = useState(null);
   const profileLayoutRef = useRef(null);
   profileLayoutRef.current = profileLayout;
+  const lastBaseCvRef = useRef(null);
+  lastBaseCvRef.current = lastBaseCv;
 
   const postRenderHtml = useCallback((body) => apiPost('/api/render-html', {
     ...body,
-    ...betaCanvasRenderFields(body?.template_id, profileLayoutRef.current),
+    ...betaCanvasRenderFieldsForCv(
+      body?.template_id,
+      profileLayoutRef.current,
+      body?.base_cv || lastBaseCvRef.current,
+      body?.cv,
+    ),
   }), []);
 
   const postPdfBlob = useCallback((body) => apiPostBlob('/api/pdf', {
     ...body,
-    ...betaCanvasRenderFields(body?.template_id, profileLayoutRef.current),
+    ...betaCanvasRenderFieldsForCv(
+      body?.template_id,
+      profileLayoutRef.current,
+      body?.base_cv || lastBaseCvRef.current,
+      body?.cv,
+    ),
   }), []);
 
   /**
@@ -956,7 +974,7 @@ export default function App() {
   const [tourHighlightStepActive, setTourHighlightStepActive] = useState(false);
   const [tourDemoPreviewHtml, setTourDemoPreviewHtml] = useState('');
   const prevTourHighlightRef = useRef(false);
-  const cvChatInputRef = useRef(null);
+  const cvChatComposerRef = useRef(null);
   const contextFileInputRef = useRef(null);
   const contextFilesRef = useRef([]);
   const contextUploadSeqRef = useRef(0);
@@ -978,15 +996,6 @@ export default function App() {
     if (!uid) return null;
     return `${ADAPT_DRAFT_STORAGE_PREFIX}${uid}`;
   }, [session?.user?.id]);
-
-  // Hauteur auto du textarea : après envoi / reset, enlever le style inline sinon il reste « grand ».
-  useEffect(() => {
-    if (chatInput !== '') return;
-    const el = cvChatInputRef.current;
-    if (!el) return;
-    el.style.height = 'auto';
-    el.style.removeProperty('height');
-  }, [chatInput]);
 
   const handleTourStepChange = useCallback((step) => {
     setTourHighlightStepActive(step?.id === TOUR_STEP_PREVIEW_AI_HIGHLIGHT);
@@ -1304,7 +1313,7 @@ export default function App() {
       if (sessionStorage.getItem(k) !== '1') return;
       sessionStorage.removeItem(k);
       const id = requestAnimationFrame(() => {
-        cvChatInputRef.current?.focus();
+        cvChatComposerRef.current?.focus();
       });
       return () => cancelAnimationFrame(id);
     } catch (_) { /* ignore */ }
@@ -1706,13 +1715,20 @@ export default function App() {
   /** Réinitialise l’espace « Adapter un CV » : nouveau fil de chat, nouvel adapt (sans toucher aux candidatures déjà enregistrées). */
   const resetAdaptationWorkspace = () => {
     setLastAdaptedCv(null);
+    setAdaptLiveCv(null);
     setLastAdaptationId(null);
     setLastSelectionA4(null);
     setRapport(null);
     setRapportBefore(null);
     setExportBlockVisible(false);
     setChatMessages([]);
-    setChatInput('');
+    cvChatComposerRef.current?.clear();
+    try {
+      const draftKey = getAdaptDraftStorageKey();
+      if (draftKey) localStorage.removeItem(draftKey);
+    } catch {
+      /* ignore localStorage */
+    }
     setAdaptTodoPlan(null);
     setAdaptPlanLoading(false);
     setAdaptTodoExplain('');
@@ -1908,35 +1924,6 @@ export default function App() {
     return () => { cancelled = true; };
   }, [session?.user?.id, view, lastAdaptedCv, adapting, adaptTodoPlan, getPersistedPlanStorageKey]);
 
-  // Sauvegarde locale du brouillon de l'offre pendant la saisie (avant adaptation).
-  useEffect(() => {
-    if (!session?.user?.id || view !== 'cv') return;
-    if (lastAdaptedCv || adaptTodoPlan) return;
-    const key = getAdaptDraftStorageKey();
-    if (!key) return;
-    try {
-      const v = (chatInput || '').trim();
-      if (!v) localStorage.removeItem(key);
-      else localStorage.setItem(key, v);
-    } catch {
-      /* ignore localStorage */
-    }
-  }, [session?.user?.id, view, chatInput, lastAdaptedCv, adaptTodoPlan, getAdaptDraftStorageKey]);
-
-  // Restauration du brouillon après refresh.
-  useEffect(() => {
-    if (!session?.user?.id || view !== 'cv') return;
-    if (lastAdaptedCv || adaptTodoPlan || (chatInput || '').trim()) return;
-    const key = getAdaptDraftStorageKey();
-    if (!key) return;
-    try {
-      const draft = (localStorage.getItem(key) || '').trim();
-      if (draft) setChatInput(draft);
-    } catch {
-      /* ignore localStorage */
-    }
-  }, [session?.user?.id, view, lastAdaptedCv, adaptTodoPlan, chatInput, getAdaptDraftStorageKey]);
-
   useEffect(() => {
     if (usage && usage.adaptations_used > 0) setFirstOfferNudgeOpen(false);
   }, [usage?.adaptations_used]);
@@ -2021,6 +2008,7 @@ export default function App() {
     const pending = pendingAdaptResultRef.current;
     if (pending) {
       if (pending.cv) setLastAdaptedCv(pending.cv);
+      setAdaptLiveCv(null);
       if (pending.adaptation_id != null) setLastAdaptationId(pending.adaptation_id);
       if (pending.selection_a4 !== undefined) setLastSelectionA4(pending.selection_a4);
       if (pending.rapport !== undefined) setRapport(pending.rapport);
@@ -2065,6 +2053,10 @@ export default function App() {
     }
     setAdapting(false);
   }, [apiAdaptDone, adaptStepIndex, adapting, bumpPostFirstAdaptTour]);
+
+  const handlePreviewCvEdit = useCallback((nextCv) => {
+    if (nextCv) setLastAdaptedCv(nextCv);
+  }, []);
 
   // Scroll vers la réponse / animation quand on lance un prompt
   useEffect(() => {
@@ -2122,6 +2114,7 @@ export default function App() {
     setAdaptRating(null);
     setApiAdaptDone(false);
     setAdaptStepIndex(0);
+    setAdaptLiveCv(null);
     setAdaptStreamRunningStepId(null);
     setAdaptStreamDoneStepIds([]);
     const selected = Array.isArray(selectedStepIds) ? selectedStepIds : [];
@@ -2151,6 +2144,7 @@ export default function App() {
         ...templateParams,
       }, {
         signal: adaptSignal,
+        timeoutMs: ADAPT_RUN_TIMEOUT_MS,
         onMessage: (msg) => {
           if (!msg || typeof msg !== 'object') return;
           if (msg.type === 'started' && Array.isArray(msg.step_labels) && msg.step_labels.length > 0) {
@@ -2171,6 +2165,10 @@ export default function App() {
             if (msg.step_id) {
               setAdaptStreamDoneStepIds((prev) => (prev.includes(String(msg.step_id)) ? prev : [...prev, String(msg.step_id)]));
               setAdaptStreamRunningStepId(null);
+            }
+            if (msg.cv && typeof msg.cv === 'object') {
+              setAdaptLiveCv(msg.cv);
+              setPreviewVariant('modified');
             }
             return;
           }
@@ -2357,7 +2355,7 @@ export default function App() {
         plan_id: plan?.planId || undefined,
         output_language: 'cv',
         preview_seq: seq,
-      }).catch(() => {
+      }, { timeoutMs: ADAPT_PLAN_TIMEOUT_MS }).catch(() => {
         /* ignore : l'aperçu source est déjà restauré */
       });
       return;
@@ -2373,7 +2371,7 @@ export default function App() {
         plan_id: plan?.planId || undefined,
         output_language: 'offer',
         preview_seq: seq,
-      });
+      }, { timeoutMs: ADAPT_PLAN_TIMEOUT_MS });
       if (seq !== languagePreviewSeqRef.current) return;
       const cv = data?.cv;
       if (!cv || typeof cv !== 'object') {
@@ -2473,7 +2471,7 @@ export default function App() {
         entreprise: ent || undefined,
         output_language: outputLanguage === 'offer' ? 'offer' : 'cv',
         ...templateParams,
-      });
+      }, { timeoutMs: ADAPT_RUN_TIMEOUT_MS });
       setLastAdaptedCv(data.cv);
       setLastAdaptationId(data.adaptation_id || null);
       if (data.export_hints && data.adaptation_id) {
@@ -2671,13 +2669,12 @@ export default function App() {
     }
   };
 
-  const handleChatSend = async () => {
-    const text = (chatInput || '').trim();
+  const handleChatSend = async (rawText) => {
+    const text = String(rawText || '').trim();
     if (!text || adapting || adaptPlanLoading || contextDocStatus === 'uploading') return;
     const attachedNames = (contextDocMeta.length ? contextDocMeta : contextFiles)
       .map((doc) => doc.filename || doc.name)
       .filter(Boolean);
-    setChatInput('');
     setChatMessages((prev) => [...prev, { role: 'user', content: text, attachments: attachedNames }]);
     hideError();
     if (!lastAdaptedCv) {
@@ -2696,7 +2693,7 @@ export default function App() {
           titre: posteNom || undefined,
           entreprise: entrepriseNom || undefined,
           documents_context: documentsContext || undefined,
-        });
+        }, { timeoutMs: ADAPT_PLAN_TIMEOUT_MS });
         const todo = Array.isArray(plan?.todo) ? plan.todo : [];
         const mismatch = Boolean(
           plan?.language_mismatch
@@ -2778,7 +2775,7 @@ export default function App() {
         cv: lastAdaptedCv,
         instruction: text,
         documents_context: documentsContext || undefined,
-      });
+      }, { timeoutMs: ADAPT_PLAN_TIMEOUT_MS });
       contextFilesRef.current = [];
       setContextFiles([]);
       setContextDocMeta([]);
@@ -4086,9 +4083,11 @@ export default function App() {
                 >
                   <HiOutlinePaperClip size={20} aria-hidden="true" />
                 </Button>
-                <textarea
-                  ref={cvChatInputRef}
-                  className="cv-chat-input"
+                <CvChatComposer
+                  ref={cvChatComposerRef}
+                  storageKey={getAdaptDraftStorageKey()}
+                  restoreDraft={Boolean(session?.user?.id && view === 'cv' && !lastAdaptedCv && !adaptTodoPlan)}
+                  persistDraft={!lastAdaptedCv && !adaptTodoPlan}
                   placeholder={
                     adaptPlanLoading
                       ? 'Préparation de ton plan…'
@@ -4096,27 +4095,10 @@ export default function App() {
                         ? "Valide d'abord la todo puis lance l'adaptation."
                         : "Colle une offre d'emploi ou décris ce que tu veux modifier..."
                   }
-                  value={chatInput}
-                  onChange={(e) => {
-                    const el = e.target;
-                    setChatInput(el.value);
-                    requestAnimationFrame(() => {
-                      el.style.height = 'auto';
-                      if (!el.value.trim()) {
-                        el.style.removeProperty('height');
-                        return;
-                      }
-                      el.style.height = `${Math.min(el.scrollHeight, 150)}px`;
-                    });
-                  }}
-                  onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleChatSend(); } }}
-                  rows={1}
                   disabled={adapting || adaptPlanLoading || (!!adaptTodoPlan && !lastAdaptedCv)}
-                  {...analyticsAttrs('cv-chat-input-offer', 'chat', 'tertiary', 'input')}
+                  sendBlocked={contextDocStatus === 'uploading'}
+                  onSend={handleChatSend}
                 />
-                <button type="button" className="cv-chat-input-send" onClick={handleChatSend} disabled={adapting || adaptPlanLoading || contextDocStatus === 'uploading' || !chatInput.trim() || (!!adaptTodoPlan && !lastAdaptedCv)} aria-label="Envoyer" {...analyticsAttrs('cv-chat-cta-send', 'chat', 'primary', 'cta')}>
-                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 2L11 13"/><path d="M22 2L15 22L11 13L2 9L22 2Z"/></svg>
-                </button>
               </div>
             </div>
             <div className="cv-chat-preview" data-analytics-section="preview">
@@ -4216,7 +4198,31 @@ export default function App() {
               })() : null}
               <div className="preview-wrap" ref={previewWrapRef}>
                 <div className="preview-a4-sheet">
-                {previewVariant === 'modified' && lastAdaptedCv && !(templateId || '').startsWith('custom_') && ['classic', 'minimal', 'modern', 'bold', 'creative', 'elegant', 'executive'].includes((templateId || '').trim()) ? (
+                {(() => {
+                  if (!isBetaCanvasTemplateId(templateId)) return null;
+                  const adaptedShown = lastAdaptedCv || adaptLiveCv;
+                  const previewCv = previewVariant === 'modified' && adaptedShown
+                    ? adaptedShown
+                    : (previewVariant === 'modified' && languagePreviewStatus === 'ready' && languagePreviewCvRef.current
+                      ? languagePreviewCvRef.current
+                      : lastBaseCv);
+                  const source = hasUsableBetaCanvasLayout(previewCv?.layout) ? previewCv.layout : profileLayout;
+                  if (!previewCv || !hasUsableBetaCanvasLayout(source)) return null;
+                  return (
+                    <BetaCvLivePreview
+                      templateId={templateId}
+                      profileLayout={profileLayout}
+                      previewVariant={previewVariant}
+                      lastAdaptedCv={adaptedShown}
+                      lastBaseCv={lastBaseCv}
+                      languagePreviewStatus={languagePreviewStatus}
+                      languagePreviewCv={languagePreviewStatus === 'ready' ? languagePreviewCvRef.current : null}
+                      freshPreviewPhotoUrl={freshPreviewPhotoUrl}
+                      textEditable={Boolean(lastAdaptedCv) && !adapting}
+                      onCvChange={handlePreviewCvEdit}
+                    />
+                  );
+                })() || (previewVariant === 'modified' && lastAdaptedCv && !(templateId || '').startsWith('custom_') && ['classic', 'minimal', 'modern', 'bold', 'creative', 'elegant', 'executive'].includes((templateId || '').trim()) ? (
                   <CvEditablePreview
                     cv={{
                       ...lastAdaptedCv,
@@ -4262,7 +4268,7 @@ export default function App() {
                       </div>
                     ) : null}
                   </div>
-                )}
+                ))}
                 </div>
               </div>
               {exportBlockVisible && lastAdaptedCv && (
@@ -4316,7 +4322,7 @@ export default function App() {
                           aria-controls="ats-score-modal"
                           {...analyticsAttrs('cv-export-cta-ats', 'export', 'tertiary', 'cta')}
                         >
-                          <span className="ats-score-pill-label">Score ATS</span>
+                          <span className="ats-score-pill-label">Adéquation</span>
                           {rapportBefore?.score_global != null && rapportBefore.score_global !== rapport.score_global ? (
                             <span className="ats-score-value">
                               <span className="ats-score-before">{rapportBefore.score_global}</span>
@@ -4343,7 +4349,7 @@ export default function App() {
                             onClick={(e) => e.stopPropagation()}
                           >
                             <div className="ats-score-modal-header">
-                              <h3 id="ats-score-modal-title">Score ATS - {rapport.score_global}/100</h3>
+                              <h3 id="ats-score-modal-title">Adéquation à l’offre - {rapport.score_global}/100</h3>
                               <button
                                 type="button"
                                 className="ats-score-modal-close"
@@ -4354,8 +4360,7 @@ export default function App() {
                               </button>
                             </div>
                             <p className="ats-score-modal-intro">
-                              Indicatif sur 100, calculé à partir de l&apos;offre : chaque ligne ci-dessous est une note sur 100,
-                              pondérée (pourcentage indiqué) pour former le score global. Ce n&apos;est pas le score d&apos;un logiciel de recrutement précis.
+                              Adéquation à l’offre, sur 100. Chaque ligne est une note sur 100, pondérée pour former le score global.
                             </p>
                             {rapport.detail && (
                               <div className="ats-score-section ats-detail-bars">
@@ -4920,7 +4925,7 @@ export default function App() {
                       description: fiche,
                       titre: pos || undefined,
                       entreprise: ent || undefined,
-                    });
+                    }, { timeoutMs: ADAPT_PLAN_TIMEOUT_MS });
                     if (shouldPromptLanguageChoice(langMeta.cv_language, langMeta.offer_language)) {
                       const autoLang = resolveAdaptLanguageAutoChoice(true, session?.user?.id);
                       if (!autoLang.prompt && autoLang.outputLanguage) {
@@ -5227,7 +5232,7 @@ export default function App() {
                   onClick={() => {
                     setFirstOfferNudgeOpen(false);
                     navigate('/app/cv');
-                    requestAnimationFrame(() => cvChatInputRef.current?.focus());
+                    requestAnimationFrame(() => cvChatComposerRef.current?.focus());
                     trackEvent('first_offer_nudge_cta', { action: 'go_cv' });
                   }}
                   {...analyticsAttrs('cv-nudge-cta-go', 'nudge', 'primary', 'cta')}

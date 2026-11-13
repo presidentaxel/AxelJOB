@@ -9,6 +9,12 @@ export const API_REQUEST_TIMEOUT_MS = 12000;
  */
 export const CV_IMPORT_REQUEST_TIMEOUT_MS = 180000;
 
+/** Plan d'adaptation : un appel Gemini, souvent plus long que 12 s. */
+export const ADAPT_PLAN_TIMEOUT_MS = 180000;
+
+/** Adaptation en flux : plusieurs étapes modèle à la suite. */
+export const ADAPT_RUN_TIMEOUT_MS = 300000;
+
 /** Envoi des rappels : jusqu'à 100 mails, un par un. */
 export const REMINDER_SEND_TIMEOUT_MS = 180000;
 

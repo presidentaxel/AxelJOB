@@ -32,6 +32,7 @@ function listFocusable(container) {
  * @param {'primary' | 'danger'} [props.confirmVariant]
  * @param {() => void} [props.onConfirm]
  * @param {() => void} [props.onCancel]
+ * @param {boolean} [props.hideCancel]
  */
 export default function ConfirmDialog({
   open = false,
@@ -41,6 +42,7 @@ export default function ConfirmDialog({
   confirmLabel = 'Confirmer',
   cancelLabel = 'Annuler',
   confirmVariant = 'primary',
+  hideCancel = false,
   onConfirm,
   onCancel,
 }) {
@@ -140,9 +142,11 @@ export default function ConfirmDialog({
           </p>
         ) : null}
         <footer className="confirm-dialog__actions">
-          <Button type="button" variant="secondary" size="md" onClick={() => onCancel?.()}>
-            {cancelLabel}
-          </Button>
+          {hideCancel ? null : (
+            <Button type="button" variant="secondary" size="md" onClick={() => onCancel?.()}>
+              {cancelLabel}
+            </Button>
+          )}
           <Button
             type="button"
             variant={confirmVariant}

@@ -173,7 +173,7 @@ async function _yieldForStreamUi(parsed) {
   await new Promise((resolve) => setTimeout(resolve, 0));
 }
 
-export async function apiPostStream(path, body, { onMessage, signal } = {}) {
+export async function apiPostStream(path, body, { onMessage, signal, timeoutMs } = {}) {
   let r;
   try {
     r = await fetchApi(apiUrl(path), {
@@ -181,6 +181,7 @@ export async function apiPostStream(path, body, { onMessage, signal } = {}) {
       headers: getHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify(body),
       signal,
+      timeoutMs,
     });
   } catch (e) {
     if (e?.name === 'AbortError') {
