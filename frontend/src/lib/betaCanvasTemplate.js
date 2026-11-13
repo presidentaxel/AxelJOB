@@ -209,7 +209,7 @@ function changedTextPairs(baseCv, nextCv) {
 
 function clipAdaptLog(value) {
   const text = String(value || '').replace(/\s+/g, ' ').trim();
-  if (/(?:\+?\d[\d\s.\-]{7,}\d)/.test(text)) return '[contact]';
+  if (/(?:\+?\d[\d\s.-]{7,}\d)/.test(text)) return '[contact]';
   if (!text) return '∅';
   return text.length > 90 ? `${text.slice(0, 89)}…` : text;
 }
