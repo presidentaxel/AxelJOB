@@ -211,15 +211,45 @@ export function normalizeRichTextHtml(value) {
   return decodeHtmlEntities(trimmed);
 }
 
-export function htmlToPlainText(html) {
-  return String(html || '')
-    .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<[^>]+>/g, '')
+function tagNameAt(source, ltIndex) {
+  let i = ltIndex + 1;
+  if (source[i] === '/') i += 1;
+  const start = i;
+  while (i < source.length) {
+    const c = source[i];
+    if (c === '>' || c === '/' || c === ' ' || c === '\t' || c === '\n' || c === '\r') break;
+    i += 1;
+  }
+  return source.slice(start, i).toLowerCase();
+}
+
+/** Texte visible. Pas de regex qui retire les balises : elle laisse passer `<script`. */
+function markupToPlainText(source) {
+  let out = '';
+  let i = 0;
+  while (i < source.length) {
+    const lt = source.indexOf('<', i);
+    if (lt < 0) {
+      out += source.slice(i);
+      break;
+    }
+    out += source.slice(i, lt);
+    const gt = source.indexOf('>', lt + 1);
+    if (gt < 0) break;
+    if (tagNameAt(source, lt) === 'br') out += '\n';
+    i = gt + 1;
+  }
+  return out
     .replace(/&nbsp;/gi, ' ')
-    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
-    .replace(/&#39;/g, "'");
+    .replace(/&amp;/g, '&');
+}
+
+export function htmlToPlainText(html) {
+  return markupToPlainText(String(html || ''));
 }
 
 /** Le placeholder d'un bloc vide ne doit pas rester collé au vrai texte. */

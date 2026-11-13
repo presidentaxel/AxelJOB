@@ -2,6 +2,7 @@ import { memo, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { lazyWithChunkReload } from '../../lib/lazyChunkReload.js';
 import {
   applyCvFieldsFromRoot,
+  htmlToPlainText,
   readBlockContentFromRoot,
   repairCanvasPlaceholderGlue,
   sanitizeRichTextHtml,
@@ -17,11 +18,7 @@ import ConfirmDialog from '../ui/ConfirmDialog.jsx';
 const FreeCanvas = lazyWithChunkReload(() => import('./FreeCanvas.jsx'));
 
 function plainPreviewText(html) {
-  return repairCanvasPlaceholderGlue(String(html || '')
-    .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<[^>]+>/g, '')
-    .replace(/&nbsp;/g, ' ')
-    .trim());
+  return repairCanvasPlaceholderGlue(htmlToPlainText(html).trim());
 }
 
 function editableBlockHtml(rootEl) {

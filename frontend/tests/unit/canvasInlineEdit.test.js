@@ -48,5 +48,8 @@ test('le placeholder ne reste pas collé au texte', () => {
     'en troisième année',
   );
   assert.equal(htmlToPlainText('<span class="cv-changed">motivé</span>'), 'motivé');
+  assert.equal(htmlToPlainText('a<br/>b'), 'a\nb');
+  assert.equal(htmlToPlainText('<script>alert(1)</script>'), 'alert(1)');
+  assert.equal(htmlToPlainText('&amp;lt;'), '&lt;');
   assert.equal(repairCanvasPlaceholderGlue('Texte libre'), 'Texte libre');
 });
