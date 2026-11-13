@@ -193,7 +193,9 @@ _CPU_SPIKE_REQUIRED_TICKS = max(1, int(os.getenv("MONITORING_ALERT_SPIKE_REQUIRE
 _last_alert_at: dict[str, float] = {}
 _alert_log: deque[dict[str, Any]] = deque(maxlen=30)
 _psutil_process: Any = None
-_last_db_check: dict[str, Any] = {"ok": True, "ms": 0.0, "ts": 0.0}
+_last_db_check: dict[str, Any] = {"ok": True, "ms": 0.0, "ts": 0.0, "error": ""}
+_db_down_streak = 0
+_DB_DOWN_REQUIRED_TICKS = max(1, int(os.getenv("MONITORING_ALERT_DB_REQUIRED_TICKS", "2")))
 _last_snap: dict[str, float] = {
     "system_cpu": 0.0,
     "process_cpu": 0.0,
@@ -434,6 +436,60 @@ def note_fresh_cpu_sample() -> None:
     _cpu_sample_seq += 1
 
 
+def _checkout_database(pool: Any) -> Any:
+    """Attend au plus 2 s une connexion, pour ne pas bloquer la boucle HTTP."""
+    try:
+        return pool.connection(timeout=2.0)
+    except TypeError:
+        return pool.connection()
+
+
+def _select_one(pool: Any) -> tuple[bool, str]:
+    """SELECT 1, retenté une fois : une connexion rendue au pool est souvent morte."""
+    last = ""
+    for _ in (1, 2):
+        try:
+            with _checkout_database(pool) as conn, conn.cursor() as cur:
+                cur.execute("SELECT 1")
+            return True, ""
+        except Exception as exc:
+            last = type(exc).__name__
+    return False, last
+
+
+def _probe_database() -> None:
+    try:
+        from backend import supabase_pg
+    except Exception as exc:
+        _store_db_check(False, type(exc).__name__, 0.0)
+        return
+    # Une autre requête a déjà noté la coupure (8 s). On ne la recompte pas comme un ping raté.
+    if supabase_pg.pg_connect_cooling_down():
+        return
+    t_db = time.perf_counter()
+    ok = False
+    err = ""
+    try:
+        pool = supabase_pg.get_pool()
+        if pool is None:
+            err = "pool_absent"
+        else:
+            ok, err = _select_one(pool)
+    except Exception as exc:
+        ok = False
+        err = type(exc).__name__
+    _store_db_check(ok, err, (time.perf_counter() - t_db) * 1000.0)
+
+
+def _store_db_check(ok: bool, err: str, ms: float) -> None:
+    _last_db_check["ok"] = ok
+    _last_db_check["ms"] = round(ms, 2)
+    _last_db_check["ts"] = time.time()
+    _last_db_check["error"] = err
+    DB_UP.set(1 if ok else 0)
+    DB_LATENCY_MS.set(ms)
+
+
 def tick_system_and_db() -> None:
     proc = _get_psutil_process()
     if proc and proc is not False:
@@ -499,24 +555,7 @@ def tick_system_and_db() -> None:
             logger.debug("psutil tick skipped: %s", e)
 
     if USE_SUPABASE_PG:
-        t_db = time.perf_counter()
-        ok = False
-        try:
-            from backend import supabase_pg
-
-            pool = supabase_pg.get_pool()
-            if pool:
-                with pool.connection() as conn, conn.cursor() as cur:
-                    cur.execute("SELECT 1")
-                ok = True
-        except Exception:
-            ok = False
-        ms = (time.perf_counter() - t_db) * 1000.0
-        _last_db_check["ok"] = ok
-        _last_db_check["ms"] = round(ms, 2)
-        _last_db_check["ts"] = time.time()
-        DB_UP.set(1 if ok else 0)
-        DB_LATENCY_MS.set(ms)
+        _probe_database()
 
 
 def _dispatch_gemini_down_alert() -> None:
@@ -595,12 +634,20 @@ def evaluate_alerts() -> None:
         _send_alert_email("[AxeL Job] Alerte lenteurs HTTP", msg)
         _append_alert_log("slow_burst", msg)
 
-    if USE_SUPABASE_PG and not _last_db_check.get("ok") and _alert_can_send("db_down"):
-        msg = (
-            f"Ping base de données échoué (dernière latence mesurée {_last_db_check.get('ms')} ms)."
-        )
-        _send_alert_email("[AxeL Job] Alerte base de données", msg)
-        _append_alert_log("db_down", msg)
+    global _db_down_streak
+    if USE_SUPABASE_PG:
+        if _last_db_check.get("ok"):
+            _db_down_streak = 0
+        else:
+            _db_down_streak += 1
+        if _db_down_streak >= _DB_DOWN_REQUIRED_TICKS and _alert_can_send("db_down"):
+            err = _last_db_check.get("error") or "inconnu"
+            msg = (
+                f"Ping base de données échoué {_db_down_streak} fois de suite "
+                f"(dernier essai {_last_db_check.get('ms')} ms, erreur {err})."
+            )
+            _send_alert_email("[AxeL Job] Alerte base de données", msg)
+            _append_alert_log("db_down", msg)
 
     if len(_cpu_samples) >= 8:
         arr = list(_cpu_samples)[-30:]
@@ -923,6 +970,7 @@ def get_admin_snapshot() -> dict[str, Any]:
                 "min_interval_sec": MONITORING_ALERT_MIN_INTERVAL_SEC,
                 "cpu_required_ticks": _CPU_HIGH_REQUIRED_TICKS,
                 "cpu_spike_required_ticks": _CPU_SPIKE_REQUIRED_TICKS,
+                "db_required_ticks": _DB_DOWN_REQUIRED_TICKS,
                 "cpu_avg_window_ticks": _CPU_HIGH_AVG_WINDOW_TICKS,
                 "cpu_avg_min_pct": round(_CPU_HIGH_AVG_MIN_PCT, 2),
             },
