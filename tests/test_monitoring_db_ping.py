@@ -88,6 +88,19 @@ def test_two_failures_keep_the_error_class_only() -> None:
     assert err == "TimeoutError"
 
 
+def test_cooldown_does_not_count_as_a_failed_ping(monkeypatch: pytest.MonkeyPatch) -> None:
+    import backend.supabase_pg as pg
+
+    m, sent = _arm(monkeypatch)
+    m._last_db_check.update({"ok": True, "ms": 18.0, "error": ""})
+    monkeypatch.setattr(pg, "pg_connect_cooling_down", lambda: True)
+    m._probe_database()
+    m.evaluate_alerts()
+    assert m._last_db_check["ok"] is True
+    assert m._db_down_streak == 0
+    assert sent == []
+
+
 def test_one_failed_ping_does_not_email(monkeypatch: pytest.MonkeyPatch) -> None:
     m, sent = _arm(monkeypatch)
     m._last_db_check.update({"ok": False, "ms": 471.7, "error": "OperationalError"})

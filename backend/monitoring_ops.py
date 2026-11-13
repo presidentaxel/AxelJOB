@@ -458,12 +458,18 @@ def _select_one(pool: Any) -> tuple[bool, str]:
 
 
 def _probe_database() -> None:
+    try:
+        from backend import supabase_pg
+    except Exception as exc:
+        _store_db_check(False, type(exc).__name__, 0.0)
+        return
+    # Une autre requête a déjà noté la coupure (8 s). On ne la recompte pas comme un ping raté.
+    if supabase_pg.pg_connect_cooling_down():
+        return
     t_db = time.perf_counter()
     ok = False
     err = ""
     try:
-        from backend import supabase_pg
-
         pool = supabase_pg.get_pool()
         if pool is None:
             err = "pool_absent"
@@ -472,7 +478,10 @@ def _probe_database() -> None:
     except Exception as exc:
         ok = False
         err = type(exc).__name__
-    ms = (time.perf_counter() - t_db) * 1000.0
+    _store_db_check(ok, err, (time.perf_counter() - t_db) * 1000.0)
+
+
+def _store_db_check(ok: bool, err: str, ms: float) -> None:
     _last_db_check["ok"] = ok
     _last_db_check["ms"] = round(ms, 2)
     _last_db_check["ts"] = time.time()
