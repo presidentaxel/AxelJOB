@@ -13,8 +13,8 @@
   margin: 0 auto;
 }
 .support-hero {
-  background: var(--color-primary);
-  color: var(--color-on-primary);
+  background: var(--ds-color-bg-inverse);
+  color: var(--ds-color-text-inverse);
   padding: 2rem 1.5rem;
   text-align: center;
   margin-bottom: 0;
@@ -35,7 +35,7 @@
 }
 
 .support-hero-subtitle a {
-  color: #fff;
+  color: var(--ds-color-text-inverse);
   text-decoration: underline;
 }
 
@@ -88,8 +88,8 @@
   width: 44px;
   height: 44px;
   border-radius: 10px;
-  background: var(--color-primary);
-  color: #fff;
+  background: var(--ds-color-bg-accent);
+  color: var(--ds-color-text-link);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -111,93 +111,49 @@
   line-height: 1.5;
   margin: 0;
 }
-.support-conv {
-  padding-top: 2rem;
-  margin-top: 0.5rem;
-  border-top: 1px solid var(--border);
+.support-form-block {
+  width: 100%;
+  margin-top: var(--ds-space-xl);
+  padding-top: var(--ds-space-lg);
+  border-top: 1px solid var(--ds-color-border-default);
 }
-.support-conv-card {
-  background: var(--color-canvas);
-  border: 1px solid var(--color-hairline);
-  border-radius: var(--radius-sm);
-  padding: 1.25rem 1.5rem;
+.support-form-block .ds-heading-sm {
+  margin: 0 0 var(--ds-space-xs);
 }
-.support-conv-placeholder-text {
-  margin: 0 0 1rem 0;
-  font-size: 0.875rem;
-  color: var(--muted);
-  line-height: 1.5;
+.support-form-lead {
+  margin: 0 0 var(--ds-space-md);
+  color: var(--ds-color-text-muted);
 }
-.support-conv-input-bar {
-  display: flex;
-  gap: 0.5rem;
-  align-items: center;
-}
-.support-conv-input-bar .cv-chat-input {
-  flex: 1;
-}
-
-/* Formulaire ticket support */
 .support-ticket-form {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
-  margin-top: 0.5rem;
-}
-.support-ticket-subject {
+  align-items: flex-start;
+  gap: var(--ds-space-md);
   width: 100%;
-  padding: 0.5rem 0.75rem;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  font-size: 0.9375rem;
-  background: var(--bg-page);
 }
-.support-ticket-subject:focus {
-  outline: none;
-  border-color: var(--color-form-focus);
+.support-ticket-field {
+  width: 100%;
+}
+.support-ticket-form .ds-field-label {
+  margin-bottom: var(--ds-space-xs);
+}
+.support-ticket-form .ds-input {
+  margin-bottom: 0;
 }
 .support-ticket-message {
-  width: 100%;
-  padding: 0.5rem 0.75rem;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  font-size: 0.9375rem;
-  font-family: inherit;
+  min-height: 8rem;
   resize: vertical;
-  min-height: 120px;
-  background: var(--bg-page);
 }
-.support-ticket-message:focus {
-  outline: none;
-  border-color: var(--color-form-focus);
+.support-ticket-done {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--ds-space-md);
 }
 .support-ticket-success {
-  margin: 0 0 1rem 0;
-  font-size: 0.9375rem;
-  color: var(--text);
-  line-height: 1.5;
-}
-.support-ticket-error {
   margin: 0;
-  font-size: 0.875rem;
-  color: var(--error, #dc2626);
+  color: var(--ds-color-text-default);
 }
-.support-ticket-submit {
-  align-self: flex-start;
-}
-.support-ticket-another {
-  margin-top: 0.25rem;
-}
-
-.support-reply-section {
-  margin-top: 2rem;
-}
-.support-reply-label {
-  display: block;
-  font-size: 0.75rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--text-secondary);
-  margin-bottom: 4px;
+.support-ticket-form .ds-field-error {
+  margin: 0;
 }

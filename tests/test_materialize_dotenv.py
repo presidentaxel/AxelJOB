@@ -45,6 +45,54 @@ def test_existing_file_wins_over_empty_env(dotenv):
     assert "GEMINI_API_KEY=keep-me" in out
 
 
+def test_indented_existing_values_are_kept(dotenv):
+    example = "GEMINI_API_KEY=\nSUPABASE_URL=\n"
+    existing = "    GEMINI_API_KEY=keep-me\n    SUPABASE_URL=https://proj.supabase.co\n"
+    out = dotenv.fill_template(example, existing, {})
+    assert "GEMINI_API_KEY=keep-me" in out
+    assert "SUPABASE_URL=https://proj.supabase.co" in out
+
+
+def test_commented_placeholder_does_not_hide_real_value(dotenv):
+    example = "SUPABASE_URL=\n"
+    existing = "# SUPABASE_URL=https://example.supabase.co\nSUPABASE_URL=https://real.supabase.co\n"
+    out = dotenv.fill_template(example, existing, {})
+    assert "SUPABASE_URL=https://real.supabase.co" in out
+    assert "example.supabase.co" not in out
+
+
+def test_later_nonempty_value_replaces_earlier_empty(dotenv):
+    example = "SUPABASE_URL=\n"
+    existing = "SUPABASE_URL=\nSUPABASE_URL=https://real.supabase.co\n"
+    out = dotenv.fill_template(example, existing, {})
+    assert "SUPABASE_URL=https://real.supabase.co" in out
+
+
+def test_extra_filled_keys_are_kept(dotenv):
+    example = "GEMINI_API_KEY=\n"
+    existing = "GEMINI_API_KEY=k\nSTRIPE_PRICE_ID_TEMPLATE_PERSO=price_x\n"
+    out = dotenv.fill_template(example, existing, {})
+    assert "STRIPE_PRICE_ID_TEMPLATE_PERSO=price_x" in out
+
+
+def test_materialize_refuses_to_blank_filled_keys(dotenv, tmp_path):
+    (tmp_path / ".env.example").write_text("GEMINI_API_KEY=\n", encoding="utf-8")
+    frontend = tmp_path / "frontend"
+    frontend.mkdir()
+    (frontend / ".env.example").write_text("VITE_API_URL=\n", encoding="utf-8")
+    (tmp_path / ".env").write_text("GEMINI_API_KEY=keep-me\n", encoding="utf-8")
+    real = dotenv.fill_template
+
+    def blank_secret(example, existing, environ):
+        text = real(example, existing, environ)
+        return text.replace("GEMINI_API_KEY=keep-me", "GEMINI_API_KEY=")
+
+    dotenv.fill_template = blank_secret
+    with pytest.raises(dotenv.EnvWouldWipe):
+        dotenv.materialize(tmp_path, {})
+    assert "GEMINI_API_KEY=keep-me" in (tmp_path / ".env").read_text(encoding="utf-8")
+
+
 def test_process_env_overrides_existing_file(dotenv):
     example = "GEMINI_API_KEY=\n"
     existing = "GEMINI_API_KEY=old\n"

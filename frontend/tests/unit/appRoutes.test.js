@@ -39,6 +39,7 @@ test('APP_DEFAULT_ROUTE redirige vers /app/cv', () => {
 });
 
 test('getViewFromPathname mappe chaque route principale sur sa vue', () => {
+  assert.equal(getViewFromPathname('/app/bienvenue'), 'bienvenue');
   assert.equal(getViewFromPathname('/app/cv'), 'cv');
   assert.equal(getViewFromPathname('/app/postule'), 'candidatures');
   assert.equal(getViewFromPathname('/app/profil'), 'profil');
@@ -64,6 +65,7 @@ test('getViewFromPathname tombe sur "cv" pour un pathname vide ou inconnu', () =
 test('isKnownAppPathname reconnaît /app/settings et rejette les chemins hors workspace', () => {
   assert.equal(isKnownAppPathname('/app'), true);
   assert.equal(isKnownAppPathname('/app/'), true);
+  assert.equal(isKnownAppPathname('/app/bienvenue'), true);
   assert.equal(isKnownAppPathname('/app/settings'), true);
   assert.equal(isKnownAppPathname('/app/settings/account'), true);
   assert.equal(isKnownAppPathname('/app/profil'), true);

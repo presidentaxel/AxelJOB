@@ -1,13 +1,33 @@
+import { execSync } from 'node:child_process'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import { sentryVitePlugin } from '@sentry/vite-plugin'
 import { readFileSync, writeFileSync, existsSync, readdirSync } from 'fs'
 import { join } from 'path'
+import { resolveSentryReleaseName } from './src/lib/sentryReleaseName.js'
+
+function gitShortSha() {
+  try {
+    return execSync('git rev-parse --short HEAD', {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim()
+  } catch {
+    return ''
+  }
+}
+
+const sentryRelease = resolveSentryReleaseName({
+  viteRelease: process.env.VITE_SENTRY_RELEASE,
+  sentryRelease: process.env.SENTRY_RELEASE,
+  gitSha: gitShortSha(),
+})
 
 /** Sur les pages publiques (/ats, /faq, etc.) servir le HTML statique au lieu de index.html (SPA). */
 const STATIC_ROUTES = ['/ats', '/faq', '/guide-cv', '/modeles-cv', '/erreurs-cv', '/cv-par-metier', '/cv-adapte-chaque-offre', '/mentions-legales', '/confidentialite', '/cgu']
 
 /** En dev, /login reste sur index.html (bundle + injection CSS). En preview, servir dist/login.html comme en prod. */
-const PREVIEW_STATIC_ROUTES = [...STATIC_ROUTES, '/login']
+const PREVIEW_STATIC_ROUTES = [...STATIC_ROUTES, '/login', '/inscription', '/mot-de-passe-oublie']
 
 function staticPagesPlugin() {
   return {
@@ -103,9 +123,38 @@ function cssNonBlockingPlugin() {
   }
 }
 
+function sentrySourceMapsPlugin(release) {
+  const token = (process.env.SENTRY_AUTH_TOKEN || '').trim()
+  return [
+    {
+      name: 'sentry-release',
+      config() {
+        const upload = token ? 'oui' : 'non (SENTRY_AUTH_TOKEN absent)'
+        console.info(`[sentry] release=${release || '(aucune)'} upload=${upload}`)
+      },
+    },
+    sentryVitePlugin({
+      org: 'axel-project',
+      project: 'axel-job-frontend',
+      authToken: token || undefined,
+      disable: !token,
+      telemetry: false,
+      sourcemaps: {
+        filesToDeleteAfterUpload: ['./dist/**/*.map'],
+      },
+      release: {
+        name: release,
+      },
+    }),
+  ]
+}
+
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react(), staticPagesPlugin(), cssNonBlockingPlugin()],
+  define: sentryRelease
+    ? { 'import.meta.env.VITE_SENTRY_RELEASE': JSON.stringify(sentryRelease) }
+    : undefined,
+  plugins: [react(), staticPagesPlugin(), cssNonBlockingPlugin(), ...sentrySourceMapsPlugin(sentryRelease)],
   build: {
     sourcemap: true,
     rollupOptions: {

@@ -112,7 +112,7 @@ cv-bot/
 
 ### Prerequis
 
-- Python 3.10+
+- Python 3.12+
 - Node.js 18+
 - Un projet [Supabase](https://supabase.com) (gratuit) pour l'auth et le stockage
 - Une cle API [Google Gemini](https://aistudio.google.com/app/apikey) (gratuite)
@@ -180,6 +180,9 @@ Secrets minimum pour un local utile : `GEMINI_API_KEY`, `SUPABASE_URL`, `SUPABAS
 | `STRIPE_PRICE_ID_PRO_MONTHLY` | Price ID Stripe pour l'abo Pro | Non |
 | `STRIPE_WEBHOOK_SECRET` | Secret webhook Stripe | Non |
 | `METRICS_AUTH_TOKEN` | Token pour proteger `/metrics` | Non |
+| `MONITORING_ALERT_SPIKE_REQUIRED_TICKS` | Relevés CPU d'affilée avant le mail « Pic CPU suspect ». Défaut `2`, plancher `1`. Avec `1`, un seul relevé envoie le mail : plus de protection contre un pic isolé. Pas un secret. | Non |
+| `SENTRY_DSN` | DSN Sentry backend (`axel-job-backend`). Vide = no-op | Non |
+| `SENTRY_ENVIRONMENT` | Tag Sentry ; sinon `ENVIRONMENT` | Non |
 | `LOGO_DEV_TOKEN` | Token publishable Logo.dev | Non |
 | `WEASYPRINT_DLL_DIRECTORIES` | (Windows) Chemin DLL Pango/GTK | Windows only |
 | `CV_BOT_EXPORT_BASE` | Dossier racine export candidatures | Non |
@@ -191,6 +194,9 @@ Secrets minimum pour un local utile : `GEMINI_API_KEY`, `SUPABASE_URL`, `SUPABAS
 | `VITE_API_URL` | URL du backend (`http://localhost:8000` en dev, vide en prod) | Dev only |
 | `VITE_SUPABASE_URL` | URL du projet Supabase | Oui |
 | `VITE_SUPABASE_ANON_KEY` | Cle `anon` Supabase | Oui |
+| `VITE_AXEL_GTM_ID` | Conteneur GTM (build Docker) | Non |
+| `VITE_SENTRY_DSN` | DSN Sentry frontend (`axel-job-frontend`), **build arg**. Vide = no-op | Non |
+| `VITE_SENTRY_ENVIRONMENT` | `production` ou `staging` (pas `MODE` Vite) | Non |
 
 ---
 
@@ -285,7 +291,6 @@ Il faut un reverse proxy externe (Caddy, nginx, ou Cloudflare) pour HTTPS.
 | Fichier / dossier | Role |
 |-------------------|------|
 | `docs/examples/cv_base_vierge.json` | Structure vide du CV (template) |
-| `cv_base.json` | Ton CV de base (gitignore) |
 | `adaptations/` | Adaptations par offre (gitignore) |
 | `logs/` | Logs structures JSONL (gitignore) |
 | `assets/` | Photo CV (gitignore) |
@@ -349,7 +354,7 @@ Le projet inclut des standards de contribution et des quality gates :
 - Audit conformité guide : `docs/conformity-audit.md`
 - Politique securite : `docs/security.md`
 - Standards engineering : `docs/engineering-standards.md`
-- **Design system UI (Cohere 2026)** : `docs/DESIGN-cohere.md` - référence couleurs, typographie, composants, spacing, responsive. Chargé automatiquement par Cursor via `.cursor/rules/design-system.mdc`.
+- **Design system UI (palette Axel)** : `docs/design-system.md` - tokens, typographie (Fraunces + Inter), composants, contraste. Source : `frontend/src/design/tokens.json`. L'ancienne analyse Cohere reste archivée dans `docs/DESIGN-cohere.md`.
 - CI GitHub Actions : `.github/workflows/ci.yml`
 - Workflow securite : `.github/workflows/security.yml` (CodeQL, Gitleaks, pip-audit)
 - Dependabot : `.github/dependabot.yml`

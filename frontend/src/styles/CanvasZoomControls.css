@@ -4,9 +4,9 @@
   gap: 2px;
   padding: 4px;
   border-radius: 30px;
-  border: 1px solid var(--color-hairline, #d9d9dd);
-  background: var(--color-canvas, #ffffff);
-  color: var(--color-primary, #17171c);
+  border: 1px solid var(--color-hairline);
+  background: var(--color-canvas);
+  color: var(--color-primary);
   font-family: var(--editor-font-family, var(--app-font-family));
 }
 
@@ -25,7 +25,7 @@
 }
 
 .canvas-zoom-controls__btn:hover:not(:disabled) {
-  background: var(--color-soft-stone, #eeece7);
+  background: var(--color-soft-stone);
 }
 
 .canvas-zoom-controls__btn:disabled {
@@ -35,7 +35,7 @@
 
 .canvas-zoom-controls__btn:focus-visible,
 .canvas-zoom-controls__percent:focus-visible {
-  outline: 2px solid var(--color-focus-blue, #4c6ee6);
+  outline: 2px solid var(--color-focus-blue);
   outline-offset: 1px;
 }
 
@@ -53,12 +53,12 @@
 }
 
 .canvas-zoom-controls__percent:hover {
-  background: var(--color-soft-stone, #eeece7);
+  background: var(--color-soft-stone);
 }
 
 .canvas-zoom-controls__btn--fit {
   margin-left: 2px;
-  border-left: 1px solid var(--color-hairline, #d9d9dd);
+  border-left: 1px solid var(--color-hairline);
   border-radius: 0 999px 999px 0;
   width: 36px;
 }

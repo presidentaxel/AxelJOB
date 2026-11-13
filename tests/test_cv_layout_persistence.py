@@ -9,40 +9,72 @@ Tests de persistance du champ `layout` du CV (P2.3).
   3. Ecraser le `layout` si le payload envoie explicitement une
      nouvelle valeur (y compris `None` pour revenir au defaut).
 
-On utilise le fallback fichier (`CV_BASE_PATH`, row_id="default")
-pour eviter de monter un Supabase. Le code de save partage la meme
-branche de logique pour Supabase et le fichier.
+Le stockage est un faux client Supabase : plus de fichier `cv_base.json`.
 """
 
 from __future__ import annotations
-
-import json
-import os
 
 import pytest
 
 from backend import db
 
 
+class _Result:
+    def __init__(self, data):
+        self.data = data
+
+
+class _Query:
+    def __init__(self, store):
+        self.store = store
+        self.row_id = None
+        self.payload = None
+        self.op = None
+
+    def select(self, *_args, **_kwargs):
+        self.op = "select"
+        return self
+
+    def eq(self, _key, value):
+        self.row_id = value
+        return self
+
+    def limit(self, _n):
+        return self
+
+    def upsert(self, payload, on_conflict="id"):
+        self.op = "upsert"
+        self.payload = payload
+        return self
+
+    def execute(self):
+        if self.op == "upsert":
+            self.store[self.payload["id"]] = self.payload["data"]
+            return _Result([self.payload])
+        row = self.store.get(self.row_id)
+        if row is None:
+            return _Result([])
+        return _Result([{"data": row}])
+
+
+class _Supabase:
+    def __init__(self):
+        self.store = {}
+
+    def table(self, name):
+        assert name == "cv_base"
+        return _Query(self.store)
+
+
 @pytest.fixture
-def cv_base_tmpfile(tmp_path, monkeypatch):
-    """Redirige `CV_BASE_PATH` vers un fichier temporaire et force le
-    mode fichier (pas de Supabase)."""
-    tmp = tmp_path / "cv_base.json"
-    monkeypatch.setattr(db, "CV_BASE_PATH", tmp)
-    monkeypatch.setattr(db, "_get_supabase", lambda: None)
-    yield tmp
-    if tmp.exists():
-        os.remove(tmp)
+def cv_store(monkeypatch):
+    sb = _Supabase()
+    monkeypatch.setattr(db, "USE_SUPABASE_PG", False)
+    monkeypatch.setattr(db, "_get_supabase", lambda: sb)
+    return sb.store
 
 
-def _read(tmp):
-    if not tmp.exists():
-        return None
-    return json.loads(tmp.read_text(encoding="utf-8"))
-
-
-def test_save_then_load_preserves_layout(cv_base_tmpfile):
+def test_save_then_load_preserves_layout(cv_store):
     layout = {
         "version": 1,
         "sectionsOrder": [
@@ -61,7 +93,7 @@ def test_save_then_load_preserves_layout(cv_base_tmpfile):
     assert loaded["layout"] == layout
 
 
-def test_partial_save_preserves_existing_layout(cv_base_tmpfile):
+def test_partial_save_preserves_existing_layout(cv_store):
     layout = {
         "version": 1,
         "sectionsOrder": ["experiences", "formations"],
@@ -69,14 +101,13 @@ def test_partial_save_preserves_existing_layout(cv_base_tmpfile):
         "theme": "default",
     }
     db.save_cv_base({"prenom": "A", "layout": layout})
-    # Payload "legacy" qui ne connait pas `layout`.
     db.save_cv_base({"prenom": "A", "nom": "Updated"})
     loaded = db.load_cv_base()
     assert loaded["layout"] == layout
     assert loaded["nom"] == "Updated"
 
 
-def test_explicit_null_layout_clears_persisted_value(cv_base_tmpfile):
+def test_explicit_null_layout_clears_persisted_value(cv_store):
     layout = {
         "version": 1,
         "sectionsOrder": ["experiences"],
@@ -84,15 +115,14 @@ def test_explicit_null_layout_clears_persisted_value(cv_base_tmpfile):
         "theme": "default",
     }
     db.save_cv_base({"prenom": "A", "layout": layout})
-    # L user revient au layout par defaut -> le client envoie `null`.
     db.save_cv_base({"prenom": "A", "layout": None})
     loaded = db.load_cv_base()
     assert loaded.get("layout") is None
 
 
-def test_layout_not_set_then_save_with_layout(cv_base_tmpfile):
+def test_layout_not_set_then_save_with_layout(cv_store):
     db.save_cv_base({"prenom": "A"})
-    assert _read(cv_base_tmpfile).get("layout") is None
+    assert cv_store["default"].get("layout") is None
     layout = {
         "version": 1,
         "sectionsOrder": ["resume", "experiences"],
@@ -103,9 +133,7 @@ def test_layout_not_set_then_save_with_layout(cv_base_tmpfile):
     assert db.load_cv_base()["layout"] == layout
 
 
-def test_preservation_keeps_template_id_and_options(cv_base_tmpfile):
-    """Le test garantit que la prise en charge de `layout` n a pas casse
-    la preservation existante de template_id / template_options."""
+def test_preservation_keeps_template_id_and_options(cv_store):
     db.save_cv_base(
         {
             "prenom": "A",
@@ -117,3 +145,13 @@ def test_preservation_keeps_template_id_and_options(cv_base_tmpfile):
     loaded = db.load_cv_base()
     assert loaded["template_id"] == "executive"
     assert loaded["template_options"] == {"primary_color": "#123456"}
+
+
+def test_without_supabase_does_not_touch_a_file(monkeypatch, tmp_path):
+    monkeypatch.setattr(db, "_get_supabase", lambda: None)
+    monkeypatch.chdir(tmp_path)
+    with pytest.raises(RuntimeError, match="Supabase requis"):
+        db.load_cv_base()
+    with pytest.raises(RuntimeError, match="Supabase requis"):
+        db.save_cv_base({"prenom": "A"})
+    assert not (tmp_path / "cv_base.json").exists()

@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import Cropper from 'react-easy-crop';
 import {
   apiGet,
@@ -12,15 +13,33 @@ import {
   saveBlobWithPreferredMethod,
   trackEvent,
 } from '../api';
+import { CV_IMPORT_REQUEST_TIMEOUT_MS } from '../lib/fetchWithDeadline.js';
 import { supabase } from '../lib/supabase';
 import { defaultCv, newExpId, newFormId, newCertId, newProjId } from '../data/cvDefault';
 import TemplatePicker from './TemplatePicker';
 import ReauthModal from './ReauthModal';
 import DesignModeBridgeModal from './editor/DesignModeBridgeModal.jsx';
-import { applyA4PageFramesToDocument, syncCvPreviewIframeHeight } from '../lib/cvPreviewA4Pages';
+import { applyA4PageFramesToDocument, bindProfilePreviewScale, syncCvPreviewIframeHeight } from '../lib/cvPreviewA4Pages';
 import { buildBetaToStableOffer } from '../lib/designModeBridge.js';
 import { betaCanvasRenderFields } from '../lib/betaCanvasTemplate.js';
-import { HiArrowDownTray } from 'react-icons/hi2';
+import { HiArrowDownTray, HiChevronDown, HiChevronUp } from 'react-icons/hi2';
+import { analyticsAttrs } from '../lib/analyticsAttrs.js';
+import { applyImportedProfileCv, cvFromImportPayload, extractImportApiResponse } from '../lib/cvImportUtils.js';
+import {
+  buildProfileCvPutPayload,
+  decideProfileAutoSaveOnActiveChange,
+  decideProfileAutoSaveOnCvChange,
+  decideProfileAutoSaveOnLifecycle,
+  decideProfileFlushStart,
+  decideProfileReplayKeepalive,
+  decideProfileSaveFinish,
+  decideProfileSaveStart,
+  nextKeepalivePending,
+  profileHasUnloadGuard,
+  profilePutShouldKeepalive,
+} from '../lib/profileAutoSaveGate.js';
+import Button from './ui/Button.jsx';
+import InlineEdit from './profile/InlineEdit.jsx';
 import '../styles/ProfileView.css';
 import '../styles/TemplatePicker.css';
 import '../styles/DesignModeBridgeModal.css';
@@ -96,19 +115,31 @@ function ProfileCompletion({ cv }) {
   );
 }
 
-function CollapsibleSection({ title, defaultOpen = true, required, children }) {
-  const [open, setOpen] = useState(defaultOpen);
+function displayedBullets(list) {
+  if (Array.isArray(list) && list.length > 0) return list;
+  return ['', ''];
+}
+
+function moveListItem(list, index, direction) {
+  const items = list || [];
+  const target = index + direction;
+  if (target < 0 || target >= items.length) return items;
+  const next = items.slice();
+  const [item] = next.splice(index, 1);
+  next.splice(target, 0, item);
+  return next;
+}
+
+function OrderButtons({ index, total, onMove, label }) {
   return (
-    <section className={`profile-section profile-section--collapsible ${open ? 'open' : 'closed'}`}>
-      <button type="button" className="profile-section-toggle" onClick={() => setOpen(v => !v)}>
-        <span className="profile-section-toggle-text">
-          <h2>{title}</h2>
-          {required && <span className="profile-required-badge">requis</span>}
-        </span>
-        <svg className={`profile-chevron ${open ? 'profile-chevron--open' : ''}`} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 12 15 18 9"/></svg>
+    <>
+      <button type="button" className="profile-card-move" disabled={index === 0} aria-label={`Monter ${label}`} title="Monter" onClick={() => onMove(index, -1)}>
+        <HiChevronUp aria-hidden />
       </button>
-      {open && <div className="profile-section-body">{children}</div>}
-    </section>
+      <button type="button" className="profile-card-move" disabled={index >= total - 1} aria-label={`Descendre ${label}`} title="Descendre" onClick={() => onMove(index, 1)}>
+        <HiChevronDown aria-hidden />
+      </button>
+    </>
   );
 }
 
@@ -126,7 +157,7 @@ function formatScalarPreviewForPrivacy(fieldKey, value, maxLen) {
   return s.slice(0, maxLen) + (s.length > maxLen ? '…' : '');
 }
 
-export default function ProfileView({ onSaveSuccess, session, refreshKey, usage, onUpgradeClick, onUsageRefresh, onBillingPortalClick, templatesList, templateId: templateIdProp, templateOptions: templateOptionsProp, onTemplateIdChange, onTemplateOptionsChange, onPhotoSessionExpired }) {
+export default function ProfileView({ isActive = true, onSaveSuccess, session, refreshKey, usage, onUpgradeClick, onUsageRefresh, onBillingPortalClick, templatesList, templateId: templateIdProp, templateOptions: templateOptionsProp, onTemplateIdChange, onTemplateOptionsChange, onPhotoSessionExpired }) {
   const [cv, setCv] = useState(defaultCv());
   const [localTemplateId, setLocalTemplateId] = useState(() => localStorage.getItem('cv_template_id') || 'minimal');
   const [localTemplateOptions, setLocalTemplateOptions] = useState(() => {
@@ -139,6 +170,7 @@ export default function ProfileView({ onSaveSuccess, session, refreshKey, usage,
   const setTemplateId = onTemplateIdChange ?? ((id) => { setLocalTemplateId(id); localStorage.setItem('cv_template_id', id); });
   const templateOptions = templateOptionsProp ?? localTemplateOptions;
   const setTemplateOptions = onTemplateOptionsChange ?? ((opts) => { setLocalTemplateOptions(opts); localStorage.setItem('cv_template_options', JSON.stringify(opts)); });
+  const [profileSection, setProfileSection] = useState('identite');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -155,6 +187,8 @@ export default function ProfileView({ onSaveSuccess, session, refreshKey, usage,
   const [profilePreviewLoading, setProfilePreviewLoading] = useState(false);
   const [baseCvPdfLoading, setBaseCvPdfLoading] = useState(false);
   const profilePreviewIframeRef = useRef(null);
+  const profilePreviewScrollRef = useRef(null);
+  const profilePreviewHtmlRef = useRef('');
   const [photoModalOpen, setPhotoModalOpen] = useState(false);
   const [cropModalOpen, setCropModalOpen] = useState(false);
   const [cropImageSrc, setCropImageSrc] = useState(null);
@@ -162,10 +196,8 @@ export default function ProfileView({ onSaveSuccess, session, refreshKey, usage,
   const [zoom, setZoom] = useState(1);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState(null);
   const [importLoading, setImportLoading] = useState(false);
-  const [importMergeParsed, setImportMergeParsed] = useState(null);
-  const [importMergeOpen, setImportMergeOpen] = useState(false);
-  const [importMergeChoices, setImportMergeChoices] = useState({});
   const [importStepIndex, setImportStepIndex] = useState(0);
+  const [importSummary, setImportSummary] = useState(null);
   const importStepTimerRef = useRef(null);
   const importFinalisationTimerRef = useRef(null);
   const [cancelSubModalOpen, setCancelSubModalOpen] = useState(false);
@@ -175,6 +207,20 @@ export default function ProfileView({ onSaveSuccess, session, refreshKey, usage,
   const fileInputRef = useRef(null);
   const importFileRef = useRef(null);
   const skipNextAutoSaveRef = useRef(true);
+  const onSaveSuccessRef = useRef(onSaveSuccess);
+  const saveToApiRef = useRef(null);
+  const pendingAutoSaveRef = useRef(false);
+  const savingAutoSaveRef = useRef(false);
+  const pendingKeepaliveRef = useRef(false);
+  const autoSaveTimerRef = useRef(null);
+  const isActiveRef = useRef(isActive);
+  const wasActiveRef = useRef(isActive);
+  useEffect(() => {
+    onSaveSuccessRef.current = onSaveSuccess;
+  }, [onSaveSuccess]);
+  useEffect(() => {
+    isActiveRef.current = isActive;
+  }, [isActive]);
 
   // Données profil : exclusivement depuis Supabase (liées au compte connecté via JWT)
   useEffect(() => {
@@ -200,6 +246,11 @@ export default function ProfileView({ onSaveSuccess, session, refreshKey, usage,
       .finally(() => setLoading(false));
   }, [session?.user?.id, refreshKey]);
 
+  useLayoutEffect(() => {
+    if (loading) return undefined;
+    return bindProfilePreviewScale(profilePreviewScrollRef.current);
+  }, [loading]);
+
   // Auto-trigger LinkedIn sync/photo after OAuth redirect
   const linkedinAutoTriggeredRef = useRef(false);
 
@@ -217,21 +268,73 @@ export default function ProfileView({ onSaveSuccess, session, refreshKey, usage,
     } catch (_) { /* ignore */ }
   }, []);
 
+  const clearAutoSaveTimer = useCallback(() => {
+    if (autoSaveTimerRef.current == null) return;
+    clearTimeout(autoSaveTimerRef.current);
+    autoSaveTimerRef.current = null;
+  }, []);
+
+  const flushPendingAutoSave = useCallback((opts = {}) => {
+    const action = decideProfileFlushStart({
+      hasPending: pendingAutoSaveRef.current,
+      saving: savingAutoSaveRef.current,
+    });
+    if (action === 'defer') {
+      pendingAutoSaveRef.current = true;
+      pendingKeepaliveRef.current = nextKeepalivePending({
+        already: pendingKeepaliveRef.current,
+        keepalive: opts.keepalive,
+      });
+      clearAutoSaveTimer();
+      return;
+    }
+    if (action !== 'start') return;
+    pendingAutoSaveRef.current = false;
+    clearAutoSaveTimer();
+    void saveToApiRef.current?.({ silent: true, keepalive: Boolean(opts.keepalive) });
+  }, [clearAutoSaveTimer]);
+
   // Auto-save : sauvegarde automatique après modification (debounce)
-  const saveToApi = useCallback(async () => {
+  const saveToApi = useCallback(async ({ silent = false, keepalive = false } = {}) => {
+    if (decideProfileSaveStart({ saving: savingAutoSaveRef.current }) === 'defer') {
+      pendingAutoSaveRef.current = true;
+      pendingKeepaliveRef.current = nextKeepalivePending({
+        already: pendingKeepaliveRef.current,
+        keepalive,
+      });
+      return;
+    }
+    const payload = buildProfileCvPutPayload(cv, templateId, templateOptions);
+    pendingAutoSaveRef.current = false;
+    savingAutoSaveRef.current = true;
     setError('');
     setSaving(true);
     try {
-      await apiPut('/api/cv', { ...cv, template_id: templateId, template_options: templateOptions });
-      setMessage('Sauvegardé');
-      setTimeout(() => setMessage(''), 2000);
-      onSaveSuccess?.();
+      await apiPut('/api/cv', payload, {
+        keepalive: keepalive && profilePutShouldKeepalive(payload),
+      });
+      if (!silent) {
+        setMessage('Sauvegardé');
+        setTimeout(() => setMessage(''), 2000);
+      }
+      onSaveSuccessRef.current?.();
     } catch (e) {
       setError(e.message || 'Erreur lors de l’enregistrement.');
     } finally {
+      savingAutoSaveRef.current = false;
       setSaving(false);
+      if (decideProfileSaveFinish({ hasPending: pendingAutoSaveRef.current }) === 'replay') {
+        const keepaliveReplay = decideProfileReplayKeepalive({
+          keepalivePending: pendingKeepaliveRef.current,
+        });
+        pendingKeepaliveRef.current = false;
+        void saveToApiRef.current?.({ silent: true, keepalive: keepaliveReplay });
+      }
     }
-  }, [cv, templateId, templateOptions, onSaveSuccess]);
+  }, [cv, templateId, templateOptions]);
+  useEffect(() => {
+    saveToApiRef.current = saveToApi;
+  }, [saveToApi]);
 
   const handleConfirmDesignBridge = useCallback(async (offer) => {
     if (!offer?.templateId) {
@@ -244,11 +347,7 @@ export default function ProfileView({ onSaveSuccess, session, refreshKey, usage,
       const templateChanged = offer.templateId !== templateId;
       const nextOptions = templateChanged ? {} : (templateOptions || {});
       // Persister d’abord — ne mettre à jour l’UI locale qu’après succès API.
-      await apiPut('/api/cv', {
-        ...cv,
-        template_id: offer.templateId,
-        template_options: nextOptions,
-      });
+      await apiPut('/api/cv', buildProfileCvPutPayload(cv, offer.templateId, nextOptions));
       if (onTemplateIdChange) onTemplateIdChange(offer.templateId);
       else setLocalTemplateId(offer.templateId);
       if (templateChanged) {
@@ -336,14 +435,85 @@ export default function ProfileView({ onSaveSuccess, session, refreshKey, usage,
   }, [session?.provider_token, loading, fetchLinkedInWithToken, handleImportLinkedInPhotoWithToken]);
 
   useEffect(() => {
-    if (loading) return;
-    if (skipNextAutoSaveRef.current) {
+    const action = decideProfileAutoSaveOnCvChange({
+      loading,
+      skipNext: skipNextAutoSaveRef.current,
+      isActive: isActiveRef.current,
+    });
+    if (action === 'wait') return undefined;
+    if (action === 'skip') {
       skipNextAutoSaveRef.current = false;
-      return;
+      pendingAutoSaveRef.current = false;
+      clearAutoSaveTimer();
+      return undefined;
     }
-    const t = setTimeout(() => saveToApi(), AUTO_SAVE_DELAY_MS);
-    return () => clearTimeout(t);
-  }, [cv, loading, saveToApi]);
+    if (action === 'ignore') return undefined;
+    pendingAutoSaveRef.current = true;
+    clearAutoSaveTimer();
+    autoSaveTimerRef.current = setTimeout(() => {
+      autoSaveTimerRef.current = null;
+      void saveToApiRef.current?.({ silent: !isActiveRef.current });
+    }, AUTO_SAVE_DELAY_MS);
+    return () => clearAutoSaveTimer();
+  }, [cv, loading, clearAutoSaveTimer]);
+
+  // AXE-29 / Bugbot : flush le debounce si on quitte Profil (le panel reste monté).
+  // Ne pas replanifier un PUT rien qu’en redevenant actif.
+  useEffect(() => {
+    const wasActive = wasActiveRef.current;
+    wasActiveRef.current = isActive;
+    if (decideProfileAutoSaveOnActiveChange({
+      wasActive,
+      isActive,
+      hasPending: pendingAutoSaveRef.current,
+    }) === 'flush') {
+      flushPendingAutoSave();
+    }
+  }, [isActive, flushPendingAutoSave]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    const onPageHide = () => {
+      if (decideProfileAutoSaveOnLifecycle({
+        event: 'pagehide',
+        hasPending: pendingAutoSaveRef.current,
+      }) === 'flush') {
+        flushPendingAutoSave({ keepalive: true });
+      }
+    };
+    const onVisibility = () => {
+      if (decideProfileAutoSaveOnLifecycle({
+        event: 'visibility',
+        hasPending: pendingAutoSaveRef.current,
+        visibilityState: document.visibilityState,
+      }) === 'flush') {
+        flushPendingAutoSave({ keepalive: true });
+      }
+    };
+    const onBeforeUnload = (event) => {
+      if (!profileHasUnloadGuard({
+        hasPending: pendingAutoSaveRef.current,
+        saving: savingAutoSaveRef.current,
+      })) return undefined;
+      event.preventDefault();
+      event.returnValue = '';
+      return '';
+    };
+    window.addEventListener('pagehide', onPageHide);
+    window.addEventListener('beforeunload', onBeforeUnload);
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      window.removeEventListener('pagehide', onPageHide);
+      window.removeEventListener('beforeunload', onBeforeUnload);
+      document.removeEventListener('visibilitychange', onVisibility);
+      if (decideProfileAutoSaveOnLifecycle({
+        event: 'unmount',
+        hasPending: pendingAutoSaveRef.current,
+      }) === 'flush') {
+        flushPendingAutoSave({ keepalive: true });
+      }
+    };
+  }, [flushPendingAutoSave]);
 
   useEffect(() => {
     if (onTemplateIdChange) return;
@@ -357,9 +527,17 @@ export default function ProfileView({ onSaveSuccess, session, refreshKey, usage,
   // Aperçu = même HTML que le rendu navigateur (render-html), pas le PDF, pour éviter les soucis WeasyPrint sur le profil
   const templateKey = templateId + '|' + JSON.stringify(templateOptions);
   useEffect(() => {
-    if (loading) return;
+    profilePreviewHtmlRef.current = profilePreviewHtml;
+  }, [profilePreviewHtml]);
+  useEffect(() => {
+    if (loading) return undefined;
+    if (!isActive) {
+      setProfilePreviewLoading(false);
+      return undefined;
+    }
     let cancelled = false;
-    setProfilePreviewLoading(true);
+    const keepExistingPreview = Boolean(profilePreviewHtmlRef.current);
+    if (!keepExistingPreview) setProfilePreviewLoading(true);
     const t = setTimeout(async () => {
       try {
         const html = await apiPost('/api/render-html', {
@@ -371,7 +549,7 @@ export default function ProfileView({ onSaveSuccess, session, refreshKey, usage,
         if (cancelled) return;
         setProfilePreviewHtml(typeof html === 'string' ? html : '');
       } catch {
-        if (!cancelled) setProfilePreviewHtml('');
+        if (!cancelled && !profilePreviewHtmlRef.current) setProfilePreviewHtml('');
       } finally {
         if (!cancelled) setProfilePreviewLoading(false);
       }
@@ -380,7 +558,7 @@ export default function ProfileView({ onSaveSuccess, session, refreshKey, usage,
       cancelled = true;
       clearTimeout(t);
     };
-  }, [cv, loading, templateKey]);
+  }, [cv, loading, templateKey, isActive]);
 
   const downloadBaseCvPdf = useCallback(async () => {
     if (loading) return;
@@ -450,8 +628,8 @@ export default function ProfileView({ onSaveSuccess, session, refreshKey, usage,
     setCv((prev) => ({
       ...prev,
       experiences: [
-        ...(prev.experiences || []),
         { id: newExpId(), poste: '', entreprise: '', secteur: '', date_debut: '', date_fin: '', lieu: '', contexte: '', bullet_points: ['', ''], mots_cles: [], clients: '' },
+        ...(prev.experiences || []),
       ],
     }));
   };
@@ -463,10 +641,14 @@ export default function ProfileView({ onSaveSuccess, session, refreshKey, usage,
     }));
   };
 
+  const moveExp = (index, direction) => {
+    setCv((prev) => ({ ...prev, experiences: moveListItem(prev.experiences, index, direction) }));
+  };
+
   const updateExpBullet = (expIndex, bulletIndex, value) => {
     setCv((prev) => {
       const next = [...(prev.experiences || [])];
-      const bullets = [...(next[expIndex].bullet_points || ['', ''])];
+      const bullets = [...displayedBullets(next[expIndex].bullet_points)];
       bullets[bulletIndex] = value;
       next[expIndex] = { ...next[expIndex], bullet_points: bullets };
       return { ...prev, experiences: next };
@@ -476,8 +658,17 @@ export default function ProfileView({ onSaveSuccess, session, refreshKey, usage,
   const addExpBullet = (expIndex) => {
     setCv((prev) => {
       const next = [...(prev.experiences || [])];
-      const bullets = [...(next[expIndex].bullet_points || [''])];
+      const bullets = [...displayedBullets(next[expIndex].bullet_points)];
       bullets.push('');
+      next[expIndex] = { ...next[expIndex], bullet_points: bullets };
+      return { ...prev, experiences: next };
+    });
+  };
+
+  const moveExpBullet = (expIndex, bulletIndex, direction) => {
+    setCv((prev) => {
+      const next = [...(prev.experiences || [])];
+      const bullets = moveListItem(displayedBullets(next[expIndex].bullet_points), bulletIndex, direction);
       next[expIndex] = { ...next[expIndex], bullet_points: bullets };
       return { ...prev, experiences: next };
     });
@@ -486,7 +677,7 @@ export default function ProfileView({ onSaveSuccess, session, refreshKey, usage,
   const removeExpBullet = (expIndex, bulletIndex) => {
     setCv((prev) => {
       const next = [...(prev.experiences || [])];
-      const bullets = (next[expIndex].bullet_points || ['']).filter((_, j) => j !== bulletIndex);
+      const bullets = displayedBullets(next[expIndex].bullet_points).filter((_, j) => j !== bulletIndex);
       if (bullets.length === 0) bullets.push('');
       next[expIndex] = { ...next[expIndex], bullet_points: bullets };
       return { ...prev, experiences: next };
@@ -496,12 +687,16 @@ export default function ProfileView({ onSaveSuccess, session, refreshKey, usage,
   const addFormation = () => {
     setCv((prev) => ({
       ...prev,
-      formations: [...(prev.formations || []), { id: newFormId(), diplome: '', etablissement: '', date: '', mention: '' }],
+      formations: [{ id: newFormId(), diplome: '', etablissement: '', date: '', mention: '' }, ...(prev.formations || [])],
     }));
   };
 
   const removeFormation = (index) => {
     setCv((prev) => ({ ...prev, formations: prev.formations.filter((_, i) => i !== index) }));
+  };
+
+  const moveFormation = (index, direction) => {
+    setCv((prev) => ({ ...prev, formations: moveListItem(prev.formations, index, direction) }));
   };
 
   const updateFormation = (index, field, value) => {
@@ -515,12 +710,16 @@ export default function ProfileView({ onSaveSuccess, session, refreshKey, usage,
   const addCertification = () => {
     setCv((prev) => ({
       ...prev,
-      certifications: [...(prev.certifications || []), { id: newCertId(), nom: '', organisme: '', date: '' }],
+      certifications: [{ id: newCertId(), nom: '', organisme: '', date: '' }, ...(prev.certifications || [])],
     }));
   };
 
   const removeCertification = (index) => {
     setCv((prev) => ({ ...prev, certifications: (prev.certifications || []).filter((_, i) => i !== index) }));
+  };
+
+  const moveCertification = (index, direction) => {
+    setCv((prev) => ({ ...prev, certifications: moveListItem(prev.certifications, index, direction) }));
   };
 
   const updateCertification = (index, field, value) => {
@@ -534,12 +733,16 @@ export default function ProfileView({ onSaveSuccess, session, refreshKey, usage,
   const addProjet = () => {
     setCv((prev) => ({
       ...prev,
-      projets: [...(prev.projets || []), { id: newProjId(), nom: '', description: '', mots_cles: [] }],
+      projets: [{ id: newProjId(), nom: '', description: '', mots_cles: [] }, ...(prev.projets || [])],
     }));
   };
 
   const removeProjet = (index) => {
     setCv((prev) => ({ ...prev, projets: prev.projets.filter((_, i) => i !== index) }));
+  };
+
+  const moveProjet = (index, direction) => {
+    setCv((prev) => ({ ...prev, projets: moveListItem(prev.projets, index, direction) }));
   };
 
   const updateProjet = (index, field, value) => {
@@ -571,7 +774,7 @@ export default function ProfileView({ onSaveSuccess, session, refreshKey, usage,
     setMessage('');
     setSaving(true);
     try {
-      await apiPut('/api/cv', { ...cv, template_id: templateId, template_options: templateOptions });
+      await apiPut('/api/cv', buildProfileCvPutPayload(cv, templateId, templateOptions));
       setMessage('CV enregistré.');
       onSaveSuccess?.();
     } catch (e) {
@@ -687,25 +890,6 @@ export default function ProfileView({ onSaveSuccess, session, refreshKey, usage,
     }
   };
 
-  const IMPORT_SCALAR_KEYS = [
-    { key: 'prenom', label: 'Prénom' },
-    { key: 'nom', label: 'Nom' },
-    { key: 'email', label: 'Email' },
-    { key: 'telephone', label: 'Téléphone' },
-    { key: 'linkedin', label: 'LinkedIn' },
-    { key: 'ville', label: 'Ville' },
-    { key: 'titre_professionnel', label: 'Titre professionnel' },
-    { key: 'resume', label: 'Résumé / Accroche' },
-    { key: 'photo_url', label: 'Photo' },
-  ];
-  const IMPORT_SECTION_KEYS = [
-    { key: 'experiences', label: 'Expériences' },
-    { key: 'formations', label: 'Formations' },
-    { key: 'certifications', label: 'Certifications' },
-    { key: 'competences', label: 'Compétences' },
-    { key: 'projets', label: 'Projets' },
-  ];
-
   const IMPORT_STEPS = [
     'Lecture du document',
     'Extraction du texte',
@@ -739,41 +923,28 @@ export default function ProfileView({ onSaveSuccess, session, refreshKey, usage,
       if (importStepTimerRef.current) clearInterval(importStepTimerRef.current);
     }, IMPORT_PHASE_DURATION_MS);
     try {
-      const result = await apiPostFile('/api/cv/import', file);
-      const parsed = result?.cv || result;
-      if (parsed && typeof parsed === 'object') {
-        const choices = {};
-        IMPORT_SCALAR_KEYS.forEach(({ key }) => {
-          const importedVal = parsed[key];
-          if (importedVal === undefined || importedVal === null || String(importedVal).trim() === '') return;
-          const currentVal = (cv[key] ?? '').toString().trim();
-          const importedStr = String(importedVal).trim();
-          if (currentVal === importedStr) return;
-          choices[key] = currentVal === '' ? 'add' : 'keep';
+      const result = await apiPostFile('/api/cv/import', file, 'file', { timeoutMs: CV_IMPORT_REQUEST_TIMEOUT_MS });
+      const imported = cvFromImportPayload(extractImportApiResponse(result).cv);
+      const next = applyImportedProfileCv(cv, imported);
+      skipNextAutoSaveRef.current = true;
+      setCv(next);
+      setProfileSection('identite');
+      setSaving(true);
+      try {
+        await apiPut('/api/cv', buildProfileCvPutPayload(next, templateId, templateOptions));
+        const nExp = (imported.experiences || []).filter((item) => item?.poste || item?.entreprise).length;
+        const nForm = (imported.formations || []).filter((item) => item?.diplome || item?.etablissement).length;
+        setImportSummary({
+          name: [imported.prenom, imported.nom].filter(Boolean).join(' '),
+          title: imported.titre_professionnel || '',
+          experiences: nExp,
+          formations: nForm,
         });
-        IMPORT_SECTION_KEYS.forEach(({ key }) => {
-          const imported = parsed[key];
-          const hasImported = Array.isArray(imported) ? imported.length > 0 : (imported && typeof imported === 'object' && (Object.keys(imported).length > 0 || (imported.techniques || imported.logiciels || imported.langues || imported.autres)));
-          if (!hasImported) return;
-          const current = cv[key];
-          try {
-            if (JSON.stringify(imported) === JSON.stringify(current)) return;
-          } catch {
-            /* non-serializable fragment: fall through to merge UI */
-          }
-          const hasCurrent = Array.isArray(current) ? current.some((e) => (e && (e.poste || e.entreprise || e.diplome || e.nom || (e.bullet_points && e.bullet_points.some(Boolean))))) : (current && typeof current === 'object' && ((current.techniques || []).some(Boolean) || (current.logiciels || []).some(Boolean)));
-          choices[key] = hasCurrent ? 'keep' : 'replace';
-        });
-        if (Object.keys(choices).length === 0) {
-          skipNextAutoSaveRef.current = true;
-          setCv((prev) => ({ ...defaultCv(), ...prev, ...parsed }));
-          setMessage('CV importé - vérifie et complète les champs ci-dessous.');
-          setTimeout(() => setMessage(''), 5000);
-        } else {
-          setImportMergeParsed(parsed);
-          setImportMergeChoices(choices);
-          setImportMergeOpen(true);
-        }
+        onSaveSuccess?.();
+      } catch (saveErr) {
+        setError(saveErr.message || 'CV importé à l’écran, mais l’enregistrement a échoué.');
+      } finally {
+        setSaving(false);
       }
     } catch (err) {
       setError(err.message || 'Erreur lors de l\'import.');
@@ -785,58 +956,26 @@ export default function ProfileView({ onSaveSuccess, session, refreshKey, usage,
     }
   };
 
-  const applyImportMerge = async () => {
-    if (!importMergeParsed) return;
-    const next = { ...defaultCv(), ...cv };
-    IMPORT_SCALAR_KEYS.forEach(({ key }) => {
-      const choice = importMergeChoices[key];
-      if (choice === 'add' || choice === 'replace') next[key] = importMergeParsed[key] ?? next[key];
-    });
-    IMPORT_SECTION_KEYS.forEach(({ key }) => {
-      if (importMergeChoices[key] === 'replace' && importMergeParsed[key] !== undefined) {
-        next[key] = Array.isArray(importMergeParsed[key]) ? [...importMergeParsed[key]] : (typeof importMergeParsed[key] === 'object' && importMergeParsed[key] !== null ? { ...importMergeParsed[key] } : importMergeParsed[key]);
-      }
-    });
-    setCv(next);
-    setImportMergeOpen(false);
-    setImportMergeParsed(null);
-    setImportMergeChoices({});
-    setSaving(true);
-    setError('');
-    try {
-      await apiPut('/api/cv', { ...next, template_id: templateId, template_options: templateOptions });
-      setMessage('CV importé et enregistré.');
-      onSaveSuccess?.();
-    } catch (e) {
-      setError(e.message || 'Erreur lors de l\'enregistrement.');
-    } finally {
-      setSaving(false);
-    }
-    setTimeout(() => setMessage(''), 5000);
-  };
-
   if (loading) return <div className="profile-loading">Chargement du profil…</div>;
 
   return (
     <div className="profile-view profile-view-with-preview">
       <div className="profile-form-pane">
       <div className="profile-header">
-        <h1>Mon profil CV</h1>
-        <p className="profile-subtitle">Complète tes informations. Le CV est généré à partir de ces données.</p>
+        <h1 className="ds-label-md">Profil</h1>
         <div className="profile-header-actions">
           <input ref={importFileRef} type="file" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" style={{ display: 'none' }} onChange={handleImportCv} />
-          <button type="button" className="btn btn-import-cv" onClick={() => importFileRef.current?.click()} disabled={importLoading}>
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-            {importLoading ? 'Import…' : 'Importer un CV'}
-          </button>
-          <button type="button" className="button button-primary profile-save-btn" onClick={handleSave} disabled={saving}>
-            {saving ? 'Enregistrement…' : 'Enregistrer les modifications'}
-          </button>
+          <Button type="button" variant="secondary" size="sm" title="Importer un CV" onClick={() => importFileRef.current?.click()} disabled={importLoading} loading={importLoading} {...analyticsAttrs('profil-header-cta-import', 'header', 'secondary', 'cta')}>
+            {importLoading ? 'Import…' : 'Importer'}
+          </Button>
+          <Button type="button" variant="primary" size="sm" className="profile-save-btn" title="Enregistrer les modifications" onClick={handleSave} disabled={saving} loading={saving} {...analyticsAttrs('profil-header-cta-save', 'header', 'primary', 'cta')}>
+            {saving ? 'Enregistrement…' : 'Enregistrer'}
+          </Button>
         </div>
       </div>
 
-      {importLoading && (
-        <div className="import-cv-loading-overlay" role="status" aria-live="polite">
+      {importLoading && createPortal(
+        <div className="import-cv-loading-overlay import-cv-loading-overlay--front" role="status" aria-live="polite">
           <div className="import-cv-loading-card">
             <div className="import-cv-loading-spinner" aria-hidden="true" />
             <p className="import-cv-loading-title">Analyse de ton CV en cours</p>
@@ -857,7 +996,8 @@ export default function ProfileView({ onSaveSuccess, session, refreshKey, usage,
               ))}
             </ul>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
 
       {message && <div className="profile-toast profile-toast--success" role="status">{message}</div>}
@@ -865,7 +1005,30 @@ export default function ProfileView({ onSaveSuccess, session, refreshKey, usage,
 
       <ProfileCompletion cv={cv} />
 
-      <CollapsibleSection title="Identité" defaultOpen={true}>
+      <nav className="profile-section-nav" aria-label="Rubriques du profil">
+        {[
+          { id: 'identite', label: 'Identité' },
+          { id: 'experiences', label: 'Expériences' },
+          { id: 'formations', label: 'Formations' },
+          { id: 'certifications', label: 'Certifications' },
+          { id: 'projets', label: 'Projets' },
+          { id: 'competences', label: 'Compétences' },
+          ...(usage?.plan === 'pro' && !usage?.paywall_disabled ? [{ id: 'abonnement', label: 'Abonnement' }] : []),
+        ].map((section) => (
+          <button
+            key={section.id}
+            type="button"
+            aria-current={profileSection === section.id ? 'page' : undefined}
+            onClick={() => setProfileSection(section.id)}
+          >
+            {section.label}
+          </button>
+        ))}
+      </nav>
+
+      {profileSection === 'identite' && (
+      <section className="profile-section-panel">
+        <h2 className="ds-label-md">Identité</h2>
         <div className="profile-photo-row profile-photo-row-simple">
           <div className="profile-photo-preview">
             {(cv.photo_url || '').trim() ? (
@@ -886,9 +1049,9 @@ export default function ProfileView({ onSaveSuccess, session, refreshKey, usage,
               <span className="profile-photo-placeholder">Aucune photo</span>
             )}
           </div>
-          <button type="button" className="button button-secondary profile-photo-edit-btn" onClick={() => setPhotoModalOpen(true)}>
-            Modifier la photo
-          </button>
+          <Button type="button" variant="tertiary" size="sm" className="profile-photo-edit-btn" onClick={() => setPhotoModalOpen(true)}>
+            Modifier
+          </Button>
         </div>
         {photoModalOpen && (
           <div className="profile-photo-modal-overlay" onClick={() => setPhotoModalOpen(false)} role="dialog" aria-modal="true" aria-labelledby="photo-modal-title">
@@ -902,13 +1065,13 @@ export default function ProfileView({ onSaveSuccess, session, refreshKey, usage,
                 onChange={(e) => { openCropModal(e); }}
                 aria-label="Choisir une image"
               />
-              <button type="button" className="button button-secondary profile-photo-modal-btn" onClick={() => { fileInputRef.current?.click(); }} disabled={uploadPhotoLoading}>
+              <Button type="button" variant="secondary" className="profile-photo-modal-btn" onClick={() => { fileInputRef.current?.click(); }} disabled={uploadPhotoLoading} loading={uploadPhotoLoading}>
                 {uploadPhotoLoading ? 'Import…' : 'Importer depuis mon PC'}
-              </button>
-              <button type="button" className="button button-secondary btn-linkedin-sync profile-photo-modal-btn" onClick={() => { handleImportLinkedInPhoto(); setPhotoModalOpen(false); }} disabled={importPhotoLoading}>
+              </Button>
+              <Button type="button" variant="secondary" className="btn-linkedin-sync profile-photo-modal-btn" onClick={() => { handleImportLinkedInPhoto(); setPhotoModalOpen(false); }} disabled={importPhotoLoading} loading={importPhotoLoading}>
                 {importPhotoLoading ? 'Import…' : 'Importer la photo LinkedIn'}
-              </button>
-              <button type="button" className="button button-tertiary profile-photo-modal-close" onClick={() => setPhotoModalOpen(false)}>Fermer</button>
+              </Button>
+              <Button type="button" variant="tertiary" className="profile-photo-modal-close" onClick={() => setPhotoModalOpen(false)}>Fermer</Button>
             </div>
           </div>
         )}
@@ -943,124 +1106,151 @@ export default function ProfileView({ onSaveSuccess, session, refreshKey, usage,
                 />
               </div>
               <div className="profile-crop-modal-actions">
-                <button type="button" className="button button-tertiary" onClick={closeCropModal}>Annuler</button>
-                <button type="button" className="button button-primary" onClick={handleConfirmCrop} disabled={uploadPhotoLoading || !croppedAreaPixels}>
+                <Button type="button" variant="tertiary" onClick={closeCropModal}>Annuler</Button>
+                <Button type="button" variant="primary" onClick={handleConfirmCrop} disabled={uploadPhotoLoading || !croppedAreaPixels} loading={uploadPhotoLoading}>
                   {uploadPhotoLoading ? 'Import…' : 'Valider le cadrage'}
-                </button>
+                </Button>
               </div>
             </div>
           </div>
         )}
         <div className="profile-grid profile-grid-identity">
-          <label>Prénom <input type="text" value={cv.prenom || ''} onChange={(e) => update('prenom', e.target.value)} /></label>
-          <label>Nom <input type="text" value={cv.nom || ''} onChange={(e) => update('nom', e.target.value)} /></label>
-          <label>Email <input type="email" value={cv.email || ''} onChange={(e) => update('email', e.target.value)} /></label>
-          <label>Téléphone <input type="text" value={cv.telephone || ''} onChange={(e) => update('telephone', e.target.value)} /></label>
-          <label>LinkedIn <input type="text" value={cv.linkedin || ''} onChange={(e) => update('linkedin', e.target.value)} placeholder="URL" /></label>
-          <label>Ville <input type="text" value={cv.ville || ''} onChange={(e) => update('ville', e.target.value)} /></label>
+          <InlineEdit label="Prénom" value={cv.prenom || ''} onChange={(v) => update('prenom', v)} />
+          <InlineEdit label="Nom" value={cv.nom || ''} onChange={(v) => update('nom', v)} />
+          <InlineEdit label="Email" type="email" value={cv.email || ''} onChange={(v) => update('email', v)} />
+          <InlineEdit label="Téléphone" value={cv.telephone || ''} onChange={(v) => update('telephone', v)} />
+          <InlineEdit label="LinkedIn" value={cv.linkedin || ''} onChange={(v) => update('linkedin', v)} placeholder="URL" />
+          <InlineEdit label="Ville" value={cv.ville || ''} onChange={(v) => update('ville', v)} />
+          <InlineEdit label="Titre professionnel" value={cv.titre_professionnel || ''} onChange={(v) => update('titre_professionnel', v)} placeholder="ex. Étudiant HEC - Data Analyst ou Data Analyst" />
+          <InlineEdit label="Résumé / Accroche" multiline value={cv.resume || ''} onChange={(v) => update('resume', v)} placeholder="Quelques lignes pour te présenter" />
         </div>
-        <label className="profile-full">Titre professionnel <input type="text" value={cv.titre_professionnel || ''} onChange={(e) => update('titre_professionnel', e.target.value)} placeholder="ex. Étudiant HEC - Data Analyst ou Data Analyst" /></label>
-        <label className="profile-full">Résumé / Accroche <textarea value={cv.resume || ''} onChange={(e) => update('resume', e.target.value)} rows={3} placeholder="Quelques lignes pour te présenter" /></label>
-      </CollapsibleSection>
+      </section>
+      )}
 
-      <CollapsibleSection title="Expériences professionnelles" defaultOpen={true}>
+      {profileSection === 'experiences' && (
+      <section className="profile-section-panel">
+        <h2 className="ds-label-md">Expériences</h2>
         <div className="profile-section-head">
           <button type="button" className="btn btn-add" onClick={addExp}>+ Ajouter une expérience</button>
         </div>
         {(cv.experiences || []).map((exp, i) => (
           <div key={exp.id} className="profile-card">
             <div className="profile-card-head">
-              <span>Expérience {i + 1}</span>
-              <button type="button" className="btn btn-remove" onClick={() => removeExp(i)} title="Supprimer">×</button>
+              <span>{exp.poste || exp.entreprise || `Expérience ${i + 1}`}</span>
+              <div className="profile-card-actions">
+                <OrderButtons index={i} total={(cv.experiences || []).length} onMove={moveExp} label="cette expérience" />
+                <button type="button" className="btn btn-remove" onClick={() => removeExp(i)} title="Supprimer">×</button>
+              </div>
             </div>
             <div className="profile-grid">
-              <label>Poste <input type="text" value={exp.poste || ''} onChange={(e) => updateExp(i, 'poste', e.target.value)} /></label>
-              <label>Organisation <input type="text" value={exp.entreprise || ''} onChange={(e) => updateExp(i, 'entreprise', e.target.value)} placeholder="Entreprise, association, administration…" /></label>
-              <label>Secteur <input type="text" value={exp.secteur || ''} onChange={(e) => updateExp(i, 'secteur', e.target.value)} /></label>
-              <label>Date début <input type="text" value={exp.date_debut || ''} onChange={(e) => updateExp(i, 'date_debut', e.target.value)} placeholder="ex. 2022, 01/2024" title="Année ou mois (vide = pas affiché sur le CV)" /></label>
-              <label>Date fin <input type="text" value={exp.date_fin || ''} onChange={(e) => updateExp(i, 'date_fin', e.target.value)} placeholder="ex. Aujourd'hui, 08/2024" title="Année, mois ou Aujourd'hui (vide = pas affiché)" /></label>
-              <label>Lieu <input type="text" value={exp.lieu || ''} onChange={(e) => updateExp(i, 'lieu', e.target.value)} /></label>
+              <InlineEdit label="Poste" value={exp.poste || ''} onChange={(v) => updateExp(i, 'poste', v)} />
+              <InlineEdit label="Organisation" value={exp.entreprise || ''} onChange={(v) => updateExp(i, 'entreprise', v)} placeholder="Entreprise, association, administration…" />
+              <InlineEdit label="Secteur" value={exp.secteur || ''} onChange={(v) => updateExp(i, 'secteur', v)} />
+              <InlineEdit label="Date début" value={exp.date_debut || ''} onChange={(v) => updateExp(i, 'date_debut', v)} placeholder="ex. 2022, 01/2024" title="Année ou mois (vide = pas affiché sur le CV)" />
+              <InlineEdit label="Date fin" value={exp.date_fin || ''} onChange={(v) => updateExp(i, 'date_fin', v)} placeholder="ex. Aujourd'hui, 08/2024" title="Année, mois ou Aujourd'hui (vide = pas affiché)" />
+              <InlineEdit label="Lieu" value={exp.lieu || ''} onChange={(v) => updateExp(i, 'lieu', v)} />
             </div>
-            <label className="profile-full">Contexte <input type="text" value={exp.contexte || ''} onChange={(e) => updateExp(i, 'contexte', e.target.value)} /></label>
+            <InlineEdit label="Contexte" value={exp.contexte || ''} onChange={(v) => updateExp(i, 'contexte', v)} />
             <div className="profile-bullets">
               <div className="profile-bullets-head">
                 <span>Bullet points</span>
                 <button type="button" className="btn btn-add" onClick={() => addExpBullet(i)}>+ Ajouter un point</button>
               </div>
-              {(exp.bullet_points || ['', '']).map((b, j) => (
+              {displayedBullets(exp.bullet_points).map((b, j) => (
                 <div key={j} className="profile-bullet-row">
-                  <textarea value={b} onChange={(e) => updateExpBullet(i, j, e.target.value)} rows={2} placeholder={`Point ${j + 1}`} />
+                  <InlineEdit multiline value={b} onChange={(v) => updateExpBullet(i, j, v)} placeholder={`Point ${j + 1}`} />
+                  <OrderButtons index={j} total={displayedBullets(exp.bullet_points).length} onMove={(idx, dir) => moveExpBullet(i, idx, dir)} label="ce point" />
                   <button type="button" className="btn btn-remove" onClick={() => removeExpBullet(i, j)} title="Supprimer ce point">×</button>
                 </div>
               ))}
             </div>
-            <label className="profile-full">Clients <input type="text" value={exp.clients || ''} onChange={(e) => updateExp(i, 'clients', e.target.value)} placeholder="ex. L'Oréal, Charal, Herta (vide = pas affiché sur le CV)" title="Liste de clients ou types de clients (vide = pas affiché)" /></label>
+            <InlineEdit label="Clients" value={exp.clients || ''} onChange={(v) => updateExp(i, 'clients', v)} placeholder="ex. L'Oréal, Charal, Herta" title="Liste de clients ou types de clients (vide = pas affiché)" />
           </div>
         ))}
-      </CollapsibleSection>
+      </section>
+      )}
 
-      <CollapsibleSection title="Formations" defaultOpen={true}>
+      {profileSection === 'formations' && (
+      <section className="profile-section-panel">
+        <h2 className="ds-label-md">Formations</h2>
         <div className="profile-section-head">
           <button type="button" className="btn btn-add" onClick={addFormation}>+ Ajouter</button>
         </div>
         {(cv.formations || []).map((form, i) => (
           <div key={form.id} className="profile-card">
             <div className="profile-card-head">
-              <span>Formation {i + 1}</span>
-              <button type="button" className="btn btn-remove" onClick={() => removeFormation(i)}>×</button>
+              <span>{form.diplome || form.etablissement || `Formation ${i + 1}`}</span>
+              <div className="profile-card-actions">
+                <OrderButtons index={i} total={(cv.formations || []).length} onMove={moveFormation} label="cette formation" />
+                <button type="button" className="btn btn-remove" onClick={() => removeFormation(i)}>×</button>
+              </div>
             </div>
             <div className="profile-grid">
-              <label>Diplôme <input type="text" value={form.diplome || ''} onChange={(e) => updateFormation(i, 'diplome', e.target.value)} /></label>
-              <label>Établissement <input type="text" value={form.etablissement || ''} onChange={(e) => updateFormation(i, 'etablissement', e.target.value)} /></label>
-              <label>Date <input type="text" value={form.date || ''} onChange={(e) => updateFormation(i, 'date', e.target.value)} placeholder="ex. 2024, 06/2023" title="Année ou mois (vide = pas affiché sur le CV)" /></label>
-              <label className="profile-full">Description <textarea className="profile-mention-field" value={form.mention || ''} onChange={(e) => updateFormation(i, 'mention', e.target.value)} rows={4} placeholder="ex. Mention Bien, Félicitations du jury" /></label>
+              <InlineEdit label="Diplôme" value={form.diplome || ''} onChange={(v) => updateFormation(i, 'diplome', v)} />
+              <InlineEdit label="Établissement" value={form.etablissement || ''} onChange={(v) => updateFormation(i, 'etablissement', v)} />
+              <InlineEdit label="Date" value={form.date || ''} onChange={(v) => updateFormation(i, 'date', v)} placeholder="ex. 2024, 06/2023" title="Année ou mois (vide = pas affiché sur le CV)" />
+              <InlineEdit label="Description" multiline value={form.mention || ''} onChange={(v) => updateFormation(i, 'mention', v)} placeholder="ex. Mention Bien, Félicitations du jury" />
             </div>
           </div>
         ))}
-      </CollapsibleSection>
+      </section>
+      )}
 
-      <CollapsibleSection title="Certifications" defaultOpen={false}>
-        <p className="profile-subtitle" style={{ marginTop: 0, marginBottom: '0.75rem' }}>Tu pourras les ajouter au CV plus tard.</p>
+      {profileSection === 'certifications' && (
+      <section className="profile-section-panel">
+        <h2 className="ds-label-md">Certifications</h2>
         <div className="profile-section-head">
           <button type="button" className="btn btn-add" onClick={addCertification}>+ Ajouter</button>
         </div>
         {(cv.certifications || []).map((cert, i) => (
           <div key={cert.id} className="profile-card">
             <div className="profile-card-head">
-              <span>Certification {i + 1}</span>
-              <button type="button" className="btn btn-remove" onClick={() => removeCertification(i)}>×</button>
+              <span>{cert.nom || `Certification ${i + 1}`}</span>
+              <div className="profile-card-actions">
+                <OrderButtons index={i} total={(cv.certifications || []).length} onMove={moveCertification} label="cette certification" />
+                <button type="button" className="btn btn-remove" onClick={() => removeCertification(i)}>×</button>
+              </div>
             </div>
             <div className="profile-grid">
-              <label>Intitulé <input type="text" value={cert.nom || ''} onChange={(e) => updateCertification(i, 'nom', e.target.value)} placeholder="ex. PMP, AWS Solutions Architect" /></label>
-              <label>Organisme <input type="text" value={cert.organisme || ''} onChange={(e) => updateCertification(i, 'organisme', e.target.value)} placeholder="ex. PMI, Amazon" /></label>
-              <label>Date <input type="text" value={cert.date || ''} onChange={(e) => updateCertification(i, 'date', e.target.value)} placeholder="ex. 2024, 06/2023" /></label>
+              <InlineEdit label="Intitulé" value={cert.nom || ''} onChange={(v) => updateCertification(i, 'nom', v)} placeholder="ex. PMP, AWS Solutions Architect" />
+              <InlineEdit label="Organisme" value={cert.organisme || ''} onChange={(v) => updateCertification(i, 'organisme', v)} placeholder="ex. PMI, Amazon" />
+              <InlineEdit label="Date" value={cert.date || ''} onChange={(v) => updateCertification(i, 'date', v)} placeholder="ex. 2024, 06/2023" />
             </div>
           </div>
         ))}
-      </CollapsibleSection>
+      </section>
+      )}
 
-      <CollapsibleSection title="Projets" defaultOpen={false}>
+      {profileSection === 'projets' && (
+      <section className="profile-section-panel">
+        <h2 className="ds-label-md">Projets</h2>
         <div className="profile-section-head">
           <button type="button" className="btn btn-add" onClick={addProjet}>+ Ajouter</button>
         </div>
         {(cv.projets || []).map((proj, i) => (
           <div key={proj.id} className="profile-card">
             <div className="profile-card-head">
-              <span>Projet {i + 1}</span>
-              <button type="button" className="btn btn-remove" onClick={() => removeProjet(i)}>×</button>
+              <span>{proj.nom || `Projet ${i + 1}`}</span>
+              <div className="profile-card-actions">
+                <OrderButtons index={i} total={(cv.projets || []).length} onMove={moveProjet} label="ce projet" />
+                <button type="button" className="btn btn-remove" onClick={() => removeProjet(i)}>×</button>
+              </div>
             </div>
-            <label>Nom <input type="text" value={proj.nom || ''} onChange={(e) => updateProjet(i, 'nom', e.target.value)} /></label>
-            <label className="profile-full">Description <textarea value={proj.description || ''} onChange={(e) => updateProjet(i, 'description', e.target.value)} rows={2} /></label>
+            <InlineEdit label="Nom" value={proj.nom || ''} onChange={(v) => updateProjet(i, 'nom', v)} />
+            <InlineEdit label="Description" multiline value={proj.description || ''} onChange={(v) => updateProjet(i, 'description', v)} />
           </div>
         ))}
-      </CollapsibleSection>
+      </section>
+      )}
 
-      <CollapsibleSection title="Compétences, langues & autres" defaultOpen={false}>
+      {profileSection === 'competences' && (
+      <section className="profile-section-panel">
+        <h2 className="ds-label-md">Compétences</h2>
         <div className="profile-card">
           <h3 className="sidebar-category">Compétences techniques</h3>
           {(comp.techniques || []).map((item, i) => (
             <div key={i} className="profile-comp-row">
-              <input type="text" value={typeof item === 'string' ? item : ''} onChange={(e) => updateCompList('techniques', i, e.target.value)} placeholder="ex. Python, Gestion de projet" />
+              <InlineEdit value={typeof item === 'string' ? item : ''} onChange={(v) => updateCompList('techniques', i, v)} placeholder="ex. Python, Gestion de projet" />
               <button type="button" className="btn btn-remove" onClick={() => removeCompList('techniques', i)} title="Supprimer">×</button>
             </div>
           ))}
@@ -1070,7 +1260,7 @@ export default function ProfileView({ onSaveSuccess, session, refreshKey, usage,
           <h3 className="sidebar-category">Logiciels & outils</h3>
           {(comp.logiciels || []).map((item, i) => (
             <div key={i} className="profile-comp-row">
-              <input type="text" value={typeof item === 'string' ? item : ''} onChange={(e) => updateCompList('logiciels', i, e.target.value)} placeholder="ex. Excel, React, Git" />
+              <InlineEdit value={typeof item === 'string' ? item : ''} onChange={(v) => updateCompList('logiciels', i, v)} placeholder="ex. Excel, React, Git" />
               <button type="button" className="btn btn-remove" onClick={() => removeCompList('logiciels', i)} title="Supprimer">×</button>
             </div>
           ))}
@@ -1080,8 +1270,8 @@ export default function ProfileView({ onSaveSuccess, session, refreshKey, usage,
           <h3 className="sidebar-category">Langues</h3>
           {(comp.langues || []).map((l, i) => (
             <div key={i} className="profile-langue-row">
-              <input type="text" value={l?.langue || ''} onChange={(e) => updateCompList('langues', i, { ...l, langue: e.target.value })} placeholder="Langue" />
-              <input type="text" value={l?.niveau || ''} onChange={(e) => updateCompList('langues', i, { ...l, niveau: e.target.value })} placeholder="ex. Natif, Courant (C1)" />
+              <InlineEdit value={l?.langue || ''} onChange={(v) => updateCompList('langues', i, { ...l, langue: v })} placeholder="Langue" />
+              <InlineEdit value={l?.niveau || ''} onChange={(v) => updateCompList('langues', i, { ...l, niveau: v })} placeholder="ex. Natif, Courant (C1)" />
               <button type="button" className="btn btn-remove" onClick={() => removeCompList('langues', i)} title="Supprimer">×</button>
             </div>
           ))}
@@ -1091,16 +1281,18 @@ export default function ProfileView({ onSaveSuccess, session, refreshKey, usage,
           <h3 className="sidebar-category">Autres</h3>
           {(comp.autres || []).map((item, i) => (
             <div key={i} className="profile-comp-row">
-              <input type="text" value={typeof item === 'string' ? item : ''} onChange={(e) => updateCompList('autres', i, e.target.value)} placeholder="ex. Permis B, Piano" />
+              <InlineEdit value={typeof item === 'string' ? item : ''} onChange={(v) => updateCompList('autres', i, v)} placeholder="ex. Permis B, Piano" />
               <button type="button" className="btn btn-remove" onClick={() => removeCompList('autres', i)} title="Supprimer">×</button>
             </div>
           ))}
           <button type="button" className="btn btn-add" onClick={() => addCompList('autres', '')}>+ Ajouter</button>
         </div>
-      </CollapsibleSection>
+      </section>
+      )}
 
-      {usage?.plan === 'pro' && !usage?.paywall_disabled && (
-        <CollapsibleSection title="Abonnement" defaultOpen={true}>
+      {profileSection === 'abonnement' && usage?.plan === 'pro' && !usage?.paywall_disabled && (
+        <section className="profile-section-panel">
+          <h2 className="ds-label-md">Abonnement</h2>
           <p className="profile-section-desc">Gère la résiliation depuis ici (exigence légale). La facturation détaillée reste disponible sur le portail sécurisé Stripe si besoin.</p>
           {usage.stripe_subscription ? (
             <>
@@ -1123,18 +1315,20 @@ export default function ProfileView({ onSaveSuccess, session, refreshKey, usage,
                     Résilier mon abonnement - La résiliation prend effet à la fin de la période en cours. Vos données restent accessibles jusqu&apos;à cette date.
                   </p>
                   <div className="profile-subscription-actions">
-                    <button
+                    <Button
                       type="button"
-                      className="button button-secondary profile-btn-cancel-sub"
+                      variant="secondary"
+                      className="profile-btn-cancel-sub"
                       onClick={() => setCancelSubModalOpen(true)}
                       disabled={cancelSubLoading}
+                      {...analyticsAttrs('profil-billing-cta-cancel', 'billing', 'tertiary', 'cta')}
                     >
                       Résilier mon abonnement
-                    </button>
+                    </Button>
                     {typeof onBillingPortalClick === 'function' && (
-                      <button type="button" className="button button-secondary" onClick={onBillingPortalClick}>
+                      <Button type="button" variant="secondary" onClick={onBillingPortalClick} {...analyticsAttrs('profil-billing-cta-portal', 'billing', 'tertiary', 'cta')}>
                         Facturation &amp; moyens de paiement (Stripe)
-                      </button>
+                      </Button>
                     )}
                   </div>
                 </>
@@ -1146,13 +1340,13 @@ export default function ProfileView({ onSaveSuccess, session, refreshKey, usage,
                 Le détail Stripe n&apos;est pas disponible pour l&apos;instant (connexion ou synchronisation). Tu peux ouvrir le portail de facturation pour gérer ton abonnement.
               </p>
               {typeof onBillingPortalClick === 'function' && (
-                <button type="button" className="button button-secondary" onClick={onBillingPortalClick}>
+                <Button type="button" variant="secondary" onClick={onBillingPortalClick} {...analyticsAttrs('profil-billing-cta-portal', 'billing', 'tertiary', 'cta')}>
                   Ouvrir le portail de facturation
-                </button>
+                </Button>
               )}
             </div>
           )}
-        </CollapsibleSection>
+        </section>
       )}
 
       {cancelSubModalOpen && (
@@ -1167,10 +1361,11 @@ export default function ProfileView({ onSaveSuccess, session, refreshKey, usage,
               . Aucun remboursement automatique de la période en cours : tu conserves l&apos;accès Pro jusqu&apos;à cette date. Un email de confirmation te sera envoyé.
             </p>
             <div className="reauth-actions">
-              <button
+              <Button
                 type="button"
-                className="button button-primary"
+                variant="primary"
                 disabled={cancelSubLoading}
+                loading={cancelSubLoading}
                 onClick={async () => {
                   setCancelSubLoading(true);
                   setError('');
@@ -1194,25 +1389,20 @@ export default function ProfileView({ onSaveSuccess, session, refreshKey, usage,
                 }}
               >
                 {cancelSubLoading ? 'Traitement…' : 'Résilier mon abonnement'}
-              </button>
-              <button type="button" className="button button-secondary" disabled={cancelSubLoading} onClick={() => setCancelSubModalOpen(false)}>
+              </Button>
+              <Button type="button" variant="secondary" disabled={cancelSubLoading} onClick={() => setCancelSubModalOpen(false)}>
                 Retour
-              </button>
+              </Button>
             </div>
           </div>
         </div>
       )}
 
-      <div className="profile-footer">
-        <button type="button" className="button button-primary" onClick={handleSave} disabled={saving}>
-          {saving ? 'Enregistrement…' : 'Enregistrer le CV'}
-        </button>
-      </div>
       </div>
 
       <div className="profile-preview-pane">
         <div className="profile-preview-pane-top">
-          <h2 className="profile-preview-title">Aperçu du CV</h2>
+          <h2 className="profile-preview-title ds-label-sm">Aperçu du CV</h2>
           <TemplatePicker
             templates={templatesList}
             templateId={templateId}
@@ -1234,6 +1424,7 @@ export default function ProfileView({ onSaveSuccess, session, refreshKey, usage,
                 onClick={downloadBaseCvPdf}
                 disabled={baseCvPdfLoading || loading}
                 title="Télécharger ton CV de profil (tel qu’affiché dans l’aperçu) en PDF"
+                {...analyticsAttrs('profil-preview-cta-pdf', 'preview', 'secondary', 'cta')}
               >
                 <span className="tpl-btn-bar-extra-icon" aria-hidden>
                   <HiArrowDownTray size={16} strokeWidth={2} />
@@ -1243,15 +1434,18 @@ export default function ProfileView({ onSaveSuccess, session, refreshKey, usage,
             )}
           />
         </div>
-        <div className="profile-preview-pane-scroll">
+        <div className="profile-preview-pane-scroll" ref={profilePreviewScrollRef}>
+          <div className="profile-preview-fit">
           <div className="profile-preview-wrap profile-preview-a4">
-            {profilePreviewLoading && (
+            {profilePreviewLoading && !profilePreviewHtml && (
               <p className="profile-preview-empty">Génération de l&apos;aperçu…</p>
             )}
             {!profilePreviewLoading && !profilePreviewHtml && (
-              <p className="profile-preview-empty">Modifiez le formulaire pour voir l&apos;aperçu.</p>
+              <p className="profile-preview-empty">
+                Complète ton profil pour voir le CV.
+              </p>
             )}
-            {!profilePreviewLoading && profilePreviewHtml && (
+            {profilePreviewHtml && (
               <iframe
                 key={templateKey}
                 ref={(el) => { profilePreviewIframeRef.current = el; }}
@@ -1262,6 +1456,7 @@ export default function ProfileView({ onSaveSuccess, session, refreshKey, usage,
                 onLoad={(e) => resizeProfilePreviewIframe(e.target)}
               />
             )}
+          </div>
           </div>
         </div>
       </div>
@@ -1300,108 +1495,36 @@ export default function ProfileView({ onSaveSuccess, session, refreshKey, usage,
                   ))}
                 </ul>
                 <div className="linkedin-sync-actions">
-                  <button type="button" className="button button-primary" onClick={handleApplyLinkedInChanges} disabled={linkedinApplyLoading || selectedChangeIds.size === 0}>
+                  <Button type="button" variant="primary" onClick={handleApplyLinkedInChanges} disabled={linkedinApplyLoading || selectedChangeIds.size === 0} loading={linkedinApplyLoading}>
                     {linkedinApplyLoading ? 'Application…' : `Appliquer ${selectedChangeIds.size} changement(s)`}
-                  </button>
-                  <button type="button" className="button button-secondary" onClick={() => setLinkedinModalOpen(false)}>Fermer</button>
+                  </Button>
+                  <Button type="button" variant="secondary" onClick={() => setLinkedinModalOpen(false)}>Fermer</Button>
                 </div>
               </>
             )}
             {!linkedinLoading && proposedChanges.length === 0 && (
               <>
                 {!linkedinError && <p>Aucune mise à jour proposée.</p>}
-                <button type="button" className="button button-secondary linkedin-sync-close" onClick={() => setLinkedinModalOpen(false)}>Fermer</button>
+                <Button type="button" variant="secondary" className="linkedin-sync-close" onClick={() => setLinkedinModalOpen(false)}>Fermer</Button>
               </>
             )}
           </div>
         </div>
       )}
-
-      {importMergeOpen && importMergeParsed && (
-        <div className="linkedin-sync-overlay import-merge-overlay" onClick={() => { setImportMergeOpen(false); setImportMergeParsed(null); }} role="dialog" aria-modal="true" aria-labelledby="import-merge-title">
-          <div className="linkedin-sync-modal import-merge-modal" onClick={(e) => e.stopPropagation()}>
-            <h3 id="import-merge-title" className="import-merge-modal-title">Importer le CV - choisir les champs</h3>
-            <p className="linkedin-sync-intro import-merge-intro">Champ vide : ajouter le texte importé ou l’ignorer. Champ déjà rempli : remplacer ou conserver ta version actuelle.</p>
-            <ul className="linkedin-sync-changes import-merge-list">
-              {IMPORT_SCALAR_KEYS.filter(({ key }) => importMergeParsed[key] !== undefined && String(importMergeParsed[key] ?? '').trim() !== '').map(({ key, label }) => {
-                const currentVal = (cv[key] ?? '').toString().trim();
-                const isEmpty = currentVal === '';
-                const choice = importMergeChoices[key];
-                return (
-                  <li key={key} className="linkedin-sync-change import-merge-row">
-                    <span className="change-label import-merge-field-label">{label}</span>
-                    <div className="change-values import-merge-field-body">
-                      {isEmpty ? (
-                        <>
-                          <div className="import-merge-previews">
-                            <div className="change-new import-merge-preview import-merge-preview--import"><span className="import-merge-preview-tag">Import</span><span className="import-merge-preview-text">{formatScalarPreviewForPrivacy(key, importMergeParsed[key], 80)}</span></div>
-                          </div>
-                          <div className="import-merge-choice-group" role="group" aria-label={`Choix pour ${label}`}>
-                            <label className="import-merge-choice">
-                              <input type="radio" name={`import-merge-${key}`} checked={choice === 'add'} onChange={() => setImportMergeChoices((p) => ({ ...p, [key]: 'add' }))} />
-                              Ajouter
-                            </label>
-                            <label className="import-merge-choice">
-                              <input type="radio" name={`import-merge-${key}`} checked={choice === 'skip'} onChange={() => setImportMergeChoices((p) => ({ ...p, [key]: 'skip' }))} />
-                              Ne pas ajouter
-                            </label>
-                          </div>
-                        </>
-                      ) : (
-                        <>
-                          <div className="import-merge-previews import-merge-previews--compare">
-                            <div className="change-current import-merge-preview import-merge-preview--current"><span className="import-merge-preview-tag">Actuel</span><span className="import-merge-preview-text">{formatScalarPreviewForPrivacy(key, currentVal, 60)}</span></div>
-                            <div className="change-new import-merge-preview import-merge-preview--import"><span className="import-merge-preview-tag">Import</span><span className="import-merge-preview-text">{formatScalarPreviewForPrivacy(key, importMergeParsed[key], 60)}</span></div>
-                          </div>
-                          <div className="import-merge-choice-group" role="group" aria-label={`Choix pour ${label}`}>
-                            <label className="import-merge-choice">
-                              <input type="radio" name={`import-merge-${key}`} checked={choice === 'replace'} onChange={() => setImportMergeChoices((p) => ({ ...p, [key]: 'replace' }))} />
-                              Remplacer
-                            </label>
-                            <label className="import-merge-choice">
-                              <input type="radio" name={`import-merge-${key}`} checked={choice === 'keep'} onChange={() => setImportMergeChoices((p) => ({ ...p, [key]: 'keep' }))} />
-                              Garder l’actuel
-                            </label>
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  </li>
-                );
-              })}
-              {IMPORT_SECTION_KEYS.filter(({ key }) => {
-                const v = importMergeParsed[key];
-                return Array.isArray(v) ? v.length > 0 : (v && typeof v === 'object' && (Object.keys(v).length > 0 || (v.techniques || v.logiciels || v.langues || v.autres)));
-              }).map(({ key, label }) => {
-                const choice = importMergeChoices[key];
-                return (
-                  <li key={key} className="linkedin-sync-change import-merge-row import-merge-row--section">
-                    <span className="change-label import-merge-field-label">{label}</span>
-                    <div className="change-values import-merge-field-body">
-                      <p className="import-merge-section-note">Section complète (plusieurs entrées). Tu choisis si tout le bloc importé remplace le tien.</p>
-                      <div className="import-merge-choice-group" role="group" aria-label={`Choix pour ${label}`}>
-                        <label className="import-merge-choice">
-                          <input type="radio" name={`import-merge-${key}`} checked={choice === 'replace'} onChange={() => setImportMergeChoices((p) => ({ ...p, [key]: 'replace' }))} />
-                          Remplacer par l’import
-                        </label>
-                        <label className="import-merge-choice">
-                          <input type="radio" name={`import-merge-${key}`} checked={choice === 'keep'} onChange={() => setImportMergeChoices((p) => ({ ...p, [key]: 'keep' }))} />
-                          Garder l’actuel
-                        </label>
-                      </div>
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-            <div className="linkedin-sync-actions import-merge-actions">
-              <button type="button" className="button button-primary" onClick={applyImportMerge}>
-                Appliquer les choix
-              </button>
-              <button type="button" className="button button-secondary" onClick={() => { setImportMergeOpen(false); setImportMergeParsed(null); }}>Annuler</button>
+      {importSummary && createPortal(
+        <div className="linkedin-sync-overlay import-result-overlay" role="dialog" aria-modal="true" aria-labelledby="import-result-title">
+          <div className="linkedin-sync-modal" onClick={(e) => e.stopPropagation()}>
+            <h3 id="import-result-title">CV importé</h3>
+            <p className="linkedin-sync-intro">
+              {[importSummary.name, importSummary.title].filter(Boolean).join(' · ') || 'Profil mis à jour.'}
+              {` ${importSummary.experiences} expérience${importSummary.experiences > 1 ? 's' : ''}, ${importSummary.formations} formation${importSummary.formations > 1 ? 's' : ''}.`}
+            </p>
+            <div className="linkedin-sync-actions">
+              <Button type="button" variant="primary" onClick={() => setImportSummary(null)}>OK</Button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );

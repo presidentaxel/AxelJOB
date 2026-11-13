@@ -7,6 +7,7 @@ import {
   isBetaCanvasTemplateId,
   withBetaCanvasTemplate,
 } from '../lib/betaCanvasTemplate.js';
+import { useBetaMode } from '../lib/useBetaMode.js';
 
 const TYPO_DEFAULTS = {
   font_size_name: 15,
@@ -554,11 +555,13 @@ export default function TemplatePicker({
   const [templatesLocal, setTemplatesLocal] = useState([]);
   const [optionsModalOpen, setOptionsModalOpen] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
+  const [betaMode] = useBetaMode();
   const useProp = templatesProp !== undefined;
   const templatesRaw = useProp && Array.isArray(templatesProp) ? templatesProp : templatesLocal;
-  const templates = withBetaCanvasTemplate(templatesRaw);
+  const templates = withBetaCanvasTemplate(templatesRaw, { includeBeta: betaMode });
+  const templatesForLabel = withBetaCanvasTemplate(templatesRaw);
   const loading = useProp ? templatesRaw.length === 0 : templatesLocal.length === 0;
-  const currentMeta = templates.find(t => t.id === templateId) || templates[0] || {};
+  const currentMeta = templatesForLabel.find(t => t.id === templateId) || templates[0] || {};
   const rawLayoutOptions = currentMeta.options || [];
   const isCustomTemplate = (templateId || '').startsWith('custom_');
   const isBetaTemplate = isBetaCanvasTemplateId(templateId);
@@ -645,6 +648,7 @@ export default function TemplatePicker({
         templateId={templateId}
         onChangeTemplate={onChangeTemplate}
         profileLayout={profileLayout}
+        includeBeta={betaMode}
         onBetaUnavailable={onBetaUnavailable}
       />
     </div>

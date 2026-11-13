@@ -3,6 +3,7 @@
  */
 import { defaultCv } from '../data/cvDefault.js';
 import { syncCvDualKeys } from './cvDualKey.js';
+import { userFacingHttpMessage } from './userFacingError.js';
 
 export const CV_IMPORT_SCALAR_KEYS = [
   { key: 'prenom', label: 'Prénom' },
@@ -33,9 +34,74 @@ export const CV_IMPORT_STEPS = [
   'Finalisation du canvas',
 ];
 
-export const CV_IMPORT_STEP_DURATION_MS = 1600;
+/** Étapes overlay à la création de compte (AXE-341). Le layout design est persisté à part (AXE-398). */
+export const ONBOARDING_IMPORT_STEPS = [
+  'Lecture du document',
+  'Extraction du texte',
+  'Analyse IA du contenu',
+  'Structuration du profil',
+  'Finalisation',
+];
+
+/** Durées des étapes avant le palier d'attente (l'appel IA). Plus longues au début pour ne pas figer la barre. */
+export const CV_IMPORT_STEP_DURATIONS_MS = [8000, 9000, 14000, 10000];
+export const CV_IMPORT_PROGRESS_CEILING = 96;
+/** Constante de temps du glissement après le palier : la barre continue d'avancer sans atteindre 100 %. */
+export const CV_IMPORT_CREEP_TAU_MS = 22000;
+/** @deprecated Conservé pour les appelants qui lisaient l'ancien intervalle unique. */
+export const CV_IMPORT_STEP_DURATION_MS = CV_IMPORT_STEP_DURATIONS_MS[0];
 /** Dernière étape animée avant confirmation API (reste sur « Placement… »). */
 export const CV_IMPORT_ANIMATION_HOLD_STEP = CV_IMPORT_STEPS.length - 2;
+
+function _holdStepFor(steps, holdStep) {
+  const count = Math.max(1, steps.length);
+  if (typeof holdStep === 'number') return Math.min(Math.max(0, holdStep), count - 1);
+  return Math.max(0, count - 2);
+}
+
+function _holdAtMs(holdStep, durations) {
+  let holdAt = 0;
+  const fallback = durations[durations.length - 1] || 8000;
+  for (let i = 0; i < holdStep; i += 1) {
+    holdAt += durations[i] ?? fallback;
+  }
+  return holdAt;
+}
+
+/** Pourcentage affiché pour un temps écoulé. Linéaire jusqu'au palier, puis asymptote vers le plafond. */
+export function importProgressForElapsed(elapsedMs, options = {}) {
+  const steps = Array.isArray(options.steps) && options.steps.length
+    ? options.steps
+    : CV_IMPORT_STEPS;
+  const holdStep = _holdStepFor(steps, options.holdStep);
+  const durations = options.durationsMs || CV_IMPORT_STEP_DURATIONS_MS;
+  const elapsed = Math.max(0, Number(elapsedMs) || 0);
+  const holdAt = _holdAtMs(holdStep, durations);
+  const holdPct = ((holdStep + 1) / steps.length) * 100;
+  if (holdAt <= 0 || elapsed >= holdAt) {
+    const extra = holdAt <= 0 ? elapsed : elapsed - holdAt;
+    const crept = holdPct + (CV_IMPORT_PROGRESS_CEILING - holdPct) * (1 - Math.exp(-extra / CV_IMPORT_CREEP_TAU_MS));
+    return Math.min(CV_IMPORT_PROGRESS_CEILING, Math.round(crept));
+  }
+  return Math.max(4, Math.round((elapsed / holdAt) * holdPct));
+}
+
+/** Index d'étape pour un temps écoulé, plafonné au palier d'attente. */
+export function importStepForElapsed(elapsedMs, options = {}) {
+  const steps = Array.isArray(options.steps) && options.steps.length
+    ? options.steps
+    : CV_IMPORT_STEPS;
+  const holdStep = _holdStepFor(steps, options.holdStep);
+  const durations = options.durationsMs || CV_IMPORT_STEP_DURATIONS_MS;
+  const elapsed = Math.max(0, Number(elapsedMs) || 0);
+  let acc = 0;
+  const fallback = durations[durations.length - 1] || 8000;
+  for (let i = 0; i < holdStep; i += 1) {
+    acc += durations[i] ?? fallback;
+    if (elapsed < acc) return i;
+  }
+  return holdStep;
+}
 
 export function formatScalarPreviewForPrivacy(fieldKey, value, maxLen) {
   if (fieldKey === 'photo_url') {
@@ -127,6 +193,63 @@ export function applyImportMergeChoices(cv, parsed, choices) {
     }
   });
 
+  return next;
+}
+
+const PROFILE_IMPORT_SCALARS = [
+  'prenom',
+  'nom',
+  'first_name',
+  'last_name',
+  'email',
+  'telephone',
+  'linkedin',
+  'ville',
+  'titre_professionnel',
+  'resume',
+];
+
+function importedListHasItems(items) {
+  if (!Array.isArray(items) || items.length === 0) return false;
+  return items.some((item) => {
+    if (typeof item === 'string') return item.trim();
+    if (!item || typeof item !== 'object') return false;
+    return Object.entries(item).some(([key, value]) => key !== 'id' && String(value ?? '').trim());
+  });
+}
+
+/**
+ * Pose le CV importé sur le profil Stable.
+ * Une liste vide dans l'import ne remplace pas une section déjà remplie.
+ */
+export function applyImportedProfileCv(current, imported) {
+  const base = current && typeof current === 'object' ? current : {};
+  const src = imported && typeof imported === 'object' ? imported : {};
+  const next = { ...base };
+
+  PROFILE_IMPORT_SCALARS.forEach((key) => {
+    const value = String(src[key] ?? '').trim();
+    if (value) next[key] = src[key];
+  });
+
+  ['experiences', 'formations', 'certifications', 'projets'].forEach((key) => {
+    if (importedListHasItems(src[key])) next[key] = src[key];
+  });
+
+  const srcComp = src.competences && typeof src.competences === 'object' ? src.competences : null;
+  if (srcComp) {
+    const prev = next.competences && typeof next.competences === 'object' ? { ...next.competences } : {};
+    ['techniques', 'logiciels', 'langues', 'autres'].forEach((key) => {
+      if (importedListHasItems(srcComp[key])) prev[key] = srcComp[key];
+    });
+    next.competences = prev;
+  }
+
+  const photo = String(src.photo_url ?? '').trim();
+  if (photo) next.photo_url = photo;
+  next.layout = base.layout;
+  next.template_id = base.template_id;
+  next.template_options = base.template_options;
   return next;
 }
 
@@ -229,17 +352,58 @@ export function cvFromImportPayload(parsed) {
 }
 
 export function startImportLoadingAnimation(setImportStepIndex, options = {}) {
-  const holdStep = typeof options.holdStep === 'number'
-    ? options.holdStep
-    : CV_IMPORT_ANIMATION_HOLD_STEP;
-  setImportStepIndex(0);
-  const stepTimer = setInterval(() => {
-    setImportStepIndex((i) => (i >= holdStep ? i : i + 1));
-  }, CV_IMPORT_STEP_DURATION_MS);
+  const steps = Array.isArray(options.steps) && options.steps.length
+    ? options.steps
+    : CV_IMPORT_STEPS;
+  const holdStep = _holdStepFor(steps, options.holdStep);
+  const setProgress = typeof options.setProgress === 'function' ? options.setProgress : null;
+  const tickOptions = { steps, holdStep };
+  const started = Date.now();
+  const tick = () => {
+    const elapsed = Date.now() - started;
+    const step = importStepForElapsed(elapsed, tickOptions);
+    setImportStepIndex((current) => (current >= steps.length - 1 ? current : step));
+    if (setProgress) {
+      const next = importProgressForElapsed(elapsed, tickOptions);
+      setProgress((current) => (current >= 100 ? current : next));
+    }
+  };
+  tick();
+  const stepTimer = setInterval(tick, 200);
   return () => clearInterval(stepTimer);
 }
 
 /** Passe à l'étape « Finalisation » une fois l'import API terminé. */
-export function finishImportLoadingAnimation(setImportStepIndex) {
-  setImportStepIndex(CV_IMPORT_STEPS.length - 1);
+export function finishImportLoadingAnimation(setImportStepIndex, options = {}) {
+  const steps = Array.isArray(options.steps) && options.steps.length
+    ? options.steps
+    : CV_IMPORT_STEPS;
+  setImportStepIndex(Math.max(0, steps.length - 1));
+}
+
+/** True si l’import n’a presque rien extrait (identité / exp / formation vides). */
+export function isSparseImportedCv(cv) {
+  if (!cv || typeof cv !== 'object') return true;
+  const hasIdentity = Boolean(
+    String(cv.prenom || '').trim()
+    || String(cv.nom || '').trim()
+    || String(cv.titre_professionnel || '').trim(),
+  );
+  const hasExp = (cv.experiences || []).some((row) => (
+    String(row?.poste || '').trim() || String(row?.entreprise || '').trim()
+  ));
+  const hasForm = (cv.formations || []).some((row) => (
+    String(row?.diplome || row?.intitule || '').trim()
+  ));
+  return !hasIdentity && !hasExp && !hasForm;
+}
+
+export function onboardingImportErrorMessage(err) {
+  const status = err?.status;
+  const fallback = String(err?.message || '').trim();
+  if (status === 400) {
+    return fallback || 'Impossible de lire ce fichier. Essaie un PDF texte, un Word, ou le copier-coller.';
+  }
+  if (status) return userFacingHttpMessage(status, fallback);
+  return fallback || 'Impossible d’analyser le CV. Réessaie ou saisis ton profil à la main.';
 }

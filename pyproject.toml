@@ -58,7 +58,9 @@ python_files = ["test_*.py"]
 addopts = "-ra"
 
 [tool.mypy]
-python_version = "3.10"
+# CI et l'image Docker sont en 3.12. Les stubs NumPy 2.5 (via PyMuPDF 2)
+# utilisent `type` (PEP 695) : mypy les refuse si python_version < 3.12.
+python_version = "3.12"
 ignore_missing_imports = true
 warn_unused_ignores = true
 warn_redundant_casts = true

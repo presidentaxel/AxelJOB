@@ -23,11 +23,30 @@ USE_SUPABASE = bool(SUPABASE_URL and SUPABASE_SERVICE_KEY)
 USE_SUPABASE_PG = bool(USE_SUPABASE and SUPABASE_DATABASE_URL)
 
 
+def _session_mode_database_url(url: str) -> bool:
+    """True pour le pooler session (port 5432, plafond projet ~15 clients).
+
+    Le mode transaction (port 6543) n'a pas ce plafond aussi bas.
+    On lit l'hôte parsé, pas une sous-chaîne de l'URL entière.
+    """
+    parsed = urlparse(url)
+    if parsed.port == 6543:
+        return False
+    if parsed.port == 5432:
+        return True
+    host = (parsed.hostname or "").lower().rstrip(".")
+    return host == "pooler.supabase.com" or host.endswith(".pooler.supabase.com")
+
+
 def _pg_pool_max() -> int:
     try:
-        return max(1, min(32, int(os.environ.get("SUPABASE_PG_POOL_MAX", "8"))))
+        requested = int(os.environ.get("SUPABASE_PG_POOL_MAX", "4"))
     except ValueError:
-        return 8
+        requested = 4
+    url = os.environ.get("SUPABASE_DATABASE_URL", "") or ""
+    # Session mode : un process ne doit pas pouvoir prendre une grosse part des 15 slots.
+    ceiling = 4 if _session_mode_database_url(url) else 32
+    return max(1, min(ceiling, requested))
 
 
 def supabase_pg_pool_max() -> int:
@@ -62,7 +81,7 @@ def supabase_data_mode_info() -> dict:
     if not USE_SUPABASE:
         return {
             "backend": "disabled",
-            "hint": "cv_base.json et adaptations/ en local",
+            "hint": "Supabase requis pour le CV. adaptations/ reste un fallback local",
         }
     if USE_SUPABASE_PG:
         return {
@@ -94,6 +113,7 @@ JWT_LEEWAY_SECONDS = _jwt_leeway_seconds()
 
 STRIPE_SECRET_KEY = _env("STRIPE_SECRET_KEY")
 STRIPE_PRICE_ID_PRO_MONTHLY = _env("STRIPE_PRICE_ID_PRO_MONTHLY")
+STRIPE_PRICE_ID_FREE = _env("STRIPE_PRICE_ID_FREE")
 STRIPE_WEBHOOK_SECRET = _env("STRIPE_WEBHOOK_SECRET")
 FRONTEND_URL = _env("CV_BOT_FRONTEND_URL") or _env("VITE_APP_URL")
 
@@ -104,6 +124,11 @@ SUPPORT_EMAIL = _env("SUPPORT_EMAIL")
 SUPPORT_ADMIN_EMAILS = [
     e.strip().lower() for e in _env("SUPPORT_ADMIN_EMAILS", "").split(",") if e.strip()
 ]
+# Comptes autorisés en plus des emails, uniquement hors production
+# (le login Google du compte admin ne fonctionne pas en dev).
+SUPPORT_ADMIN_USER_IDS = {
+    u.strip() for u in _env("SUPPORT_ADMIN_USER_IDS", "").split(",") if u.strip()
+}
 
 METRICS_AUTH_TOKEN = _env("METRICS_AUTH_TOKEN")
 

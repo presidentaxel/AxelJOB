@@ -7,10 +7,7 @@ import {
   SEMANTIC_EDIT_NOTE_DISMISSED_KEY,
 } from './canvasEditorUtils.js';
 import { DOCX_FIDELITY_NOTICE_DISMISSED_KEY } from './canvasExportFormats.js';
-
-const DRAFTS_KEY = 'cv_canvas_layout_drafts_v1';
-const DRAFT_PREFS_KEY = 'cv_canvas_layout_draft_prefs_v1';
-const DRAFT_CONTEXT_KEY = 'cv_canvas_layout_active_context_v1';
+import { canvasDraftStorageKeysFor } from './canvasLayoutDrafts.js';
 const PROPOSALS_KEY = 'cv_layout_proposals_v1';
 const IMAGES_KEY = 'cv_canvas_user_images_v1';
 const IMAGES_REMOVED_KEY = 'cv_canvas_user_images_removed_v1';
@@ -44,11 +41,12 @@ export function resetEditorHints() {
   }
 }
 
-export function clearCanvasLayoutDrafts() {
+export function clearCanvasLayoutDrafts(userId) {
   try {
-    localStorage.removeItem(DRAFTS_KEY);
-    localStorage.removeItem(DRAFT_PREFS_KEY);
-    localStorage.removeItem(DRAFT_CONTEXT_KEY);
+    const keys = canvasDraftStorageKeysFor(userId);
+    localStorage.removeItem(keys.drafts);
+    localStorage.removeItem(keys.prefs);
+    localStorage.removeItem(keys.active);
     return true;
   } catch {
     return false;
@@ -74,12 +72,12 @@ export function clearUserCanvasImageLibrary() {
   }
 }
 
-export function getLocalDataSummary() {
+export function getLocalDataSummary(userId) {
   let draftCount = 0;
   let proposalCount = 0;
   let imageCount = 0;
   try {
-    const drafts = JSON.parse(localStorage.getItem(DRAFTS_KEY) || '{}');
+    const drafts = JSON.parse(localStorage.getItem(canvasDraftStorageKeysFor(userId).drafts) || '{}');
     draftCount = Object.keys(drafts || {}).length;
   } catch { /* ignore */ }
   try {

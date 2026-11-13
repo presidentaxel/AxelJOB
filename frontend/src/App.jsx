@@ -3,6 +3,7 @@ import DOMPurify from 'dompurify';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   apiGet,
+  clearApiOutageCooldown,
   apiPost,
   apiPostStream,
   apiPatch,
@@ -16,36 +17,62 @@ import {
   trackEvent,
 } from './api';
 import { ensureAnalyticsFirstTouch, getStoredAttribution } from './analyticsSession';
+import { consumePlanIntentIfPro, maybeEmitSignUpForSession, wantsProCheckout } from '../public/signupAttribution.js';
+import { maybeEmitProductLogin, clearProductLoginSent } from './lib/productLogin.js';
 import { resetTemplateOptionsToDefaults } from './lib/templateOptionsSchema.js';
 import { useViewAnalytics } from './useViewAnalytics';
 import { supabase } from './lib/supabase';
+import { supabaseConfigMessage } from './lib/userFacingError.js';
 import { fetchAuthSessionWithTimeout } from './lib/supabaseAuthSession';
-import AuthForm from './components/AuthForm';
+import { analyticsAttrs } from './lib/analyticsAttrs.js';
+import { ADAPT_PLAN_TIMEOUT_MS, ADAPT_RUN_TIMEOUT_MS } from './lib/fetchWithDeadline.js';
+import CvChatComposer from './components/CvChatComposer.jsx';
+import AuthForm, { AuthLayout } from './components/AuthForm';
+import { authModeFromPath } from './lib/authPaths.js';
+import { consumeAuthCallback, decidePublicEntry, hasPendingAuthCallback, isPublicEntryPath, loginNavOptions } from './lib/publicEntry.js';
 import AppTopbar from './components/AppTopbar';
 import CompanyLogo from './components/CompanyLogo';
 import CandidatureBoardCard from './components/CandidatureBoardCard';
-import { NotFoundPage } from './components/ErrorPages';
 import Button from './components/ui/Button.jsx';
+import Input from './components/ui/Input.jsx';
+import PasswordInput from './components/ui/PasswordInput.jsx';
+import AdaptLanguageChoiceDialog from './components/ui/AdaptLanguageChoiceDialog.jsx';
 import { CONTACT_EMAIL, STORAGE_EXPORT_DIR, STORAGE_EXPORT_ATS_BLOCK_SNOOZE, STORAGE_PRE_EXPORT_TEMPLATE_OPTIONS_DONE, STORAGE_PDF_EXPORT_FILENAME_PATTERN, STATUT_LABELS, KANBAN_COLUMNS, getExportFolderName } from './constants';
 import { buildAdaptedPdfFilename } from './lib/pdfExportFilename';
 import { getPdfSaveStartInDirectoryHandle } from './lib/pdfExportStartDirIdb';
-import { HiDocumentText, HiArrowDownTray, HiClipboardDocumentList, HiPencilSquare, HiChatBubbleLeftRight, HiCheck, HiSwatch, HiChevronDown, HiChevronUp, HiPlus } from 'react-icons/hi2';
-import { lazyWithChunkReload, clearChunkErrorReloadKey } from './lib/lazyChunkReload';
+import { HiDocumentText, HiArrowDownTray, HiClipboardDocumentList, HiPencilSquare, HiCheck, HiSwatch, HiChevronDown, HiChevronUp, HiPlus, HiOutlinePaperClip } from 'react-icons/hi2';
+import { lazyWithChunkReload } from './lib/lazyChunkReload';
 import { APP_DEFAULT_ROUTE, APP_ROUTES, getViewFromPathname, isKnownAppPathname } from './lib/appRoutes';
+import {
+  ADAPT_CONTEXT_MAX_FILES,
+  adaptContextFileError,
+} from './lib/adaptContextDocs.js';
 import { syncRobotsMeta } from './lib/seoHead';
 import './App.css';
 import './styles/TemplatePicker.css';
 import './styles/GuidedTour.css';
 import { formatApplicationDateLabel, formatApplicationRelativeLabel } from './lib/applicationDates';
+import { adaptLanguageNotice, adaptLanguagePreviewCopy, shouldPromptLanguageChoice, withAdaptLanguageNotice } from './lib/adaptLanguageNotice.js';
+import {
+  clearAdaptLanguagePreference,
+  getAdaptLanguagePreference,
+  resolveAdaptLanguageAutoChoice,
+  setAdaptLanguagePreference,
+} from './lib/adaptLanguagePreference.js';
+import { localizationSourceFingerprint } from './lib/localizationSourceFingerprint.js';
 import { computeApplicationMetrics, isApplicationToFollowUp } from './lib/applicationStats.js';
 import { applyA4PageFramesToDocument, syncCvPreviewIframeHeight } from './lib/cvPreviewA4Pages';
 import {
-  betaCanvasRenderFields,
+  betaCanvasRenderFieldsForCv,
+  hasUsableBetaCanvasLayout,
+  isBetaCanvasTemplateId,
   withBetaCanvasTemplate,
 } from './lib/betaCanvasTemplate.js';
+import BetaCvLivePreview from './components/editor/BetaCvLivePreview.jsx';
 
 const ProfileView = lazyWithChunkReload(() => import('./components/editor/ProfileViewSwitcher'));
 const SettingsView = lazyWithChunkReload(() => import('./components/SettingsView'));
+const NotFoundPage = lazyWithChunkReload(() => import('./components/NotFoundPage'));
 const LandingPage = lazyWithChunkReload(() => import('./components/LandingPage'));
 const LegalPages = lazyWithChunkReload(() => import('./components/LegalPages'));
 const AtsPage = lazyWithChunkReload(() => import('./components/AtsPage'));
@@ -127,20 +154,24 @@ function MfaChallengeScreen({ onSuccess }) {
         <h1>Vérification en deux étapes</h1>
         <p className="login-screen-intro">Entre le code à 6 chiffres de ton application authentificatrice.</p>
         <form className="auth-form" onSubmit={handleSubmit}>
-          <input
+          <Input
             type="text"
             inputMode="numeric"
             maxLength={6}
             placeholder="000000"
             value={code}
-            onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+            onChange={(e) => {
+              setCode(e.target.value.replace(/\D/g, '').slice(0, 6));
+              if (error) setError('');
+            }}
             className="auth-input"
             autoComplete="one-time-code"
+            invalid={Boolean(error)}
           />
-          {error && <div className="auth-error">{error}</div>}
-          <button type="submit" className="button button-primary auth-submit" disabled={loading || code.length !== 6}>
+          {error ? <p className="ds-field-error" role="alert">{error}</p> : null}
+          <Button type="submit" variant="primary" className="auth-submit" disabled={loading || code.length !== 6} loading={loading}>
             {loading ? '…' : 'Vérifier'}
-          </button>
+          </Button>
         </form>
       </div>
     </div>
@@ -152,15 +183,21 @@ function RecoveryPasswordForm({ onDone }) {
   const [confirm, setConfirm] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [invalidField, setInvalidField] = useState(null);
+  const setFieldError = (field, message) => {
+    setInvalidField(field);
+    setError(message);
+  };
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    setInvalidField(null);
     if (password.length < 6) {
-      setError('Le mot de passe doit faire au moins 6 caractères.');
+      setFieldError('password', 'Le mot de passe doit faire au moins 6 caractères.');
       return;
     }
     if (password !== confirm) {
-      setError('Les deux mots de passe ne correspondent pas.');
+      setFieldError('confirm', 'Les deux mots de passe ne correspondent pas.');
       return;
     }
     setLoading(true);
@@ -169,7 +206,7 @@ function RecoveryPasswordForm({ onDone }) {
       if (err) throw err;
       onDone();
     } catch (err) {
-      setError(err.message || 'Impossible de mettre à jour le mot de passe.');
+      setFieldError('password', err.message || 'Impossible de mettre à jour le mot de passe.');
     } finally {
       setLoading(false);
     }
@@ -181,28 +218,40 @@ function RecoveryPasswordForm({ onDone }) {
         <h1>Nouveau mot de passe</h1>
         <p className="login-screen-intro">Choisis un nouveau mot de passe pour ton compte.</p>
         <form className="auth-form" onSubmit={handleSubmit}>
-          <input
-            type="password"
+          <PasswordInput
             placeholder="Nouveau mot de passe"
             value={password}
-            onChange={(e) => setPassword(e.target.value)}
+            onChange={(e) => {
+              setPassword(e.target.value);
+              if (invalidField === 'password') {
+                setError('');
+                setInvalidField(null);
+              }
+            }}
             className="auth-input"
             autoComplete="new-password"
             minLength={6}
+            invalid={invalidField === 'password'}
           />
-          <input
-            type="password"
+          <PasswordInput
             placeholder="Confirmer le mot de passe"
             value={confirm}
-            onChange={(e) => setConfirm(e.target.value)}
+            onChange={(e) => {
+              setConfirm(e.target.value);
+              if (invalidField === 'confirm') {
+                setError('');
+                setInvalidField(null);
+              }
+            }}
             className="auth-input"
             autoComplete="new-password"
             minLength={6}
+            invalid={invalidField === 'confirm'}
           />
-          {error && <div className="auth-error">{error}</div>}
-          <button type="submit" className="button button-primary auth-submit" disabled={loading}>
+          {error ? <p className="ds-field-error" role="alert">{error}</p> : null}
+          <Button type="submit" variant="primary" className="auth-submit" disabled={loading} loading={loading}>
             {loading ? '…' : 'Définir le mot de passe'}
-          </button>
+          </Button>
         </form>
       </div>
     </div>
@@ -259,7 +308,7 @@ function CvEditPanel({ cv, onSave, onClose }) {
         </div>
         <div className="cv-edit-body">
           <label className="input-label">Titre professionnel</label>
-          <input type="text" className="input-field" value={edited.titre_professionnel || ''} onChange={(e) => update('titre_professionnel', e.target.value)} />
+          <Input type="text" value={edited.titre_professionnel || ''} onChange={(e) => update('titre_professionnel', e.target.value)} />
           <label className="input-label">Résumé / Accroche</label>
           <textarea className="input-field" rows={4} value={edited.resume || ''} onChange={(e) => update('resume', e.target.value)} />
           {(edited.experiences || []).map((exp, i) => (
@@ -272,8 +321,8 @@ function CvEditPanel({ cv, onSave, onClose }) {
           ))}
         </div>
         <div className="cv-edit-actions">
-          <button type="button" className="button button-primary" onClick={handleSave}>Enregistrer les modifications</button>
-          <button type="button" className="button button-secondary" onClick={onClose}>Annuler</button>
+          <Button type="button" variant="primary" onClick={handleSave}>Enregistrer les modifications</Button>
+          <Button type="button" variant="secondary" onClick={onClose}>Annuler</Button>
         </div>
       </div>
     </div>
@@ -524,53 +573,54 @@ function SupportTicketSection() {
   };
 
   return (
-    <section className="support-conv">
-      <h2 className="support-section-title">
-        <HiChatBubbleLeftRight className="support-conv-title-icon" aria-hidden />
-        Ouvrir un ticket
-      </h2>
-      <div className="support-conv-card">
-        {success ? (
-          <>
-            <p className="support-ticket-success">
-              Ticket envoyé. Tu recevras une réponse par email à <strong>{ticketEmail}</strong>.
-            </p>
-            <button type="button" className="button button-secondary support-ticket-another" onClick={sendAnother}>
-              Envoyer un autre ticket
-            </button>
-          </>
-        ) : (
-          <>
-            <p className="support-conv-placeholder-text">
-              Décris ton problème ou ta question. Nous te répondrons par email à l&apos;adresse de ton compte.
-            </p>
-            <form onSubmit={handleSubmit} className="support-ticket-form">
+    <section className="support-form-block">
+      <h2 className="ds-heading-sm">Ouvrir un ticket</h2>
+      {success ? (
+        <div className="support-ticket-done">
+          <p className="ds-body-md support-ticket-success" role="status">
+            Ticket envoyé. Tu recevras une réponse par email à <strong>{ticketEmail}</strong>.
+          </p>
+          <Button type="button" variant="secondary" size="sm" onClick={sendAnother}>
+            Envoyer un autre ticket
+          </Button>
+        </div>
+      ) : (
+        <>
+          <p className="ds-body-md support-form-lead">
+            Décris ton problème ou ta question. La réponse part sur l&apos;email de ton compte.
+          </p>
+          <form onSubmit={handleSubmit} className="support-ticket-form">
+            <div className="support-ticket-field">
+              <label className="ds-field-label" htmlFor="support-ticket-subject">Sujet</label>
               <input
+                id="support-ticket-subject"
                 type="text"
-                className="support-ticket-subject"
-                placeholder="Sujet du ticket"
+                className="ds-input"
                 value={subject}
                 onChange={(e) => setSubject(e.target.value)}
                 maxLength={200}
                 required
               />
+            </div>
+            <div className="support-ticket-field">
+              <label className="ds-field-label" htmlFor="support-ticket-message">Message</label>
               <textarea
-                className="support-ticket-message"
-                placeholder="Ton message…"
+                id="support-ticket-message"
+                className="ds-input support-ticket-message"
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
                 rows={5}
                 maxLength={8000}
                 required
               />
-              {error && <p className="support-ticket-error">{error}</p>}
-              <button type="submit" className="button button-primary support-ticket-submit" disabled={loading}>
-                {loading ? 'Envoi…' : 'Envoyer le ticket'}
-              </button>
-            </form>
-          </>
-        )}
-      </div>
+            </div>
+            {error && <p className="ds-field-error" role="alert">{error}</p>}
+            <Button type="submit" variant="primary" size="sm" disabled={loading} loading={loading} {...analyticsAttrs('support-ticket-cta-submit', 'ticket', 'primary', 'cta')}>
+              {loading ? 'Envoi…' : 'Envoyer le ticket'}
+            </Button>
+          </form>
+        </>
+      )}
     </section>
   );
 }
@@ -603,51 +653,52 @@ function SupportReplySection() {
   };
 
   return (
-    <section className="support-conv">
-      <h2 className="support-section-title">
-        <HiChatBubbleLeftRight className="support-conv-title-icon" aria-hidden />
-        Répondre à un utilisateur
-      </h2>
-      <div className="support-conv-card">
-        {success ? (
-          <>
-            <p className="support-ticket-success">Message envoyé.</p>
-            <button type="button" className="button button-secondary support-ticket-another" onClick={sendAnother}>
-              Nouvelle réponse
-            </button>
-          </>
-        ) : (
-          <>
-            <p className="support-conv-placeholder-text">
-              Envoi d&apos;un email de support depuis l&apos;adresse configurée côté serveur vers l&apos;utilisateur concerné.
-            </p>
-            <form onSubmit={handleSubmit} className="support-ticket-form">
+    <section className="support-form-block">
+      <h2 className="ds-heading-sm">Répondre à un utilisateur</h2>
+      {success ? (
+        <div className="support-ticket-done">
+          <p className="ds-body-md support-ticket-success" role="status">Message envoyé.</p>
+          <Button type="button" variant="secondary" size="sm" onClick={sendAnother}>
+            Nouvelle réponse
+          </Button>
+        </div>
+      ) : (
+        <>
+          <p className="ds-body-md support-form-lead">
+            Le message part depuis l&apos;adresse support vers cet email.
+          </p>
+          <form onSubmit={handleSubmit} className="support-ticket-form">
+            <div className="support-ticket-field">
+              <label className="ds-field-label" htmlFor="support-reply-email">Email</label>
               <input
+                id="support-reply-email"
                 type="email"
-                className="support-ticket-subject"
-                placeholder="Email du destinataire"
+                className="ds-input"
                 value={toEmail}
                 onChange={(e) => setToEmail(e.target.value)}
                 maxLength={320}
                 required
               />
+            </div>
+            <div className="support-ticket-field">
+              <label className="ds-field-label" htmlFor="support-reply-message">Message</label>
               <textarea
-                className="support-ticket-message"
-                placeholder="Message…"
+                id="support-reply-message"
+                className="ds-input support-ticket-message"
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
                 rows={5}
                 maxLength={8000}
                 required
               />
-              {error && <p className="support-ticket-error">{error}</p>}
-              <button type="submit" className="button button-primary support-ticket-submit" disabled={loading}>
-                {loading ? 'Envoi…' : 'Envoyer'}
-              </button>
-            </form>
-          </>
-        )}
-      </div>
+            </div>
+            {error && <p className="ds-field-error" role="alert">{error}</p>}
+            <Button type="submit" variant="primary" size="sm" disabled={loading} loading={loading}>
+              {loading ? 'Envoi…' : 'Envoyer'}
+            </Button>
+          </form>
+        </>
+      )}
     </section>
   );
 }
@@ -704,8 +755,14 @@ export default function App() {
   const analyticsView = pathname.startsWith('/app') ? view : null;
   const isCvView = view === 'cv';
   const [annonce, setAnnonce] = useState('');
+  const [contextFiles, setContextFiles] = useState([]);
+  const [contextDocMeta, setContextDocMeta] = useState([]);
+  const [documentsContext, setDocumentsContext] = useState('');
+  const [contextDocError, setContextDocError] = useState('');
+  const [contextDocStatus, setContextDocStatus] = useState('');
   const [lastAdaptedCv, setLastAdaptedCv] = useState(null);
   const lastAdaptedCvRef = useRef(null);
+  const sawNoSessionRef = useRef(false);
   lastAdaptedCvRef.current = lastAdaptedCv;
   const [lastBaseCv, setLastBaseCv] = useState(null);
   /** URL photo fraîche (GET /api/cv) pour la preview CV, évite URL signée expirée */
@@ -772,6 +829,8 @@ export default function App() {
   ]);
   /** true quand l’API a répondu ; on n’affiche le résultat qu’une fois l’animation à la dernière étape */
   const [apiAdaptDone, setApiAdaptDone] = useState(false);
+  /** CV partiel reçu à chaque étape du flux, pour les zones vertes avant le résultat final. */
+  const [adaptLiveCv, setAdaptLiveCv] = useState(null);
   const pendingAdaptResultRef = useRef(null);
   /** Annule un flux d'adaptation précédent si un nouveau démarre (double clic / relance rapide). */
   const adaptRunAbortRef = useRef(null);
@@ -801,13 +860,17 @@ export default function App() {
   const [pdfEntrepriseModalValue, setPdfEntrepriseModalValue] = useState('');
   const [exportPrepTemplateOptionsNonce, setExportPrepTemplateOptionsNonce] = useState(0);
   const [chatMessages, setChatMessages] = useState([]);
-  const [chatInput, setChatInput] = useState('');
   const [adaptTodoPlan, setAdaptTodoPlan] = useState(null);
   const [, setAdaptTodoExplain] = useState('');
   const [, setAdaptTodoExplainLoading] = useState(false);
   /** En attente de la réponse /api/adapt-plan après envoi de l’offre. */
   const [adaptPlanLoading, setAdaptPlanLoading] = useState(false);
   const [adaptTodoLastAction, setAdaptTodoLastAction] = useState('');
+  const [adaptLanguageModalOpen, setAdaptLanguageModalOpen] = useState(false);
+  const [adaptLanguageMeta, setAdaptLanguageMeta] = useState(null);
+  const pendingAdaptAfterLanguageRef = useRef(null);
+  const [languagePreviewStatus, setLanguagePreviewStatus] = useState('idle');
+  const languagePreviewSeqRef = useRef(0);
   const [adaptRunStepIds, setAdaptRunStepIds] = useState([]);
   /** Suivi des étapes par id (ordre backend ≠ ordre d’affichage de la todo). */
   const [adaptStreamRunningStepId, setAdaptStreamRunningStepId] = useState(null);
@@ -835,6 +898,7 @@ export default function App() {
   const [addManualPdfFiche, setAddManualPdfFiche] = useState(null);
   const [justAddedAppId, setJustAddedAppId] = useState(null);
   const [needsOnboarding, setNeedsOnboarding] = useState(false);
+  const welcomeExitRef = useRef(null);
   const [onboardingChecked, setOnboardingChecked] = useState(false);
   /** Erreur réseau/API sur GET /api/cv?profile=1 - ne pas confondre avec « profil vide ». */
   const [profileCvLoadError, setProfileCvLoadError] = useState(null);
@@ -853,15 +917,27 @@ export default function App() {
   const [profileLayout, setProfileLayout] = useState(null);
   const profileLayoutRef = useRef(null);
   profileLayoutRef.current = profileLayout;
+  const lastBaseCvRef = useRef(null);
+  lastBaseCvRef.current = lastBaseCv;
 
   const postRenderHtml = useCallback((body) => apiPost('/api/render-html', {
     ...body,
-    ...betaCanvasRenderFields(body?.template_id, profileLayoutRef.current),
+    ...betaCanvasRenderFieldsForCv(
+      body?.template_id,
+      profileLayoutRef.current,
+      body?.base_cv || lastBaseCvRef.current,
+      body?.cv,
+    ),
   }), []);
 
   const postPdfBlob = useCallback((body) => apiPostBlob('/api/pdf', {
     ...body,
-    ...betaCanvasRenderFields(body?.template_id, profileLayoutRef.current),
+    ...betaCanvasRenderFieldsForCv(
+      body?.template_id,
+      profileLayoutRef.current,
+      body?.base_cv || lastBaseCvRef.current,
+      body?.cv,
+    ),
   }), []);
 
   /**
@@ -898,7 +974,10 @@ export default function App() {
   const [tourHighlightStepActive, setTourHighlightStepActive] = useState(false);
   const [tourDemoPreviewHtml, setTourDemoPreviewHtml] = useState('');
   const prevTourHighlightRef = useRef(false);
-  const cvChatInputRef = useRef(null);
+  const cvChatComposerRef = useRef(null);
+  const contextFileInputRef = useRef(null);
+  const contextFilesRef = useRef([]);
+  const contextUploadSeqRef = useRef(0);
   /** Après la 1re adaptation réussie (chat), ouvre le tutoriel phase 2 - pas au début (évite conflit avec le modal « en cours »). */
   const openPhase2AfterFirstAdaptRef = useRef(false);
 
@@ -917,15 +996,6 @@ export default function App() {
     if (!uid) return null;
     return `${ADAPT_DRAFT_STORAGE_PREFIX}${uid}`;
   }, [session?.user?.id]);
-
-  // Hauteur auto du textarea : après envoi / reset, enlever le style inline sinon il reste « grand ».
-  useEffect(() => {
-    if (chatInput !== '') return;
-    const el = cvChatInputRef.current;
-    if (!el) return;
-    el.style.height = 'auto';
-    el.style.removeProperty('height');
-  }, [chatInput]);
 
   const handleTourStepChange = useCallback((step) => {
     setTourHighlightStepActive(step?.id === TOUR_STEP_PREVIEW_AI_HIGHLIGHT);
@@ -971,6 +1041,8 @@ export default function App() {
       '/faq': "CV, ATS et IA : les réponses aux questions que tout le monde se pose | AxeL Job",
       '/ats': "ATS : qu'est-ce que c'est et comment ça fonctionne vraiment ? | AxeL Job",
       '/login': "Connexion | AxeL Job",
+      '/inscription': "Inscription | AxeL Job",
+      '/mot-de-passe-oublie': "Mot de passe oublié | AxeL Job",
       '/modeles-cv': "Modèles de CV : comment choisir un template qui passe l'ATS et convainc un recruteur | AxeL Job",
       '/guide-cv': "Comment faire un bon CV en 2025 : les règles qui font vraiment la différence | AxeL Job",
       '/erreurs-cv': "Les 7 erreurs les plus courantes dans un CV (et comment les corriger) | AxeL Job",
@@ -987,11 +1059,6 @@ export default function App() {
     }
     if (pathname.startsWith('/app')) document.title = "AxeL Job - Adapter ton CV à l'offre";
   }, [pathname]);
-
-  // Après chargement réussi, réinitialiser le flag de reload chunk (pour un futur déploiement)
-  useEffect(() => {
-    clearChunkErrorReloadKey();
-  }, []);
 
   // Meta robots : sync client sur les routes SPA ; en prod /login sert login.html (noindex déjà dans le HTML)
   useEffect(() => {
@@ -1065,6 +1132,13 @@ export default function App() {
   const prevLastSelectionA4Ref = useRef(lastSelectionA4);
   /** Pour déclencher un rendu preview immédiat quand le template sync (API / profil) sans attendre le debounce. */
   const prevCvPreviewTemplateKeyRef = useRef(null);
+  const languagePreviewCvRef = useRef(null);
+  const lastLocalizedSourceFpRef = useRef('');
+  const applyLanguagePreviewRef = useRef(null);
+  const adaptTodoPlanRef = useRef(adaptTodoPlan);
+  adaptTodoPlanRef.current = adaptTodoPlan;
+  const languagePreviewStatusRef = useRef(languagePreviewStatus);
+  languagePreviewStatusRef.current = languagePreviewStatus;
 
   useEffect(() => {
     if (!supabase) {
@@ -1089,6 +1163,12 @@ export default function App() {
       setAuthToken(s?.access_token ?? null);
       if (event === 'PASSWORD_RECOVERY') setRecoveryMode(true);
       if (s) setMfaChallengeChecked(false);
+      if (event === 'SIGNED_IN' && s?.user) {
+        maybeEmitSignUpForSession(s.user);
+        maybeEmitProductLogin(s.user, trackEvent);
+        apiPost('/api/account/sign-in', {}).catch(() => {});
+      }
+      if (event === 'SIGNED_OUT') clearProductLoginSent();
     });
     return () => subscription?.unsubscribe();
   }, []);
@@ -1186,8 +1266,10 @@ export default function App() {
       setOnboardingChecked(false);
     }
     setProfileCvLoadError(null);
-    apiGet('/api/cv?profile=1')
+    const controller = new AbortController();
+    apiGet('/api/cv?profile=1', { signal: controller.signal })
       .then((data) => {
+        if (controller.signal.aborted) return;
         const empty = !data || (typeof data === 'object' && Object.keys(data).length === 0);
         setNeedsOnboarding(empty);
         if (data?.template_id !== undefined && (data.template_id || '').trim()) setTemplateId((data.template_id || '').trim() || 'minimal');
@@ -1196,11 +1278,17 @@ export default function App() {
           setProfileLayout(data.layout && typeof data.layout === 'object' ? data.layout : null);
         }
       })
-      .catch(() => {
-        setProfileCvLoadError('Impossible de charger ton profil. Vérifie ta connexion puis réessaie.');
+      .catch((error) => {
+        if (controller.signal.aborted || error?.name === 'AbortError') return;
+        setProfileCvLoadError(
+          error?.message || 'Impossible de charger ton profil. Vérifie ta connexion puis réessaie.',
+        );
         setNeedsOnboarding(false);
       })
-      .finally(() => setOnboardingChecked(true));
+      .finally(() => {
+        if (!controller.signal.aborted) setOnboardingChecked(true);
+      });
+    return () => controller.abort();
   }, [session?.user?.id, session?.user?.email, authLoading, profileRefreshKey]);
 
   // Ancienne clé tutoriel unique → marquer les deux phases comme vues pour ce compte (évite de re-montrer le tour aux anciens utilisateurs).
@@ -1225,7 +1313,7 @@ export default function App() {
       if (sessionStorage.getItem(k) !== '1') return;
       sessionStorage.removeItem(k);
       const id = requestAnimationFrame(() => {
-        cvChatInputRef.current?.focus();
+        cvChatComposerRef.current?.focus();
       });
       return () => cancelAnimationFrame(id);
     } catch (_) { /* ignore */ }
@@ -1255,10 +1343,23 @@ export default function App() {
   useEffect(() => {
     if (authLoading) return;
     if (!supabase) return;
+    if (!session) sawNoSessionRef.current = true;
     if (session) {
       const params = new URLSearchParams(location.search);
-      if (pathname === '/' || pathname === '/login') {
-        if (params.get('plan') === 'pro') {
+      /* Session apparue pendant cette visite (formulaire soumis) : l'utilisateur vient de se connecter. */
+      const entry = decidePublicEntry({
+        hasSession: true,
+        pathname,
+        locationState: location.state,
+        authCallback: hasPendingAuthCallback() || sawNoSessionRef.current,
+      });
+      if (entry === 'stay') {
+        /* AXE-504 : simple visite d'une page publique, la session reste en mémoire sans rediriger */
+      } else if (entry === 'enter') {
+        consumeAuthCallback();
+        sawNoSessionRef.current = false;
+        if (wantsProCheckout(location.search)) {
+          consumePlanIntentIfPro();
           navigate(APP_DEFAULT_ROUTE, { replace: true });
           setTimeout(() => handleUpgradeClick(), 500);
         } else {
@@ -1283,7 +1384,7 @@ export default function App() {
         navigate('/', { replace: true });
       }
     }
-  }, [session, pathname, authLoading, navigate, location.search]);
+  }, [session, pathname, authLoading, navigate, location.search, location.state]);
 
   /* /app sans sous-chemin reconnu → CV (évite état incohérent URL / contenu) */
   useEffect(() => {
@@ -1291,6 +1392,22 @@ export default function App() {
     if (!pathname.startsWith('/app')) return;
     if (!isKnownAppPathname(pathname)) navigate(APP_DEFAULT_ROUTE, { replace: true });
   }, [session, authLoading, pathname, navigate]);
+
+  /* AXE-500 : l'écran Bienvenue a sa route. /app/cv ne l'affiche pas. */
+  useEffect(() => {
+    if (!session || authLoading || !onboardingChecked) return;
+    if (!pathname.startsWith('/app')) return;
+    const onWelcome = pathname.startsWith(APP_ROUTES.bienvenue);
+    if (needsOnboarding && !onWelcome) {
+      navigate(APP_ROUTES.bienvenue, { replace: true });
+      return;
+    }
+    if (!needsOnboarding && onWelcome) {
+      const dest = welcomeExitRef.current || APP_DEFAULT_ROUTE;
+      welcomeExitRef.current = null;
+      navigate(dest, { replace: true });
+    }
+  }, [session, authLoading, onboardingChecked, needsOnboarding, pathname, navigate]);
 
   const setPreviewHtml = (html) => {
     const s = typeof html === 'string' ? html : '';
@@ -1446,6 +1563,29 @@ export default function App() {
           .catch(() => {
         /* ignore */
       });
+      } else if (languagePreviewCvRef.current) {
+        const plan = adaptTodoPlanRef.current;
+        const sourceFp = localizationSourceFingerprint(lastBaseCv);
+        const previewStale =
+          plan?.outputLanguage === 'offer'
+          && Boolean(sourceFp)
+          && sourceFp !== lastLocalizedSourceFpRef.current;
+        if (!previewStale) {
+          postRenderHtml({
+            cv: languagePreviewCvRef.current,
+            base_cv: lastBaseCv || undefined,
+            highlight_changes: false,
+            template_id: tid,
+            template_options: opts,
+          })
+            .then((html) => {
+              setModifiedPreviewHtml(html);
+              setPreviewHtml(html);
+            })
+            .catch(() => {
+        /* ignore */
+      });
+        }
       } else if (!tourHighlightStepActive) {
         loadInitialPreview(tid, opts);
       }
@@ -1575,18 +1715,29 @@ export default function App() {
   /** Réinitialise l’espace « Adapter un CV » : nouveau fil de chat, nouvel adapt (sans toucher aux candidatures déjà enregistrées). */
   const resetAdaptationWorkspace = () => {
     setLastAdaptedCv(null);
+    setAdaptLiveCv(null);
     setLastAdaptationId(null);
     setLastSelectionA4(null);
     setRapport(null);
     setRapportBefore(null);
     setExportBlockVisible(false);
     setChatMessages([]);
-    setChatInput('');
+    cvChatComposerRef.current?.clear();
+    try {
+      const draftKey = getAdaptDraftStorageKey();
+      if (draftKey) localStorage.removeItem(draftKey);
+    } catch {
+      /* ignore localStorage */
+    }
     setAdaptTodoPlan(null);
     setAdaptPlanLoading(false);
     setAdaptTodoExplain('');
     setAdaptTodoExplainLoading(false);
     setAdaptTodoLastAction('');
+    setLanguagePreviewStatus('idle');
+    languagePreviewSeqRef.current += 1;
+    languagePreviewCvRef.current = null;
+    lastLocalizedSourceFpRef.current = '';
     try {
       const key = getPersistedPlanStorageKey();
       if (key) localStorage.removeItem(key);
@@ -1594,6 +1745,13 @@ export default function App() {
       /* ignore localStorage */
     }
     setAnnonce('');
+    contextUploadSeqRef.current += 1;
+    setContextFiles([]);
+    contextFilesRef.current = [];
+    setContextDocMeta([]);
+    setDocumentsContext('');
+    setContextDocError('');
+    setContextDocStatus('');
     setLastAdaptRunConfig(null);
     setAdaptRating(null);
     setApiAdaptDone(false);
@@ -1685,7 +1843,14 @@ export default function App() {
             })
             .catch(() => loadInitialPreview(tid, opts));
         } else {
-          loadInitialPreview(tid, opts);
+          const plan = adaptTodoPlanRef.current;
+          const keepOfferPreview =
+            plan?.languageMismatch
+            && plan?.outputLanguage === 'offer'
+            && (languagePreviewCvRef.current || languagePreviewStatusRef.current === 'loading' || languagePreviewStatusRef.current === 'ready');
+          if (!keepOfferPreview) {
+            loadInitialPreview(tid, opts);
+          }
         }
       });
     return () => { cancelled = true; };
@@ -1709,6 +1874,11 @@ export default function App() {
       .then((data) => {
         if (cancelled) return;
         const todo = Array.isArray(data?.todo) ? data.todo : [];
+        const mismatch = Boolean(
+          data?.language_mismatch
+          || shouldPromptLanguageChoice(data?.cv_language, data?.offer_language),
+        );
+        const restoreLang = resolveAdaptLanguageAutoChoice(mismatch, session?.user?.id);
         setAdaptRunStepIds([]);
         setAdaptStreamRunningStepId(null);
         setAdaptStreamDoneStepIds([]);
@@ -1717,8 +1887,27 @@ export default function App() {
           description: data?.description || '',
           todo,
           assistantMessage: data?.assistant_message || 'Plan restauré. Tu peux valider ou ajuster les étapes.',
+          cvLanguage: data?.cv_language || null,
+          offerLanguage: data?.offer_language || null,
+          languageMismatch: mismatch,
+          outputLanguage: restoreLang.outputLanguage,
+          languageRemembered: restoreLang.remembered,
+          documentsContext: data?.documents_context || '',
         });
+        setDocumentsContext(data?.documents_context || '');
+        setContextDocMeta(Array.isArray(data?.context_documents) ? data.context_documents : []);
+        setContextDocStatus(data?.documents_context ? 'ready' : '');
+        setLanguagePreviewStatus(mismatch && restoreLang.prompt ? 'idle' : mismatch ? 'idle' : 'ready');
+        languagePreviewCvRef.current = null;
+        lastLocalizedSourceFpRef.current = '';
         setAnnonce((data?.description || '').trim());
+        if (restoreLang.prompt) {
+          setAdaptLanguageMeta({
+            cvLanguage: data?.cv_language || null,
+            offerLanguage: data?.offer_language || null,
+          });
+          setAdaptLanguageModalOpen(true);
+        }
         setChatMessages((prev) => (
           prev.some((m) => m.kind === 'todo_plan')
             ? prev
@@ -1734,35 +1923,6 @@ export default function App() {
       });
     return () => { cancelled = true; };
   }, [session?.user?.id, view, lastAdaptedCv, adapting, adaptTodoPlan, getPersistedPlanStorageKey]);
-
-  // Sauvegarde locale du brouillon de l'offre pendant la saisie (avant adaptation).
-  useEffect(() => {
-    if (!session?.user?.id || view !== 'cv') return;
-    if (lastAdaptedCv || adaptTodoPlan) return;
-    const key = getAdaptDraftStorageKey();
-    if (!key) return;
-    try {
-      const v = (chatInput || '').trim();
-      if (!v) localStorage.removeItem(key);
-      else localStorage.setItem(key, v);
-    } catch {
-      /* ignore localStorage */
-    }
-  }, [session?.user?.id, view, chatInput, lastAdaptedCv, adaptTodoPlan, getAdaptDraftStorageKey]);
-
-  // Restauration du brouillon après refresh.
-  useEffect(() => {
-    if (!session?.user?.id || view !== 'cv') return;
-    if (lastAdaptedCv || adaptTodoPlan || (chatInput || '').trim()) return;
-    const key = getAdaptDraftStorageKey();
-    if (!key) return;
-    try {
-      const draft = (localStorage.getItem(key) || '').trim();
-      if (draft) setChatInput(draft);
-    } catch {
-      /* ignore localStorage */
-    }
-  }, [session?.user?.id, view, lastAdaptedCv, adaptTodoPlan, chatInput, getAdaptDraftStorageKey]);
 
   useEffect(() => {
     if (usage && usage.adaptations_used > 0) setFirstOfferNudgeOpen(false);
@@ -1848,6 +2008,7 @@ export default function App() {
     const pending = pendingAdaptResultRef.current;
     if (pending) {
       if (pending.cv) setLastAdaptedCv(pending.cv);
+      setAdaptLiveCv(null);
       if (pending.adaptation_id != null) setLastAdaptationId(pending.adaptation_id);
       if (pending.selection_a4 !== undefined) setLastSelectionA4(pending.selection_a4);
       if (pending.rapport !== undefined) setRapport(pending.rapport);
@@ -1860,6 +2021,10 @@ export default function App() {
         setModifiedPreviewHtml(pending.modifiedPreviewHtml);
       }
       // Flux silencieux: pas de récapitulatif automatique dans le chat après adaptation.
+      // Exception AXE-357 : notice si CV mixte ou langue offre ≠ langue CV.
+      if (pending.languageNotice) {
+        setChatMessages((prev) => [...prev, { role: 'assistant', content: pending.languageNotice }]);
+      }
       if (pending.baseCv != null) setLastBaseCv(pending.baseCv);
       if (pending.export_hints != null && pending.adaptation_id != null) {
         exportHintsRef.current = { ...pending.export_hints, adaptation_id: pending.adaptation_id };
@@ -1888,6 +2053,10 @@ export default function App() {
     }
     setAdapting(false);
   }, [apiAdaptDone, adaptStepIndex, adapting, bumpPostFirstAdaptTour]);
+
+  const handlePreviewCvEdit = useCallback((nextCv) => {
+    if (nextCv) setLastAdaptedCv(nextCv);
+  }, []);
 
   // Scroll vers la réponse / animation quand on lance un prompt
   useEffect(() => {
@@ -1923,7 +2092,14 @@ export default function App() {
     setApplicationDetailId(null);
   };
 
-  const runPlannedAdaptation = async ({ description, selectedStepIds, source = 'chat_send', planId = null }) => {
+  const runPlannedAdaptation = async ({
+    description,
+    selectedStepIds,
+    source = 'chat_send',
+    planId = null,
+    outputLanguage = 'cv',
+    documentsContext: runDocumentsContext = '',
+  }) => {
     try {
       adaptRunAbortRef.current?.abort();
     } catch (_) { /* ignore */ }
@@ -1938,6 +2114,7 @@ export default function App() {
     setAdaptRating(null);
     setApiAdaptDone(false);
     setAdaptStepIndex(0);
+    setAdaptLiveCv(null);
     setAdaptStreamRunningStepId(null);
     setAdaptStreamDoneStepIds([]);
     const selected = Array.isArray(selectedStepIds) ? selectedStepIds : [];
@@ -1961,10 +2138,13 @@ export default function App() {
         titre: posteNom || undefined,
         entreprise: entrepriseNom || undefined,
         plan_id: planId || undefined,
+        documents_context: runDocumentsContext || undefined,
         selected_step_ids: selected,
+        output_language: outputLanguage === 'offer' ? 'offer' : 'cv',
         ...templateParams,
       }, {
         signal: adaptSignal,
+        timeoutMs: ADAPT_RUN_TIMEOUT_MS,
         onMessage: (msg) => {
           if (!msg || typeof msg !== 'object') return;
           if (msg.type === 'started' && Array.isArray(msg.step_labels) && msg.step_labels.length > 0) {
@@ -1985,6 +2165,10 @@ export default function App() {
             if (msg.step_id) {
               setAdaptStreamDoneStepIds((prev) => (prev.includes(String(msg.step_id)) ? prev : [...prev, String(msg.step_id)]));
               setAdaptStreamRunningStepId(null);
+            }
+            if (msg.cv && typeof msg.cv === 'object') {
+              setAdaptLiveCv(msg.cv);
+              setPreviewVariant('modified');
             }
             return;
           }
@@ -2054,9 +2238,20 @@ export default function App() {
       if (selectedSteps.includes('rewrite_experiences')) touchedSections.push('expériences');
       if (selectedSteps.includes('optimize_ats')) touchedSections.push('ATS');
       const sectionsText = touchedSections.length ? `Sections modifiées: ${touchedSections.join(', ')}.` : '';
-      const summary = data.rapport?.score_global != null
+      const summaryBase = data.rapport?.score_global != null
         ? `CV adapté (score ATS : ${data.rapport.score_global}/100). ${sectionsText} Tu peux affiner en envoyant un autre message ou modifier le texte avant téléchargement.`
         : `CV adapté à l'offre. ${sectionsText} Envoie un message pour affiner ou clique sur « Modifier le CV » pour éditer le texte.`;
+      const languageNotice = adaptLanguageNotice(
+        data.cv_language,
+        data.offer_language,
+        data.output_language,
+      );
+      const summary = withAdaptLanguageNotice(
+        summaryBase,
+        data.cv_language,
+        data.offer_language,
+        data.output_language,
+      );
       setSourceOffreValue('');
       pendingAdaptResultRef.current = {
         cv: data.cv,
@@ -2069,6 +2264,7 @@ export default function App() {
         previewHtml: '',
         modifiedPreviewHtml: html,
         summary,
+        languageNotice,
         baseCv: baseCv ?? lastBaseCv ?? undefined,
       };
       const labelsLen = streamStepLabels.length > 0 ? streamStepLabels.length : adaptStepLabels.length;
@@ -2079,6 +2275,9 @@ export default function App() {
         description,
         selectedStepIds: selectedSteps,
         source: 'redo_available',
+        documentsContext: runDocumentsContext || '',
+        planId: planId || null,
+        outputLanguage,
       });
       try {
         const key = getPersistedPlanStorageKey();
@@ -2131,6 +2330,217 @@ export default function App() {
     });
   };
 
+  const applyLanguagePreview = async (choice, planOverride = null) => {
+    const plan = planOverride || adaptTodoPlan;
+    const seq = languagePreviewSeqRef.current + 1;
+    languagePreviewSeqRef.current = seq;
+    const policy = choice === 'offer' ? 'offer' : 'cv';
+    if (policy === 'cv') {
+      languagePreviewCvRef.current = null;
+      lastLocalizedSourceFpRef.current = localizationSourceFingerprint(lastBaseCv);
+      const html = originalPreviewHtml || previewHtmlFallback;
+      if (html) {
+        setPreviewHtml(html);
+        setModifiedPreviewHtml(html);
+      } else {
+        loadInitialPreview();
+      }
+      setLanguagePreviewStatus('ready');
+      const copy = adaptLanguagePreviewCopy(plan?.cvLanguage, plan?.offerLanguage, 'cv', 'ready');
+      if (copy?.title) setAdaptTodoLastAction(copy.title);
+      apiPost('/api/adapt-localize', {
+        description: plan?.description || annonce,
+        titre: posteNom || undefined,
+        entreprise: entrepriseNom || undefined,
+        plan_id: plan?.planId || undefined,
+        output_language: 'cv',
+        preview_seq: seq,
+      }, { timeoutMs: ADAPT_PLAN_TIMEOUT_MS }).catch(() => {
+        /* ignore : l'aperçu source est déjà restauré */
+      });
+      return;
+    }
+    setLanguagePreviewStatus('loading');
+    const sourceFpAtStart = localizationSourceFingerprint(lastBaseCv);
+    lastLocalizedSourceFpRef.current = sourceFpAtStart;
+    try {
+      const data = await apiPost('/api/adapt-localize', {
+        description: plan?.description || annonce,
+        titre: posteNom || undefined,
+        entreprise: entrepriseNom || undefined,
+        plan_id: plan?.planId || undefined,
+        output_language: 'offer',
+        preview_seq: seq,
+      }, { timeoutMs: ADAPT_PLAN_TIMEOUT_MS });
+      if (seq !== languagePreviewSeqRef.current) return;
+      const cv = data?.cv;
+      if (!cv || typeof cv !== 'object') {
+        throw new Error("Aperçu langue indisponible.");
+      }
+      languagePreviewCvRef.current = cv;
+      lastLocalizedSourceFpRef.current = sourceFpAtStart;
+      const html = await postRenderHtml({
+        cv,
+        base_cv: lastBaseCv || undefined,
+        highlight_changes: false,
+        ...templateParams,
+      });
+      if (seq !== languagePreviewSeqRef.current) return;
+      setPreviewHtml(html);
+      setModifiedPreviewHtml(html);
+      setPreviewVariant('modified');
+      setLanguagePreviewStatus('ready');
+      const copy = adaptLanguagePreviewCopy(plan?.cvLanguage, plan?.offerLanguage, 'offer', 'ready');
+      if (copy?.title) setAdaptTodoLastAction(copy.title);
+    } catch (e) {
+      if (seq !== languagePreviewSeqRef.current) return;
+      setLanguagePreviewStatus('error');
+      setAdaptTodoLastAction(e.message || "Impossible de préparer l'aperçu dans cette langue.");
+    }
+  };
+
+  const applyAdaptLanguageChoice = (policy, options = {}) => {
+    const choice = policy === 'offer' ? 'offer' : 'cv';
+    const remember = Boolean(options?.remember);
+    const uid = session?.user?.id;
+    if (remember) setAdaptLanguagePreference(uid, choice);
+    else clearAdaptLanguagePreference(uid);
+    setAdaptLanguageModalOpen(false);
+    setAdaptTodoPlan((prev) => (prev ? { ...prev, outputLanguage: choice, languageRemembered: remember } : prev));
+    const pending = pendingAdaptAfterLanguageRef.current;
+    pendingAdaptAfterLanguageRef.current = null;
+    if (pending?.type === 'setup') {
+      runDirectAdaptFromSetup({ ...pending, outputLanguage: choice });
+      return;
+    }
+    applyLanguagePreview(choice);
+  };
+
+  const forgetStoredLanguageChoice = () => {
+    clearAdaptLanguagePreference(session?.user?.id);
+    setAdaptTodoPlan((prev) => (prev ? { ...prev, languageRemembered: false } : prev));
+  };
+
+  const openAdaptLanguageDialog = () => {
+    const plan = adaptTodoPlan;
+    if (!plan) return;
+    setAdaptLanguageMeta({
+      cvLanguage: plan.cvLanguage,
+      offerLanguage: plan.offerLanguage,
+    });
+    setAdaptLanguageModalOpen(true);
+  };
+
+  useEffect(() => {
+    if (!adaptTodoPlan?.languageMismatch || !adaptTodoPlan.languageRemembered) return undefined;
+    if (!adaptTodoPlan.outputLanguage || lastAdaptedCv) return undefined;
+    if (languagePreviewStatus !== 'idle') return undefined;
+    applyLanguagePreview(adaptTodoPlan.outputLanguage);
+    return undefined;
+  }, [adaptTodoPlan, languagePreviewStatus, lastAdaptedCv]);
+
+  applyLanguagePreviewRef.current = applyLanguagePreview;
+
+  useEffect(() => {
+    if (!adaptTodoPlan?.languageMismatch) return undefined;
+    if (adaptTodoPlan.outputLanguage !== 'offer' || lastAdaptedCv || adapting) return undefined;
+    const fp = localizationSourceFingerprint(lastBaseCv);
+    if (!fp || fp === lastLocalizedSourceFpRef.current) return undefined;
+    if (languagePreviewStatus === 'loading') return undefined;
+    const timer = window.setTimeout(() => {
+      const latest = localizationSourceFingerprint(lastBaseCv);
+      if (!latest || latest === lastLocalizedSourceFpRef.current) return;
+      applyLanguagePreviewRef.current?.('offer');
+    }, 400);
+    return () => window.clearTimeout(timer);
+  }, [
+    lastBaseCv,
+    adaptTodoPlan?.languageMismatch,
+    adaptTodoPlan?.outputLanguage,
+    lastAdaptedCv,
+    adapting,
+    languagePreviewStatus,
+  ]);
+
+  const runDirectAdaptFromSetup = async ({ fiche, pos, ent, userPreview, outputLanguage = 'cv' }) => {
+    setAdapting(true);
+    try {
+      const data = await apiPost('/api/adapt', {
+        description: fiche,
+        titre: pos || undefined,
+        entreprise: ent || undefined,
+        output_language: outputLanguage === 'offer' ? 'offer' : 'cv',
+        ...templateParams,
+      }, { timeoutMs: ADAPT_RUN_TIMEOUT_MS });
+      setLastAdaptedCv(data.cv);
+      setLastAdaptationId(data.adaptation_id || null);
+      if (data.export_hints && data.adaptation_id) {
+        exportHintsRef.current = { ...data.export_hints, adaptation_id: data.adaptation_id };
+      } else if (data.adaptation_id) {
+        exportHintsRef.current = {
+          adaptation_id: data.adaptation_id,
+          poste: '',
+          entreprise: '',
+          entreprise_confidence: 0,
+        };
+      }
+      entrepriseFieldTouchedRef.current = false;
+      if (data.export_hints) {
+        setPosteNom((p) => ((p && p.trim()) ? p : (data.export_hints.poste || '')));
+        setEntrepriseNom((e) => ((e && e.trim()) ? e : (data.export_hints.entreprise || '')));
+      }
+      setLastSelectionA4(data.selection_a4 || null);
+      setRapport(data.rapport || {});
+      setRapportBefore(data.rapport_before || null);
+      setExportBlockVisible(true);
+      setPreviewVariant('modified');
+      loadApplications();
+      loadUsage();
+      let baseCv = null;
+      try {
+        baseCv = await apiGet('/api/cv');
+      } catch {
+        /* ignore */
+      }
+      if (baseCv) setLastBaseCv(baseCv);
+      const html = await postRenderHtml({
+        ...templateParams,
+        cv: data.cv,
+        base_cv: baseCv ?? undefined,
+        highlight_changes: true,
+        selection_a4: data.selection_a4 || undefined,
+      });
+      setPreviewHtml(html);
+      setModifiedPreviewHtml(html);
+      const summary = withAdaptLanguageNotice(
+        data.rapport?.score_global != null
+          ? `CV adapté (score ${data.rapport.score_global}/100). Tu peux affiner en envoyant un autre message.`
+          : 'CV adapté. Envoie un message pour affiner ou clique sur le texte pour éditer.',
+        data.cv_language,
+        data.offer_language,
+        data.output_language,
+      );
+      setChatMessages([{ role: 'user', content: userPreview }, { role: 'assistant', content: summary }]);
+      if (openPhase2AfterFirstAdaptRef.current) {
+        openPhase2AfterFirstAdaptRef.current = false;
+        bumpPostFirstAdaptTour();
+      }
+    } catch (e) {
+      openPhase2AfterFirstAdaptRef.current = false;
+      if (e.status === 402 || (e.status === 403 && (e.message || '').toLowerCase().includes('plafond')) || (e.message && e.message.includes('épuisé'))) {
+        setUpgradeModalVisible(true);
+      } else {
+        showError(e.message || "Erreur lors de l'adaptation.");
+      }
+      setChatMessages([
+        { role: 'user', content: userPreview },
+        { role: 'assistant', content: 'Erreur : ' + (e.message || '') },
+      ]);
+    } finally {
+      setAdapting(false);
+    }
+  };
+
   const handleRunTodoPlan = async () => {
     if (!adaptTodoPlan || adapting) return;
     const selected = (adaptTodoPlan.todo || []).map((s) => s.id);
@@ -2138,19 +2548,134 @@ export default function App() {
       setError('Active au moins une étape avant de lancer.');
       return;
     }
+    if (adaptTodoPlan.languageMismatch && !adaptTodoPlan.outputLanguage) {
+      openAdaptLanguageDialog();
+      return;
+    }
+    if (
+      adaptTodoPlan.languageMismatch
+      && adaptTodoPlan.outputLanguage === 'offer'
+      && languagePreviewStatus !== 'ready'
+      && !adaptTodoPlan.languageRemembered
+    ) {
+      if (languagePreviewStatus !== 'loading') {
+        applyLanguagePreview('offer');
+      }
+      return;
+    }
     await runPlannedAdaptation({
       description: adaptTodoPlan.description,
       selectedStepIds: selected,
       source: 'todo_confirm',
       planId: adaptTodoPlan.planId || null,
+      outputLanguage: adaptTodoPlan.outputLanguage || 'cv',
+      documentsContext: adaptTodoPlan.documentsContext || documentsContext,
     });
   };
 
-  const handleChatSend = async () => {
-    const text = (chatInput || '').trim();
-    if (!text || adapting || adaptPlanLoading) return;
-    setChatInput('');
-    setChatMessages((prev) => [...prev, { role: 'user', content: text }]);
+  const uploadContextFiles = async (files) => {
+    const seq = contextUploadSeqRef.current + 1;
+    contextUploadSeqRef.current = seq;
+    setContextDocStatus('uploading');
+    setContextDocError('');
+    const form = new FormData();
+    files.forEach((file) => form.append('files', file));
+    try {
+      const data = await apiPostFormData('/api/adapt-documents', form);
+      if (contextUploadSeqRef.current !== seq) return null;
+      const documents = Array.isArray(data?.documents) ? data.documents : [];
+      setDocumentsContext(data?.documents_context || '');
+      setContextDocMeta(files.map((file, index) => ({
+        filename: documents[index]?.filename || file.name,
+        chars: documents[index]?.chars,
+        localName: file.name,
+        localSize: file.size,
+      })));
+      setContextDocStatus('ready');
+      return data;
+    } catch (e) {
+      if (contextUploadSeqRef.current !== seq) return null;
+      setContextDocStatus('');
+      setContextDocError(e.message || 'Impossible d’ajouter le document.');
+      throw e;
+    }
+  };
+
+  const addContextFiles = async (list) => {
+    const picked = Array.from(list || []);
+    if (!picked.length) return;
+    const previous = contextFilesRef.current;
+    const merged = [...previous];
+    let blocked = '';
+    for (const file of picked) {
+      const message = adaptContextFileError(file, merged.length);
+      if (message) {
+        blocked = message;
+        break;
+      }
+      if (merged.some((item) => item.name === file.name && item.size === file.size)) continue;
+      merged.push(file);
+    }
+    if (merged.length === previous.length) {
+      if (blocked) {
+        setContextDocError(blocked);
+        setContextDocStatus('');
+      }
+      return;
+    }
+    contextFilesRef.current = merged;
+    setContextFiles(merged);
+    try {
+      const uploaded = await uploadContextFiles(merged);
+      if (uploaded && blocked) setContextDocError(blocked);
+    } catch {
+      contextFilesRef.current = previous;
+      setContextFiles(previous);
+    }
+  };
+
+  const removeContextFile = async (index) => {
+    const previous = contextFilesRef.current;
+    const next = previous.filter((_file, fileIndex) => fileIndex !== index);
+    contextFilesRef.current = next;
+    setContextFiles(next);
+    setContextDocError('');
+    if (!previous.length) {
+      const current = contextDocMeta.filter((_doc, docIndex) => docIndex !== index);
+      const removed = contextDocMeta[index];
+      setContextDocMeta(current);
+      if (!current.length) {
+        setDocumentsContext('');
+        setContextDocStatus('');
+      } else if (removed?.filename) {
+        setDocumentsContext((text) => String(text || '')
+          .split(/\n(?=### )/)
+          .filter((part) => !part.startsWith(`### ${removed.filename}`))
+          .join('\n'));
+      }
+      return;
+    }
+    if (!next.length) {
+      setDocumentsContext('');
+      setContextDocMeta([]);
+      setContextDocStatus('');
+      return;
+    }
+    try {
+      await uploadContextFiles(next);
+    } catch {
+      contextFilesRef.current = previous;
+      setContextFiles(previous);
+    }
+  };
+
+  const handleChatSend = async (rawText) => {
+    const text = String(rawText || '').trim();
+    if (!text || adapting || adaptPlanLoading || contextDocStatus === 'uploading') return;
+    const attachedNames = (contextDocMeta.length ? contextDocMeta : contextFiles)
+      .map((doc) => doc.filename || doc.name)
+      .filter(Boolean);
+    setChatMessages((prev) => [...prev, { role: 'user', content: text, attachments: attachedNames }]);
     hideError();
     if (!lastAdaptedCv) {
       if (adaptTodoPlan) {
@@ -2167,23 +2692,58 @@ export default function App() {
           description: text,
           titre: posteNom || undefined,
           entreprise: entrepriseNom || undefined,
-        });
+          documents_context: documentsContext || undefined,
+        }, { timeoutMs: ADAPT_PLAN_TIMEOUT_MS });
         const todo = Array.isArray(plan?.todo) ? plan.todo : [];
+        const mismatch = Boolean(
+          plan?.language_mismatch
+          || shouldPromptLanguageChoice(plan?.cv_language, plan?.offer_language),
+        );
+        const autoLang = resolveAdaptLanguageAutoChoice(mismatch, session?.user?.id);
         setAnnonce(text);
         setAdaptRunStepIds([]);
         setAdaptStreamRunningStepId(null);
         setAdaptStreamDoneStepIds([]);
+        const cited = attachedNames.some((name) => String(plan?.assistant_message || '').includes(name));
+        const readLine = attachedNames.length && !cited
+          ? `J'ai lu ${attachedNames.map((name) => `« ${name} »`).join(', ')}.`
+          : '';
+        const assistantMessage = [readLine, plan?.assistant_message || "Voici un plan d'adaptation. Ajuste les étapes puis valide."]
+          .filter(Boolean)
+          .join(' ');
         setAdaptTodoPlan({
           planId: plan?.plan_id || null,
           description: text,
           todo,
-          assistantMessage: plan?.assistant_message || "Voici un plan d'adaptation. Ajuste les étapes puis valide.",
+          assistantMessage,
+          cvLanguage: plan?.cv_language || null,
+          offerLanguage: plan?.offer_language || null,
+          languageMismatch: mismatch,
+          outputLanguage: autoLang.outputLanguage,
+          languageRemembered: autoLang.remembered,
+          documentsContext,
+          attachments: attachedNames,
         });
+        contextFilesRef.current = [];
+        setContextFiles([]);
+        setContextDocMeta([]);
+        setContextDocStatus('');
+        setContextDocError('');
+        setLanguagePreviewStatus(mismatch ? 'idle' : 'ready');
+        languagePreviewCvRef.current = null;
+        lastLocalizedSourceFpRef.current = '';
         setChatMessages((prev) => [...prev, {
           role: 'assistant',
-          content: plan?.assistant_message || "Voici un plan d'adaptation. Ajuste les étapes puis valide.",
+          content: assistantMessage,
           kind: 'todo_plan',
         }]);
+        if (autoLang.prompt) {
+          setAdaptLanguageMeta({
+            cvLanguage: plan?.cv_language || null,
+            offerLanguage: plan?.offer_language || null,
+          });
+          setAdaptLanguageModalOpen(true);
+        }
         try {
           const key = getPersistedPlanStorageKey();
           if (key && plan?.plan_id) localStorage.setItem(key, String(plan.plan_id));
@@ -2211,7 +2771,17 @@ export default function App() {
     setAdapting(true);
     setAdaptStepLabels(['Analyse de la demande', 'Application des modifications', 'Finalisation']);
     try {
-      const data = await apiPost('/api/adapt-refine', { cv: lastAdaptedCv, instruction: text });
+      const data = await apiPost('/api/adapt-refine', {
+        cv: lastAdaptedCv,
+        instruction: text,
+        documents_context: documentsContext || undefined,
+      }, { timeoutMs: ADAPT_PLAN_TIMEOUT_MS });
+      contextFilesRef.current = [];
+      setContextFiles([]);
+      setContextDocMeta([]);
+      setDocumentsContext('');
+      setContextDocStatus('');
+      setContextDocError('');
       if (lastAdaptationId) {
         try {
           const patch = { full_cv: data.cv };
@@ -2349,8 +2919,7 @@ export default function App() {
       if (url) window.location.href = url;
       else setError('Impossible d\'accéder au portail de gestion.');
     } catch (e) {
-      if (e.status === 503) setError('Le portail de gestion des abonnements n\'est pas disponible (paiement non configuré).');
-      else setError(e.message || 'Gestion non disponible.');
+      setError(e.message || 'Ce service n\'est pas disponible pour le moment.');
     } finally {
       setCheckoutLoading(false);
     }
@@ -2881,7 +3450,21 @@ export default function App() {
   }, [showProfileCvLoadError]);
 
   const handleProfileSaveSuccess = () => {
-    if (!lastAdaptedCv) loadInitialPreview();
+    apiGet('/api/cv')
+      .then((cv) => {
+        if (cv) {
+          setLastBaseCv(cv);
+          setFreshPreviewPhotoUrl(cv.photo_url ?? null);
+        }
+      })
+      .catch(() => {
+        /* ignore */
+      })
+      .finally(() => {
+        if (!lastAdaptedCv && adaptTodoPlan?.outputLanguage !== 'offer') {
+          loadInitialPreview();
+        }
+      });
   };
 
   useEffect(() => {
@@ -2949,7 +3532,7 @@ export default function App() {
           <img src="/favicon.svg" alt="AxeL Job" className="login-screen-logo" />
           <h1>AxeL Job</h1>
           <p className="login-screen-intro">
-            Configure Supabase pour utiliser l'application. Ajoute <code>VITE_SUPABASE_URL</code> et <code>VITE_SUPABASE_ANON_KEY</code> dans <code>.env</code> (voir <code>.env.example</code>).
+            {supabaseConfigMessage(import.meta.env.DEV)}
           </p>
         </div>
       </div>
@@ -2977,29 +3560,40 @@ export default function App() {
   }
 
   /* Non connecté : login visible tout de suite (AXE-372), sans attendre getSession. */
-  if (!session) {
-    if (pathname === '/login') {
+  /* AXE-504 : session ouverte mais simple visite de / ou /login -> on affiche la page publique */
+  const publicStay = !!session && decidePublicEntry({
+    hasSession: true,
+    pathname,
+    locationState: location.state,
+    authCallback: hasPendingAuthCallback() || sawNoSessionRef.current,
+  }) === 'stay';
+  if (!session || publicStay) {
+    const authMode = authModeFromPath(pathname);
+    if (authMode) {
+      const authTitle = authMode === 'signup' ? 'Créer un compte' : authMode === 'reset' ? 'Mot de passe oublié' : 'Connexion';
       return (
-        <div className="login-screen">
-          <button type="button" className="login-screen-back" onClick={() => navigate('/')} aria-label="Retour à l'accueil">
+        <div className="login-screen login-screen--split" data-section="login">
+          <button type="button" className="login-screen-back" onClick={() => navigate('/')} aria-label="Retour à l'accueil" {...analyticsAttrs('nav-link-back', 'header', 'tertiary', 'nav')}>
             &larr; Retour à l&apos;accueil
           </button>
-          <div className="login-screen-card">
-            <img src="/favicon.svg" alt="AxeL Job" className="login-screen-logo" />
-            <h1>AxeL Job</h1>
-            <p className="login-screen-intro">Adapte ton CV à chaque offre en quelques secondes.</p>
-            {loginOtpExpired && (
-              <div className="auth-error" style={{ marginBottom: '1rem' }}>
-                Le lien de connexion a expiré ou n&apos;est plus valide. Demande un nouveau lien ci-dessous.
-              </div>
-            )}
-            <AuthForm onSuccess={() => setAuthLoading(false)} />
-          </div>
+          <AuthLayout>
+            <div className="login-screen-card auth-layout-card">
+              <img src="/favicon.svg" alt="AxeL Job" className="login-screen-logo" />
+              <h1>{authTitle}</h1>
+              <p className="login-screen-intro">Adapte ton CV à chaque offre en quelques secondes.</p>
+              {loginOtpExpired && (
+                <div className="auth-error" style={{ marginBottom: '1rem' }}>
+                  Le lien de connexion a expiré ou n&apos;est plus valide. Demande un nouveau lien ci-dessous.
+                </div>
+              )}
+              <AuthForm onSuccess={() => setAuthLoading(false)} />
+            </div>
+          </AuthLayout>
         </div>
       );
     }
     if (pathname === '/') {
-      return <Suspense fallback={<div className="landing" style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><span aria-hidden>Chargement…</span></div>}><LandingPage onCtaClick={() => navigate('/login')} onProClick={() => navigate('/login?plan=pro')} /></Suspense>;
+      return <Suspense fallback={<div className="landing" style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><span aria-hidden>Chargement…</span></div>}><LandingPage onCtaClick={() => navigate('/login', loginNavOptions())} onSignupClick={() => navigate('/inscription?plan=free', loginNavOptions())} onProClick={() => navigate('/inscription?plan=pro', loginNavOptions())} /></Suspense>;
     }
     const marketing = renderPublicMarketingPage(pathname, navigate);
     if (marketing) return marketing;
@@ -3010,11 +3604,11 @@ export default function App() {
         </div>
       );
     }
-    return <NotFoundPage />;
+    return <Suspense fallback={null}><NotFoundPage /></Suspense>;
   }
 
   /* Connecté : redirection / ou /login vers /app (useEffect) ; pages publiques hors /app ; sinon 404 */
-  if (!authLoading && session && (pathname === '/' || pathname === '/login')) {
+  if (!authLoading && session && isPublicEntryPath(pathname)) {
     return (
       <div className="app-shell" style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <span aria-live="polite">Chargement…</span>
@@ -3024,7 +3618,7 @@ export default function App() {
   if (!authLoading && session && !pathname.startsWith('/app')) {
     const marketing = renderPublicMarketingPage(pathname, navigate);
     if (marketing) return marketing;
-    return <NotFoundPage />;
+    return <Suspense fallback={null}><NotFoundPage /></Suspense>;
   }
 
   const showOnboardingBoot = !!(session && pathname.startsWith('/app') && !onboardingChecked);
@@ -3044,18 +3638,18 @@ export default function App() {
               Pour adapter ton CV, l’aperçu et le suivi des candidatures, ça fonctionne <strong>beaucoup mieux sur ordinateur</strong> - repasse depuis un PC ou une grande tablette.
             </p>
             <div className="app-mobile-gate-actions">
-              <button type="button" className="button button-primary" onClick={() => navigate('/faq')}>
+              <Button type="button" variant="primary" onClick={() => navigate('/faq')}>
                 Voir le site (FAQ, guides…)
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
-                className="button button-secondary"
+                variant="secondary"
                 onClick={async () => {
                   if (supabase) await supabase.auth.signOut();
                 }}
               >
                 Se déconnecter
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -3066,18 +3660,25 @@ export default function App() {
             <h1 id="profile-load-err-title">Profil inaccessible</h1>
             <p className="app-mobile-gate-lead">{profileCvLoadError}</p>
             <div className="app-mobile-gate-actions">
-              <button type="button" className="button button-primary" onClick={() => setProfileRefreshKey((k) => k + 1)}>
-                Réessayer
-              </button>
-              <button
+              <Button
                 type="button"
-                className="button button-secondary"
+                variant="primary"
+                onClick={() => {
+                  clearApiOutageCooldown();
+                  setProfileRefreshKey((k) => k + 1);
+                }}
+              >
+                Réessayer
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
                 onClick={async () => {
                   if (supabase) await supabase.auth.signOut();
                 }}
               >
                 Se déconnecter
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -3102,10 +3703,14 @@ export default function App() {
       />
 
       <main className="app-main" id="main-content">
-        {needsOnboarding && onboardingChecked && (
+        {needsOnboarding && onboardingChecked && view === 'bienvenue' && (
           <OnboardingWizard
             session={session}
+            templatesList={templatesList}
+            onImportedTemplate={handleUserPickTemplate}
             onComplete={(target) => {
+              const dest = target === 'profil' ? '/app/profil' : '/app/cv';
+              welcomeExitRef.current = dest;
               setNeedsOnboarding(false);
               setOnboardingChecked(true);
               setProfileRefreshKey((k) => k + 1);
@@ -3114,8 +3719,7 @@ export default function App() {
                   localStorage.removeItem(`cv_bot_tour_done_main_phase1_${session.user.id}`);
                 } catch (_) { /* ignore */ }
               }
-              if (target === 'profil') navigate('/app/profil');
-              else navigate('/app/cv');
+              navigate(dest);
             }}
           />
         )}
@@ -3132,18 +3736,23 @@ export default function App() {
                 Colle une offre d&apos;emploi, l&apos;IA adapte ton CV. Affine par chat, puis exporte en PDF.
               </p>
               <div className="page-title-row-actions">
-                <button
+                <Button
                   type="button"
-                  className="button button-secondary button--sm btn-new-adapt-session"
+                  variant="secondary"
+                  size="sm"
+                  className="btn-new-adapt-session"
                   onClick={requestNewCandidatureWorkspace}
                   disabled={adapting}
                   title="Vider le chat et l’aperçu pour adapter ton CV à une autre offre (sans supprimer tes candidatures enregistrées)"
+                  {...analyticsAttrs('cv-header-cta-new', 'header', 'secondary', 'cta')}
                 >
                   Nouvelle candidature
-                </button>
-                <button
+                </Button>
+                <Button
                   type="button"
-                  className="button button-secondary button--sm btn-new-adapt-session"
+                  variant="secondary"
+                  size="sm"
+                  className="btn-new-adapt-session"
                   onClick={async () => {
                     if (!lastAdaptRunConfig || adapting) return;
                     setChatMessages((prev) => [...prev, { role: 'user', content: 'Relancer la dernière adaptation' }]);
@@ -3151,13 +3760,16 @@ export default function App() {
                       description: lastAdaptRunConfig.description,
                       selectedStepIds: lastAdaptRunConfig.selectedStepIds || [],
                       source: 'redo_last_adaptation',
+                      planId: lastAdaptRunConfig.planId || null,
+                      outputLanguage: lastAdaptRunConfig.outputLanguage || 'cv',
+                      documentsContext: lastAdaptRunConfig.documentsContext || '',
                     });
                   }}
                   disabled={adapting || !lastAdaptRunConfig}
                   title="Relancer la dernière adaptation avec les mêmes étapes"
                 >
                   Relancer la dernière adaptation
-                </button>
+                </Button>
               </div>
             </div>
           </header>
@@ -3167,9 +3779,9 @@ export default function App() {
                 const rem = usage.adaptations_quota_remaining ?? (usage.adaptations_limit - usage.adaptations_used);
                 return rem <= 0 ? 'Tes adaptations gratuites sont épuisées.' : `Il te reste ${rem} adaptation${rem > 1 ? 's' : ''} gratuite${rem > 1 ? 's' : ''}.`;
               })()}</span>
-              <button type="button" className="button button-primary button--sm" onClick={handleUpgradeClick} disabled={checkoutLoading}>
+              <Button type="button" variant="primary" size="sm" onClick={handleUpgradeClick} disabled={checkoutLoading} loading={checkoutLoading} {...analyticsAttrs('cv-banner-cta-upgrade', 'banner', 'primary', 'cta')}>
                 {checkoutLoading ? '…' : 'Passer Pro - 10€/mois'}
-              </button>
+              </Button>
             </div>
           )}
           {usage && usage.adaptations_used === 0 && (
@@ -3203,6 +3815,9 @@ export default function App() {
                               {(adaptTodoPlan.todo || []).length} étape(s)
                             </span>
                           </div>
+                          {Array.isArray(adaptTodoPlan.attachments) && adaptTodoPlan.attachments.length > 0 && (
+                            <p className="cv-chat-todo-docs">Lu : {adaptTodoPlan.attachments.join(', ')}</p>
+                          )}
                           <div className="cv-chat-todo-list">
                             {(adaptTodoPlan.todo || []).map((step) => {
                               const sid = String(step.id);
@@ -3236,14 +3851,93 @@ export default function App() {
                               );
                             })}
                           </div>
+                          {!lastAdaptedCv && adaptTodoPlan.languageMismatch ? (() => {
+                            const langCopy = adaptLanguagePreviewCopy(
+                              adaptTodoPlan.cvLanguage,
+                              adaptTodoPlan.offerLanguage,
+                              adaptTodoPlan.outputLanguage,
+                              languagePreviewStatus,
+                              Boolean(adaptTodoPlan.languageRemembered),
+                            );
+                            if (!langCopy) return null;
+                            return (
+                              <div
+                                className={`cv-chat-todo-lang${languagePreviewStatus === 'error' ? ' cv-chat-todo-lang--error' : ''}${languagePreviewStatus === 'loading' ? ' cv-chat-todo-lang--loading' : ''}`}
+                                role="status"
+                                aria-live="polite"
+                                aria-busy={languagePreviewStatus === 'loading' || undefined}
+                              >
+                                <div className="cv-chat-todo-lang-head">
+                                  {languagePreviewStatus === 'loading' ? (
+                                    <span className="cv-lang-spinner" aria-hidden="true" />
+                                  ) : null}
+                                  <p className="cv-chat-todo-lang-title ds-label-sm">{langCopy.title}</p>
+                                </div>
+                                <p className="cv-chat-todo-lang-body ds-body-md">{langCopy.body}</p>
+                                <div className="cv-chat-todo-lang-actions">
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={openAdaptLanguageDialog}
+                                    disabled={adapting}
+                                  >
+                                    {langCopy.changeLabel}
+                                  </Button>
+                                  {langCopy.forgetLabel ? (
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={forgetStoredLanguageChoice}
+                                      disabled={adapting}
+                                    >
+                                      {langCopy.forgetLabel}
+                                    </Button>
+                                  ) : null}
+                                  {languagePreviewStatus === 'error' && langCopy.retryLabel ? (
+                                    <Button
+                                      type="button"
+                                      variant="secondary"
+                                      size="sm"
+                                      onClick={() => applyLanguagePreview(adaptTodoPlan.outputLanguage || 'offer')}
+                                      disabled={adapting}
+                                    >
+                                      {langCopy.retryLabel}
+                                    </Button>
+                                  ) : null}
+                                </div>
+                              </div>
+                            );
+                          })() : null}
                           {!lastAdaptedCv && (
                             <div className="cv-chat-todo-actions">
-                              <button type="button" className="button button-primary button--sm" onClick={handleRunTodoPlan} disabled={adapting}>
+                              <Button
+                                type="button"
+                                variant="primary"
+                                size="sm"
+                                onClick={handleRunTodoPlan}
+                                disabled={
+                                  adapting
+                                  || (
+                                    !adaptTodoPlan.languageRemembered
+                                    && (
+                                      languagePreviewStatus === 'loading'
+                                      || (
+                                        Boolean(adaptTodoPlan.languageMismatch)
+                                        && adaptTodoPlan.outputLanguage === 'offer'
+                                        && languagePreviewStatus !== 'ready'
+                                      )
+                                    )
+                                  )
+                                }
+                                {...analyticsAttrs('cv-todo-cta-run', 'todo', 'primary', 'cta')}
+                              >
                                 Valider et lancer
-                              </button>
-                              <button type="button" className="button button-secondary button--sm" onClick={requestNewCandidatureWorkspace} disabled={adapting}>
+                              </Button>
+                              <Button type="button" variant="secondary" size="sm" onClick={requestNewCandidatureWorkspace} disabled={adapting}>
                                 Annuler
-                              </button>
+                              </Button>
                             </div>
                           )}
                           {adaptTodoLastAction ? <p className="cv-chat-todo-last-action">{adaptTodoLastAction}</p> : null}
@@ -3253,6 +3947,21 @@ export default function App() {
                           {m.role === 'user' && typeof m.content === 'string' && m.content.length > 280 && !expandedUserMessages[i]
                             ? `${m.content.slice(0, 280)}…`
                             : m.content}
+                          {m.role === 'user' && Array.isArray(m.attachments) && m.attachments.length > 0 && (
+                            <span className="cv-chat-msg-files">
+                              {m.attachments.map((name) => {
+                                const ext = String(name).split('.').pop()?.toLowerCase();
+                                const kind = ext === 'pdf' ? 'PDF' : ext === 'docx' ? 'DOCX' : 'Fichier';
+                                return (
+                                  <span key={name} className="cv-chat-msg-file" title={name}>
+                                    <HiDocumentText aria-hidden="true" />
+                                    <span className="cv-chat-msg-file-name">{name}</span>
+                                    <span className="cv-chat-msg-file-kind">{kind}</span>
+                                  </span>
+                                );
+                              })}
+                            </span>
+                          )}
                           {m.role === 'user' && typeof m.content === 'string' && m.content.length > 280 ? (
                             <button
                               type="button"
@@ -3317,9 +4026,68 @@ export default function App() {
               </div>
               {error && <div className="error cv-chat-error">{error}</div>}
               <div className="cv-chat-input-bar">
-                <textarea
-                  ref={cvChatInputRef}
-                  className="cv-chat-input"
+                {(contextDocMeta.length > 0 || contextFiles.length > 0 || contextDocError || contextDocStatus === 'ready') && (
+                  <div className="cv-chat-docs">
+                    {(contextDocMeta.length ? contextDocMeta : contextFiles).map((doc, index) => {
+                      const label = doc.filename || doc.name;
+                      return (
+                        <span key={`${doc.localName || label}-${doc.localSize || index}`} className="cv-chat-doc-chip">
+                          {label}
+                          <button
+                            type="button"
+                            aria-label={`Retirer ${label}`}
+                            disabled={contextDocStatus === 'uploading' || adapting || (!!adaptTodoPlan && !lastAdaptedCv)}
+                            onClick={() => removeContextFile(index)}
+                          >
+                            ×
+                          </button>
+                        </span>
+                      );
+                    })}
+                    {contextDocStatus === 'ready' && !contextDocError && (
+                      <span className="cv-chat-docs-status" role="status">Document ajouté.</span>
+                    )}
+                    {contextDocError && (
+                      <span className="cv-chat-docs-error" role="alert">{contextDocError}</span>
+                    )}
+                  </div>
+                )}
+                <input
+                  ref={contextFileInputRef}
+                  type="file"
+                  accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                  multiple
+                  hidden
+                  onChange={(e) => {
+                    addContextFiles(e.target.files);
+                    e.target.value = '';
+                  }}
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  iconOnly
+                  className="cv-chat-attach"
+                  aria-label="Joindre un document"
+                  title="Joindre un PDF ou un DOCX"
+                  disabled={adapting || adaptPlanLoading || contextDocStatus === 'uploading' || (!!adaptTodoPlan && !lastAdaptedCv)}
+                  loading={contextDocStatus === 'uploading'}
+                  onClick={() => {
+                    if (contextFilesRef.current.length >= ADAPT_CONTEXT_MAX_FILES) {
+                      setContextDocError('3 documents maximum.');
+                      return;
+                    }
+                    contextFileInputRef.current?.click();
+                  }}
+                >
+                  <HiOutlinePaperClip size={20} aria-hidden="true" />
+                </Button>
+                <CvChatComposer
+                  ref={cvChatComposerRef}
+                  storageKey={getAdaptDraftStorageKey()}
+                  restoreDraft={Boolean(session?.user?.id && view === 'cv' && !lastAdaptedCv && !adaptTodoPlan)}
+                  persistDraft={!lastAdaptedCv && !adaptTodoPlan}
                   placeholder={
                     adaptPlanLoading
                       ? 'Préparation de ton plan…'
@@ -3327,26 +4095,10 @@ export default function App() {
                         ? "Valide d'abord la todo puis lance l'adaptation."
                         : "Colle une offre d'emploi ou décris ce que tu veux modifier..."
                   }
-                  value={chatInput}
-                  onChange={(e) => {
-                    const el = e.target;
-                    setChatInput(el.value);
-                    requestAnimationFrame(() => {
-                      el.style.height = 'auto';
-                      if (!el.value.trim()) {
-                        el.style.removeProperty('height');
-                        return;
-                      }
-                      el.style.height = `${Math.min(el.scrollHeight, 150)}px`;
-                    });
-                  }}
-                  onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleChatSend(); } }}
-                  rows={1}
                   disabled={adapting || adaptPlanLoading || (!!adaptTodoPlan && !lastAdaptedCv)}
+                  sendBlocked={contextDocStatus === 'uploading'}
+                  onSend={handleChatSend}
                 />
-                <button type="button" className="cv-chat-input-send" onClick={handleChatSend} disabled={adapting || adaptPlanLoading || !chatInput.trim() || (!!adaptTodoPlan && !lastAdaptedCv)} aria-label="Envoyer">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 2L11 13"/><path d="M22 2L15 22L11 13L2 9L22 2Z"/></svg>
-                </button>
               </div>
             </div>
             <div className="cv-chat-preview" data-analytics-section="preview">
@@ -3373,6 +4125,7 @@ export default function App() {
                       onClick={downloadBaseCvPdf}
                       disabled={baseCvPdfLoading}
                       title="Télécharger ton CV de profil (sans adaptation) en PDF, avec le template et les options actuels"
+                      {...analyticsAttrs('cv-preview-cta-base-pdf', 'preview', 'secondary', 'cta')}
                     >
                       <span className="tpl-btn-bar-extra-icon" aria-hidden>
                         <HiArrowDownTray size={16} strokeWidth={2} />
@@ -3425,9 +4178,51 @@ export default function App() {
                   <span className="preview-editable-hint-inline">Clique sur le texte pour modifier.</span>
                 </div>
               )}
+              {!lastAdaptedCv && adaptTodoPlan?.languageMismatch && adaptTodoPlan.outputLanguage ? (() => {
+                const langCopy = adaptLanguagePreviewCopy(
+                  adaptTodoPlan.cvLanguage,
+                  adaptTodoPlan.offerLanguage,
+                  adaptTodoPlan.outputLanguage,
+                  languagePreviewStatus,
+                  Boolean(adaptTodoPlan.languageRemembered),
+                );
+                if (!langCopy) return null;
+                return (
+                  <p className="cv-preview-lang-banner ds-body-md" role="status">
+                    {languagePreviewStatus === 'loading' ? (
+                      <span className="cv-lang-spinner" aria-hidden="true" />
+                    ) : null}
+                    <span>{langCopy.title}</span>
+                  </p>
+                );
+              })() : null}
               <div className="preview-wrap" ref={previewWrapRef}>
                 <div className="preview-a4-sheet">
-                {previewVariant === 'modified' && lastAdaptedCv && !(templateId || '').startsWith('custom_') && ['classic', 'minimal', 'modern', 'bold', 'creative', 'elegant', 'executive'].includes((templateId || '').trim()) ? (
+                {(() => {
+                  if (!isBetaCanvasTemplateId(templateId)) return null;
+                  const adaptedShown = lastAdaptedCv || adaptLiveCv;
+                  const previewCv = previewVariant === 'modified' && adaptedShown
+                    ? adaptedShown
+                    : (previewVariant === 'modified' && languagePreviewStatus === 'ready' && languagePreviewCvRef.current
+                      ? languagePreviewCvRef.current
+                      : lastBaseCv);
+                  const source = hasUsableBetaCanvasLayout(previewCv?.layout) ? previewCv.layout : profileLayout;
+                  if (!previewCv || !hasUsableBetaCanvasLayout(source)) return null;
+                  return (
+                    <BetaCvLivePreview
+                      templateId={templateId}
+                      profileLayout={profileLayout}
+                      previewVariant={previewVariant}
+                      lastAdaptedCv={adaptedShown}
+                      lastBaseCv={lastBaseCv}
+                      languagePreviewStatus={languagePreviewStatus}
+                      languagePreviewCv={languagePreviewStatus === 'ready' ? languagePreviewCvRef.current : null}
+                      freshPreviewPhotoUrl={freshPreviewPhotoUrl}
+                      textEditable={Boolean(lastAdaptedCv) && !adapting}
+                      onCvChange={handlePreviewCvEdit}
+                    />
+                  );
+                })() || (previewVariant === 'modified' && lastAdaptedCv && !(templateId || '').startsWith('custom_') && ['classic', 'minimal', 'modern', 'bold', 'creative', 'elegant', 'executive'].includes((templateId || '').trim()) ? (
                   <CvEditablePreview
                     cv={{
                       ...lastAdaptedCv,
@@ -3458,7 +4253,7 @@ export default function App() {
                   />
                 ) : (
                   <div
-                    className={`preview-iframe-wrap${adapting && adaptStreamMode ? ' preview-iframe-wrap--adapt-live' : ''}`}
+                    className={`preview-iframe-wrap${adapting && adaptStreamMode ? ' preview-iframe-wrap--adapt-live' : ''}${!lastAdaptedCv && languagePreviewStatus === 'loading' ? ' preview-iframe-wrap--lang-preview' : ''}`}
                   >
                     <iframe
                       ref={iframeRef}
@@ -3466,8 +4261,14 @@ export default function App() {
                       title="Aperçu du CV"
                       onLoad={(e) => resizeIframeToContent(e.target)}
                     />
+                    {!lastAdaptedCv && languagePreviewStatus === 'loading' ? (
+                      <div className="preview-lang-loading" role="status" aria-live="polite">
+                        <span className="cv-lang-spinner" aria-hidden="true" />
+                        <span className="ds-label-sm">Traduction de l’aperçu…</span>
+                      </div>
+                    ) : null}
                   </div>
-                )}
+                ))}
                 </div>
               </div>
               {exportBlockVisible && lastAdaptedCv && (
@@ -3519,8 +4320,9 @@ export default function App() {
                           aria-expanded={atsScoreOpen}
                           aria-haspopup="dialog"
                           aria-controls="ats-score-modal"
+                          {...analyticsAttrs('cv-export-cta-ats', 'export', 'tertiary', 'cta')}
                         >
-                          <span className="ats-score-pill-label">Score ATS</span>
+                          <span className="ats-score-pill-label">Adéquation</span>
                           {rapportBefore?.score_global != null && rapportBefore.score_global !== rapport.score_global ? (
                             <span className="ats-score-value">
                               <span className="ats-score-before">{rapportBefore.score_global}</span>
@@ -3547,7 +4349,7 @@ export default function App() {
                             onClick={(e) => e.stopPropagation()}
                           >
                             <div className="ats-score-modal-header">
-                              <h3 id="ats-score-modal-title">Score ATS - {rapport.score_global}/100</h3>
+                              <h3 id="ats-score-modal-title">Adéquation à l’offre - {rapport.score_global}/100</h3>
                               <button
                                 type="button"
                                 className="ats-score-modal-close"
@@ -3558,8 +4360,7 @@ export default function App() {
                               </button>
                             </div>
                             <p className="ats-score-modal-intro">
-                              Indicatif sur 100, calculé à partir de l&apos;offre : chaque ligne ci-dessous est une note sur 100,
-                              pondérée (pourcentage indiqué) pour former le score global. Ce n&apos;est pas le score d&apos;un logiciel de recrutement précis.
+                              Adéquation à l’offre, sur 100. Chaque ligne est une note sur 100, pondérée pour former le score global.
                             </p>
                             {rapport.detail && (
                               <div className="ats-score-section ats-detail-bars">
@@ -3587,8 +4388,8 @@ export default function App() {
                     </>
                   )}
                   <div className="cv-chat-export-btns">
-                    <button type="button" className="button button-success" onClick={handlePdf} disabled={exporting}>Télécharger le PDF</button>
-                    <button type="button" className="button button-secondary" onClick={handleExportDossier} disabled={exporting} aria-busy={exporting}>
+                    <Button type="button" variant="success" onClick={handlePdf} disabled={exporting} {...analyticsAttrs('cv-export-cta-pdf', 'export', 'primary', 'cta')}>Télécharger le PDF</Button>
+                    <Button type="button" variant="secondary" onClick={handleExportDossier} disabled={exporting} loading={exporting} {...analyticsAttrs('cv-export-cta-dossier', 'export', 'secondary', 'cta')}>
                       {exporting ? (
                         <>
                           <span className="export-spinner" aria-hidden="true" />
@@ -3597,7 +4398,7 @@ export default function App() {
                       ) : (
                         typeof showDirectoryPicker === 'function' ? 'Dossier complet (choisir un dossier…)' : 'Dossier complet'
                       )}
-                    </button>
+                    </Button>
                   </div>
                   {exporting && (
                     <p className="cv-chat-export-loading" role="status">Préparation du dossier (PDF, fichiers)…</p>
@@ -3914,7 +4715,7 @@ export default function App() {
                   type="button"
                   variant="primary"
                   size="lg"
-                  onClick={() => setSetupModalOpen(true)}
+                  onClick={() => navigate('/app/cv')}
                   data-attr="candidatures-empty-cta-start"
                   data-track="cta"
                   data-zone="empty"
@@ -4085,18 +4886,18 @@ export default function App() {
               <p className="setup-modal-intro">Renseigne l&apos;entreprise et la fiche de poste. L&apos;IA adaptera ton CV dans l&apos;espace de travail.</p>
               <label className="setup-field">
                 <span>Nom de l&apos;entreprise</span>
-                <input type="text" value={setupEntreprise} onChange={(e) => setSetupEntreprise(e.target.value)} placeholder="ex. Société Dupont" />
+                <Input type="text" value={setupEntreprise} onChange={(e) => setSetupEntreprise(e.target.value)} placeholder="ex. Société Dupont" />
               </label>
               <label className="setup-field">
                 <span>Intitulé du poste (optionnel, améliore le score ATS)</span>
-                <input type="text" value={setupPoste} onChange={(e) => setSetupPoste(e.target.value)} placeholder="ex. Analyste Risk & Contrôle" />
+                <Input type="text" value={setupPoste} onChange={(e) => setSetupPoste(e.target.value)} placeholder="ex. Analyste Risk & Contrôle" />
               </label>
               <label className="setup-field">
                 <span>Lien ou texte de la fiche de poste</span>
                 <textarea value={setupFiche} onChange={(e) => setSetupFiche(e.target.value)} placeholder="Colle le lien de l'annonce ou le texte de l'offre…" rows={6} />
               </label>
               <div className="setup-modal-actions">
-                <button type="button" className="button button-primary" onClick={async () => {
+                <Button type="button" variant="primary" onClick={async () => {
                   const fiche = setupFiche.trim();
                   const ent = setupEntreprise.trim();
                   const pos = setupPoste.trim();
@@ -4116,59 +4917,43 @@ export default function App() {
                   setAnnonce(fiche);
                   setAdaptRating(null);
                   openPhase2AfterFirstAdaptRef.current = true;
-                  setAdapting(true);
                   const userPreview = fiche.slice(0, 300) + (fiche.length > 300 ? '…' : '');
                   setChatMessages([{ role: 'user', content: userPreview }]);
                   try {
-                    const data = await apiPost('/api/adapt', { description: fiche, titre: pos || undefined, entreprise: ent || undefined, ...templateParams });
-                    setLastAdaptedCv(data.cv);
-                    setLastAdaptationId(data.adaptation_id || null);
-                    if (data.export_hints && data.adaptation_id) {
-                      exportHintsRef.current = { ...data.export_hints, adaptation_id: data.adaptation_id };
-                    } else if (data.adaptation_id) {
-                      exportHintsRef.current = {
-                        adaptation_id: data.adaptation_id,
-                        poste: '',
-                        entreprise: '',
-                        entreprise_confidence: 0,
-                      };
+                    setAdapting(true);
+                    const langMeta = await apiPost('/api/adapt-language', {
+                      description: fiche,
+                      titre: pos || undefined,
+                      entreprise: ent || undefined,
+                    }, { timeoutMs: ADAPT_PLAN_TIMEOUT_MS });
+                    if (shouldPromptLanguageChoice(langMeta.cv_language, langMeta.offer_language)) {
+                      const autoLang = resolveAdaptLanguageAutoChoice(true, session?.user?.id);
+                      if (!autoLang.prompt && autoLang.outputLanguage) {
+                        await runDirectAdaptFromSetup({
+                          fiche,
+                          pos,
+                          ent,
+                          userPreview,
+                          outputLanguage: autoLang.outputLanguage,
+                        });
+                        return;
+                      }
+                      setAdapting(false);
+                      pendingAdaptAfterLanguageRef.current = { type: 'setup', fiche, pos, ent, userPreview };
+                      setAdaptLanguageMeta({
+                        cvLanguage: langMeta.cv_language,
+                        offerLanguage: langMeta.offer_language,
+                      });
+                      setAdaptLanguageModalOpen(true);
+                      return;
                     }
-                    entrepriseFieldTouchedRef.current = false;
-                    if (data.export_hints) {
-                      setPosteNom((p) => ((p && p.trim()) ? p : (data.export_hints.poste || '')));
-                      setEntrepriseNom((e) => ((e && e.trim()) ? e : (data.export_hints.entreprise || '')));
-                    }
-                    setLastSelectionA4(data.selection_a4 || null);
-                    setRapport(data.rapport || {});
-                    setRapportBefore(data.rapport_before || null);
-                    setExportBlockVisible(true);
-                    setPreviewVariant('modified');
-                    loadApplications();
-                    loadUsage();
-                    let baseCv = null;
-                    try {
-                      baseCv = await apiGet('/api/cv');
-                    } catch {
-                      /* ignore */
-                    }
-                    if (baseCv) setLastBaseCv(baseCv);
-                    const html = await postRenderHtml({
-                      ...templateParams,
-                      cv: data.cv,
-                      base_cv: baseCv ?? undefined,
-                      highlight_changes: true,
-                      selection_a4: data.selection_a4 || undefined,
+                    await runDirectAdaptFromSetup({
+                      fiche,
+                      pos,
+                      ent,
+                      userPreview,
+                      outputLanguage: 'cv',
                     });
-                    setPreviewHtml(html);
-                    setModifiedPreviewHtml(html);
-                    const summary = data.rapport?.score_global != null
-                      ? `CV adapté (score ${data.rapport.score_global}/100). Tu peux affiner en envoyant un autre message.`
-                      : 'CV adapté. Envoie un message pour affiner ou clique sur le texte pour éditer.';
-                    setChatMessages([{ role: 'user', content: userPreview }, { role: 'assistant', content: summary }]);
-                    if (openPhase2AfterFirstAdaptRef.current) {
-                      openPhase2AfterFirstAdaptRef.current = false;
-                      bumpPostFirstAdaptTour();
-                    }
                   } catch (e) {
                     openPhase2AfterFirstAdaptRef.current = false;
                     if (e.status === 402 || (e.status === 403 && (e.message || '').toLowerCase().includes('plafond')) || (e.message && e.message.includes('épuisé'))) {
@@ -4180,13 +4965,12 @@ export default function App() {
                       { role: 'user', content: userPreview },
                       { role: 'assistant', content: 'Erreur : ' + (e.message || '') },
                     ]);
-                  } finally {
                     setAdapting(false);
                   }
                 }} disabled={!setupFiche.trim()}>
                   Démarrer l&apos;adaptation
-                </button>
-                <button type="button" className="button button-secondary" onClick={() => setSetupModalOpen(false)}>Annuler</button>
+                </Button>
+                <Button type="button" variant="secondary" onClick={() => setSetupModalOpen(false)}>Annuler</Button>
               </div>
             </div>
           </div>
@@ -4257,6 +5041,7 @@ export default function App() {
                       type="button"
                       className="support-usecase-card support-usecase-card--clickable"
                       onClick={() => navigate(topic.route, { state: { supportHighlight: { route: topic.route, selector: topic.selector, title: topic.bubbleTitle, content: topic.bubbleContent, position: topic.position, ...(topic.openTemplateOptions && { openTemplateOptions: true }) } } })}
+                      {...analyticsAttrs(`support-topic-${topic.id}`, 'topic', 'tertiary', 'nav')}
                     >
                       <div className="support-usecase-icon-wrap">
                         <Icon className="support-usecase-icon" aria-hidden />
@@ -4310,19 +5095,28 @@ export default function App() {
               <label className="input-label">Précisions (texte libre)</label>
               <textarea className="input-field" value={refusRaison} onChange={(e) => setRefusRaison(e.target.value)} rows={3} placeholder="Optionnel" />
               <div className="linkedin-sync-actions" style={{ marginTop: '1rem' }}>
-                <button type="button" className="button button-primary" onClick={() => submitRefusModal(false)} disabled={statutModalSubmitting}>
+                <Button type="button" variant="primary" onClick={() => submitRefusModal(false)} disabled={statutModalSubmitting} loading={statutModalSubmitting}>
                   {statutModalSubmitting ? 'Enregistrement…' : 'Enregistrer'}
-                </button>
-                <button type="button" className="button button-secondary" onClick={() => submitRefusModal(true)} disabled={statutModalSubmitting}>
+                </Button>
+                <Button type="button" variant="secondary" onClick={() => submitRefusModal(true)} disabled={statutModalSubmitting}>
                   Passer (refus sans détail)
-                </button>
-                <button type="button" className="button button-secondary" onClick={() => { setStatutModalType(null); setStatutModalAppId(null); setStatutModalApp(null); }}>
+                </Button>
+                <Button type="button" variant="secondary" onClick={() => { setStatutModalType(null); setStatutModalAppId(null); setStatutModalApp(null); }}>
                   Annuler
-                </button>
+                </Button>
               </div>
             </div>
           </div>
         )}
+
+        <AdaptLanguageChoiceDialog
+          open={adaptLanguageModalOpen}
+          cvLanguage={adaptLanguageMeta?.cvLanguage}
+          offerLanguage={adaptLanguageMeta?.offerLanguage}
+          rememberDefault={Boolean(getAdaptLanguagePreference(session?.user?.id))}
+          onKeepCv={(opts) => applyAdaptLanguageChoice('cv', opts)}
+          onUseOffer={(opts) => applyAdaptLanguageChoice('offer', opts)}
+        />
 
         {upgradeModalVisible && (
           <div className="application-detail-overlay linkedin-sync-overlay" onClick={() => setUpgradeModalVisible(false)} role="dialog" aria-modal="true" aria-labelledby="upgrade-modal-title">
@@ -4337,12 +5131,12 @@ export default function App() {
                 <li>Lettre de motivation ciblée</li>
               </ul>
               <div className="linkedin-sync-actions" style={{ marginTop: '1rem' }}>
-                <button type="button" className="button button-primary" onClick={() => { setUpgradeModalVisible(false); handleStartCheckout(); }} disabled={checkoutLoading}>
+                <Button type="button" variant="primary" onClick={() => { setUpgradeModalVisible(false); handleStartCheckout(); }} disabled={checkoutLoading} loading={checkoutLoading}>
                   {checkoutLoading ? 'Redirection…' : 'Passer en Pro - 10€/mois'}
-                </button>
-                <button type="button" className="button button-secondary" onClick={() => setUpgradeModalVisible(false)}>
+                </Button>
+                <Button type="button" variant="secondary" onClick={() => setUpgradeModalVisible(false)}>
                   Plus tard
-                </button>
+                </Button>
               </div>
             </div>
           </div>
@@ -4364,12 +5158,12 @@ export default function App() {
                     <li><span className="pro-check"><HiCheck size={14} strokeWidth={2.5} /></span>Lettre de motivation ciblée</li>
                   </ul>
                   <div className="linkedin-sync-actions" style={{ marginTop: '1rem', flexDirection: 'column', gap: '0.5rem' }}>
-                    <button type="button" className="button button-secondary" onClick={() => { setProModalVisible(false); handleManageSubscriptionClick(); }} disabled={checkoutLoading}>
+                    <Button type="button" variant="secondary" onClick={() => { setProModalVisible(false); handleManageSubscriptionClick(); }} disabled={checkoutLoading} loading={checkoutLoading}>
                       {checkoutLoading ? 'Redirection…' : 'Gérer mon abonnement / Annuler'}
-                    </button>
-                    <button type="button" className="button button-ghost" onClick={() => setProModalVisible(false)}>
+                    </Button>
+                    <Button type="button" variant="ghost" onClick={() => setProModalVisible(false)}>
                       Fermer
-                    </button>
+                    </Button>
                   </div>
                 </>
               ) : (
@@ -4398,12 +5192,12 @@ export default function App() {
                     </div>
                   </div>
                   <div className="linkedin-sync-actions" style={{ marginTop: '1rem' }}>
-                    <button type="button" className="button button-primary" onClick={() => { setProModalVisible(false); handleStartCheckout(); }} disabled={checkoutLoading}>
+                    <Button type="button" variant="primary" onClick={() => { setProModalVisible(false); handleStartCheckout(); }} disabled={checkoutLoading} loading={checkoutLoading}>
                       {checkoutLoading ? 'Redirection…' : 'Passer en Pro - 10€/mois'}
-                    </button>
-                    <button type="button" className="button button-secondary" onClick={() => setProModalVisible(false)}>
+                    </Button>
+                    <Button type="button" variant="secondary" onClick={() => setProModalVisible(false)}>
                       Plus tard
-                    </button>
+                    </Button>
                   </div>
                 </>
               )}
@@ -4417,8 +5211,8 @@ export default function App() {
               <h3 id="signout-confirm-title">Déconnexion</h3>
               <p className="profile-subtitle" style={{ marginTop: 0 }}>Tu es sûr de vouloir te déconnecter ?</p>
               <div className="linkedin-sync-actions" style={{ marginTop: '1rem' }}>
-                <button type="button" className="button button-primary" onClick={handleSignOut}>Oui, me déconnecter</button>
-                <button type="button" className="button button-secondary" onClick={() => setSignOutConfirmOpen(false)}>Annuler</button>
+                <Button type="button" variant="primary" onClick={handleSignOut}>Oui, me déconnecter</Button>
+                <Button type="button" variant="secondary" onClick={() => setSignOutConfirmOpen(false)}>Annuler</Button>
               </div>
             </div>
           </div>
@@ -4432,21 +5226,22 @@ export default function App() {
                 C’est l’étape qui adapte ton CV à un poste réel. Va sur « Adapter un CV », colle le texte de l’annonce (ou le lien) dans le champ en bas, puis envoie.
               </p>
               <div className="linkedin-sync-actions" style={{ marginTop: '1rem' }}>
-                <button
+                <Button
                   type="button"
-                  className="button button-primary"
+                  variant="primary"
                   onClick={() => {
                     setFirstOfferNudgeOpen(false);
                     navigate('/app/cv');
-                    requestAnimationFrame(() => cvChatInputRef.current?.focus());
+                    requestAnimationFrame(() => cvChatComposerRef.current?.focus());
                     trackEvent('first_offer_nudge_cta', { action: 'go_cv' });
                   }}
+                  {...analyticsAttrs('cv-nudge-cta-go', 'nudge', 'primary', 'cta')}
                 >
                   Coller une offre
-                </button>
-                <button
+                </Button>
+                <Button
                   type="button"
-                  className="button button-secondary"
+                  variant="secondary"
                   onClick={() => {
                     setFirstOfferNudgeOpen(false);
                     try {
@@ -4454,9 +5249,10 @@ export default function App() {
                     } catch (_) { /* ignore */ }
                     trackEvent('first_offer_nudge_cta', { action: 'dismiss' });
                   }}
+                  {...analyticsAttrs('cv-nudge-cta-dismiss', 'nudge', 'secondary', 'cta')}
                 >
                   Plus tard
-                </button>
+                </Button>
               </div>
             </div>
           </div>
@@ -4477,8 +5273,8 @@ export default function App() {
               <label className="input-label" style={{ display: 'block', marginTop: '0.75rem' }}>Commentaire (optionnel)</label>
               <textarea className="input-field" value={cancelReasonText} onChange={(e) => setCancelReasonText(e.target.value)} placeholder="Ton avis nous aide à nous améliorer…" rows={2} style={{ width: '100%', marginTop: '0.25rem', resize: 'vertical' }} />
               <div className="linkedin-sync-actions" style={{ marginTop: '1rem' }}>
-                <button type="button" className="button button-primary" onClick={handleManageSubscriptionConfirm} disabled={checkoutLoading}>{checkoutLoading ? 'Redirection…' : 'Accéder au portail'}</button>
-                <button type="button" className="button button-secondary" onClick={() => setManageSubscriptionModalOpen(false)}>Annuler</button>
+                <Button type="button" variant="primary" onClick={handleManageSubscriptionConfirm} disabled={checkoutLoading} loading={checkoutLoading}>{checkoutLoading ? 'Redirection…' : 'Accéder au portail'}</Button>
+                <Button type="button" variant="secondary" onClick={() => setManageSubscriptionModalOpen(false)}>Annuler</Button>
               </div>
             </div>
           </div>
@@ -4501,14 +5297,14 @@ export default function App() {
               <label className="input-label">Comment s’est passé l’entretien ? (texte libre)</label>
               <textarea className="input-field" value={interviewFeedback} onChange={(e) => setInterviewFeedback(e.target.value)} rows={3} placeholder="Optionnel" />
               <label className="input-label">Date de l’entretien (optionnel)</label>
-              <input type="date" className="input-field" value={interviewDate} onChange={(e) => setInterviewDate(e.target.value)} />
+              <Input type="date" value={interviewDate} onChange={(e) => setInterviewDate(e.target.value)} />
               <div className="linkedin-sync-actions" style={{ marginTop: '1rem' }}>
-                <button type="button" className="button button-primary" onClick={submitInterviewModal} disabled={statutModalSubmitting}>
+                <Button type="button" variant="primary" onClick={submitInterviewModal} disabled={statutModalSubmitting} loading={statutModalSubmitting}>
                   {statutModalSubmitting ? 'Enregistrement…' : 'Enregistrer'}
-                </button>
-                <button type="button" className="button button-secondary" onClick={() => { setStatutModalType(null); setStatutModalAppId(null); setStatutModalApp(null); }}>
+                </Button>
+                <Button type="button" variant="secondary" onClick={() => { setStatutModalType(null); setStatutModalAppId(null); setStatutModalApp(null); }}>
                   Annuler
-                </button>
+                </Button>
               </div>
             </div>
           </div>
@@ -4599,12 +5395,12 @@ export default function App() {
                 </label>
               </fieldset>
               <div className="linkedin-sync-actions export-ats-block-actions">
-                <button type="button" className="button button-primary" onClick={confirmExportAtsBlockModal}>
+                <Button type="button" variant="primary" onClick={confirmExportAtsBlockModal}>
                   Valider et continuer
-                </button>
-                <button type="button" className="button button-secondary" onClick={closeExportAtsBlockModal}>
+                </Button>
+                <Button type="button" variant="secondary" onClick={closeExportAtsBlockModal}>
                   Annuler
-                </button>
+                </Button>
               </div>
             </div>
           </div>
@@ -4620,9 +5416,8 @@ export default function App() {
               </p>
               <label className="setup-field" style={{ marginTop: '1rem', display: 'block' }}>
                 <span>Entreprise</span>
-                <input
+                <Input
                   type="text"
-                  className="input-field"
                   value={pdfEntrepriseModalValue}
                   onChange={(e) => setPdfEntrepriseModalValue(e.target.value)}
                   placeholder="ex. Société recruteuse"
@@ -4630,12 +5425,12 @@ export default function App() {
                 />
               </label>
               <div className="linkedin-sync-actions export-ats-block-actions" style={{ marginTop: '1.25rem' }}>
-                <button type="button" className="button button-primary" onClick={() => void confirmPdfEntrepriseModal()}>
+                <Button type="button" variant="primary" onClick={() => void confirmPdfEntrepriseModal()}>
                   Télécharger le PDF
-                </button>
-                <button type="button" className="button button-secondary" onClick={closePdfEntrepriseModal}>
+                </Button>
+                <Button type="button" variant="secondary" onClick={closePdfEntrepriseModal}>
                   Annuler
-                </button>
+                </Button>
               </div>
             </div>
           </div>
@@ -4657,7 +5452,7 @@ export default function App() {
                 ou du résultat de vos candidatures.
               </p>
               <div className="linkedin-sync-actions" style={{ marginTop: '1rem' }}>
-                <button type="button" className="button button-primary" onClick={() => {
+                <Button type="button" variant="primary" onClick={() => {
                   setAtsDisclaimerVisible(false);
                   if (pendingPdfAction === 'pdf') {
                     const o = pendingExportTemplateOptionsRef.current;
@@ -4667,10 +5462,10 @@ export default function App() {
                   setPendingPdfAction(null);
                 }}>
                   J'ai compris, télécharger
-                </button>
-                <button type="button" className="button button-secondary" onClick={() => { setAtsDisclaimerVisible(false); setPendingPdfAction(null); pendingExportTemplateOptionsRef.current = null; }}>
+                </Button>
+                <Button type="button" variant="secondary" onClick={() => { setAtsDisclaimerVisible(false); setPendingPdfAction(null); pendingExportTemplateOptionsRef.current = null; }}>
                   Annuler
-                </button>
+                </Button>
               </div>
             </div>
           </div>

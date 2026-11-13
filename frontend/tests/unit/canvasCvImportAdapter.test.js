@@ -13,6 +13,7 @@ import {
   buildStructuralImportLayout,
   buildThemeFromVisionImport,
   estimateSemanticBlockHeight,
+  ensureImportLayoutHasContent,
   inferThemeFromProfile,
   isStructuralLayout,
   mergePresetDecorations,
@@ -78,6 +79,13 @@ test('recommendTemplateId : template_match vision prioritaire', () => {
 test('estimateSemanticBlockHeight : expériences volumineuses', () => {
   const h = estimateSemanticBlockHeight({ type: 'experiences', h: 40 }, DENSE_CV);
   assert.ok(h > 50);
+});
+
+test('estimateSemanticBlockHeight : résumé court reste compact (Profil→Exp)', () => {
+  const cv = { resume: "J'ai fait un stage de 20 mois en tant que Product Owner chez Michelin." };
+  const h = estimateSemanticBlockHeight({ type: 'resume', h: 40, style: { zone: 'main' } }, cv);
+  assert.ok(h < 22, `resume trop haut: ${h}mm`);
+  assert.ok(h >= 11);
 });
 
 test('inferThemeFromProfile : hints accent prioritaire', () => {
@@ -157,7 +165,7 @@ test('buildStructuralImportLayout : copie fidèle, aucun preset', () => {
   assert.equal(title.style.bold, true);
 });
 
-test('buildStructuralImportLayout : lie titres freeform → blocs sémantiques (AXE-329)', () => {
+test('buildStructuralImportLayout : mix in-place (identity/title, corps PDF conservé)', () => {
   const structural = {
     version: 3,
     format: 'A4',
@@ -206,8 +214,38 @@ test('buildStructuralImportLayout : lie titres freeform → blocs sémantiques (
   assert.equal(result.layout.freeform, true);
   const blocks = result.layout.pages[0].blocks;
   assert.ok(blocks.some((b) => b.type === 'identity' && Array.isArray(b.bind)));
-  assert.ok(blocks.some((b) => b.type === 'experiences' && b.bind === 'experiences'));
-  assert.equal(blocks.some((b) => b.type === 'text' && String(b.content || '').includes('Head of Growth')), false);
+  assert.ok(blocks.some((b) => b.type === 'title' && b.style?.semantic_section === 'experiences'));
+  assert.ok(blocks.some((b) => b.type === 'text' && String(b.content || '').includes('Head of Growth')));
+  assert.equal(blocks.some((b) => b.type === 'experiences'), false);
+});
+
+test('ensureImportLayoutHasContent : copie PDF freeform ne seed pas de widgets', () => {
+  const layout = sanitizeLayoutV3({
+    version: 3,
+    format: 'A4',
+    grid: 'free',
+    unit: 'mm',
+    freeform: true,
+    pages: [{
+      id: 'p1',
+      blocks: [
+        {
+          id: 'bg',
+          type: 'shape:rect',
+          x: 0,
+          y: 0,
+          w: 18,
+          h: 297,
+          z: 0,
+          style: { color: '#003c33' },
+        },
+      ],
+    }],
+  });
+  const out = ensureImportLayoutHasContent(layout, DENSE_CV);
+  assert.equal(out.pages[0].blocks.some((b) => b.type === 'experiences'), false);
+  assert.equal(out.pages[0].blocks.some((b) => b.type === 'identity'), false);
+  assert.equal(out.pages[0].blocks.length, 1);
 });
 
 test('applyImportedRoundImageShapes : anneau vectoriel → image en cercle', () => {
@@ -224,6 +262,39 @@ test('applyImportedRoundImageShapes : anneau vectoriel → image en cercle', () 
   const image = out.pages[0].blocks.find((b) => b.id === 'img');
   assert.equal(image.style.shape, 'circle');
   assert.equal(out.pages[0].blocks.some((b) => b.id === 'ring'), false);
+});
+
+test('applyImportedRoundImageShapes : un aplat vectoriel carré reste rectangulaire', () => {
+  const layout = {
+    pages: [{
+      id: 'p1',
+      blocks: [
+        { id: 'tri', type: 'image', x: 0, y: 0, w: 80, h: 79, z: 1, style: { shape: 'rect', vector_fill: true }, image_src: 'https://example.test/t.png' },
+        { id: 'plate', type: 'shape:circle', x: 15, y: 10, w: 50, h: 50, z: 1, style: { color: '#ffffff', photo_plate: true } },
+        { id: 'photo', type: 'image', x: 17, y: 12, w: 46, h: 46, z: 2, style: { shape: 'circle' }, image_src: 'https://example.test/p.jpg' },
+      ],
+    }],
+  };
+  const out = applyImportedRoundImageShapes(layout);
+  const tri = out.pages[0].blocks.find((b) => b.id === 'tri');
+  const plate = out.pages[0].blocks.find((b) => b.id === 'plate');
+  assert.equal(tri.style.shape, 'rect');
+  assert.equal(plate.style.photo_plate, true);
+});
+
+test('cleanupImportedImageOverlays : garde l’anneau blanc plus grand que la photo', () => {
+  const layout = {
+    pages: [{
+      id: 'p1',
+      blocks: [
+        { id: 'img', type: 'image', x: 18, y: 18, w: 28, h: 28, z: 2, style: { shape: 'circle' }, image_src: 'https://example.test/p.jpg' },
+        { id: 'plate', type: 'shape:circle', x: 15, y: 15, w: 34, h: 34, z: 1, style: { color: '#ffffff', stroke_width: 0, photo_plate: true } },
+      ],
+    }],
+  };
+  const out = cleanupImportedImageOverlays(layout);
+  assert.equal(out.pages[0].blocks.some((b) => b.id === 'plate'), true);
+  assert.equal(out.pages[0].blocks.find((b) => b.id === 'img').style.shape, 'circle');
 });
 
 test('cleanupImportedImageOverlays : supprime icône parasite sur photo', () => {
@@ -270,7 +341,7 @@ test('sanitizeLayoutV3 : applique le min 5×3 hors freeform', () => {
 test('sanitizeLayoutV3 : préserve les polices embarquées (@font-face)', () => {
   const fonts = [
     { family: 'PDFEmbed-Garet', weight: 700, style: 'normal', format: 'truetype', src: 'data:font/ttf;base64,AAA' },
-    { family: 'PDFEmbed-Garet', weight: 400, style: 'normal', src: 'data:font/ttf;base64,BBB' },
+    { family: 'PDFEmbed-Garet', weight: 500, style: 'normal', src: 'data:font/ttf;base64,BBB' },
     { family: '', src: 'data:...' },
   ];
   const out = sanitizeLayoutV3({ ...STRUCTURAL_LAYOUT, fonts });
@@ -278,6 +349,7 @@ test('sanitizeLayoutV3 : préserve les polices embarquées (@font-face)', () => 
   assert.equal(out.fonts[0].family, 'PDFEmbed-Garet');
   assert.equal(out.fonts[0].weight, 700);
   assert.equal(out.fonts[1].format, 'truetype');
+  assert.equal(out.fonts[1].weight, 500);
 });
 
 test('reflowColumnBlocksOnPage : ne touche pas un layout freeform', () => {
@@ -301,6 +373,239 @@ test('reflowColumnBlocksOnPage : ne touche pas un layout freeform', () => {
   const out = reflowColumnBlocksOnPage(layout, 0);
   assert.equal(out, layout); // identité : aucun repositionnement
   assert.equal(out.pages[0].blocks[1].y, 50);
+});
+
+test('reflowColumnBlocksOnPage : replica_cascade empile malgré freeform', () => {
+  const layout = {
+    version: 3,
+    format: 'A4',
+    grid: 'free',
+    unit: 'mm',
+    freeform: true,
+    replica_cascade: true,
+    pages: [{
+      id: 'p1',
+      blocks: [
+        { id: 'a', type: 'experiences', bind: 'experiences', x: 8, y: 40, w: 180, h: 40, z: 1, style: { zone: 'main' } },
+        { id: 'b', type: 'formations', bind: 'formations', x: 8, y: 50, w: 180, h: 20, z: 1, style: { zone: 'main' } },
+      ],
+    }],
+    theme: {},
+  };
+  const out = reflowColumnBlocksOnPage(layout, 0);
+  const formations = out.pages[0].blocks.find((b) => b.id === 'b');
+  assert.ok(formations.y >= 80, `formations poussé sous expériences, got y=${formations.y}`);
+});
+
+test('elegant preserveReplicaGeometry : photo au-dessus du nom, pas de restack ATS', () => {
+  const cv = {
+    prenom: 'Louis',
+    nom: 'Vedovato',
+    titre_professionnel: 'Product Owner',
+    telephone: '06',
+    email: 'a@b.fr',
+    resume: 'Stage Product Owner.',
+    experiences: [
+      {
+        entreprise: 'LOUITOS',
+        poste: 'Dirigeant',
+        date_debut: '2022',
+        date_fin: "Aujourd'hui",
+        lieu: 'Cusset',
+        bullet_points: ['Chef'],
+        clients: 'clients',
+      },
+      {
+        entreprise: 'AXEL',
+        poste: 'Président',
+        date_debut: '2024',
+        date_fin: "Aujourd'hui",
+        lieu: 'Cusset',
+        bullet_points: ['Crea'],
+        clients: 'monde',
+      },
+    ],
+    formations: [{ etablissement: 'ESSEC', diplome: 'BBA', date: '2023-2027' }],
+    competences: { techniques: ['Python'], logiciels: ['Notion'], langues: [{ langue: 'Français', niveau: 'Natif' }] },
+    certifications: [{ nom: 'Cert', organisme: 'Org', date: '2026' }],
+    projets: [{ nom: 'CRM', description: 'Desc' }],
+    photo_url: 'https://example.com/p.jpg',
+  };
+  const base = createCanvasLayoutForTemplate({ id: 'elegant' });
+  const { layout } = adaptCanvasLayoutForCv(cv, base, {
+    preserveReplicaGeometry: true,
+    templateId: 'elegant',
+  });
+  assert.equal(layout.freeform, true);
+  assert.equal(layout.replica_cascade, true);
+  const blocks = layout.pages[0].blocks;
+  const photo = blocks.find((b) => b.type === 'photo');
+  const identity = blocks.find((b) => b.type === 'identity');
+  const contact = blocks.find((b) => b.type === 'contact');
+  const experiences = blocks.find((b) => b.type === 'experiences');
+  const formations = blocks.find((b) => b.type === 'formations');
+  assert.ok(photo && identity && contact);
+  assert.ok(photo.y < identity.y, 'photo Stable au-dessus du nom');
+  assert.ok(identity.y < contact.y, 'contact sous identity');
+  assert.ok(experiences.y + experiences.h <= formations.y + 0.05, 'pas de chevauchement exp/formation');
+});
+
+test('classic preserveReplicaGeometry : contenu main reste page 1 (lanes séparées)', () => {
+  const cv = {
+    prenom: 'Louis',
+    nom: 'Vedovato',
+    titre_professionnel: 'Product Owner',
+    telephone: '06',
+    email: 'a@b.fr',
+    resume: 'Résumé professionnel court pour le header Classic.',
+    experiences: [
+      {
+        entreprise: 'A',
+        poste: 'B',
+        date_debut: '2022',
+        date_fin: "Aujourd'hui",
+        lieu: 'Paris',
+        bullet_points: ['Un', 'Deux'],
+      },
+    ],
+    formations: [{ etablissement: 'ESSEC', diplome: 'BBA', date: '2023' }],
+    projets: [{ nom: 'CRM', description: 'Desc' }],
+    competences: { techniques: ['Python'], logiciels: ['Notion'] },
+    photo_url: 'https://example.com/p.jpg',
+  };
+  const { layout } = adaptCanvasLayoutForCv(cv, createCanvasLayoutForTemplate({ id: 'classic' }), {
+    preserveReplicaGeometry: true,
+    templateId: 'classic',
+  });
+  assert.equal(layout.pages.length, 1, 'pas de pagination parasite sidebar/main');
+  const page0 = layout.pages[0].blocks;
+  assert.ok(page0.some((b) => b.type === 'experiences'), 'expériences sur page 1');
+  assert.ok(page0.some((b) => b.type === 'shape:rect'), 'fonds couleurs sur page 1');
+  const contact = page0.find((b) => b.type === 'contact');
+  const experiences = page0.find((b) => b.type === 'experiences');
+  assert.ok(
+    experiences.y >= contact.y + contact.h - 0.05,
+    'main sous le header (pas de chevauchement contact)',
+  );
+});
+
+test('bold header : lock_geometry garde photo | identity | résumé | contact', () => {
+  const cv = {
+    prenom: 'Louis',
+    nom: 'Vedovato',
+    titre_professionnel: 'Product Owner - Michelin',
+    telephone: '06',
+    email: 'a@b.fr',
+    linkedin: 'louis.vedovato',
+    resume: 'Product owner chez Michelin pour mon alternance de 20 mois',
+    experiences: [{ entreprise: 'A', poste: 'B', bullet_points: ['x'] }],
+    formations: [{ etablissement: 'E', diplome: 'D', date: '2023' }],
+    competences: { techniques: ['Python'] },
+    photo_url: 'https://example.com/p.jpg',
+  };
+  const { layout } = adaptCanvasLayoutForCv(cv, createCanvasLayoutForTemplate({ id: 'bold' }), {
+    preserveReplicaGeometry: true,
+    templateId: 'bold',
+  });
+  const page0 = layout.pages[0].blocks;
+  const photo = page0.find((b) => b.type === 'photo');
+  const identity = page0.find((b) => b.type === 'identity');
+  const resume = page0.find((b) => b.type === 'resume');
+  const contact = page0.find((b) => b.type === 'contact');
+  assert.ok(photo && identity && resume && contact);
+  assert.ok(
+    Math.abs(identity.y - photo.y) < 0.05,
+    'identity même y que la photo',
+  );
+  assert.ok(
+    Math.abs(identity.h - photo.h) < 0.05,
+    'identity même hauteur que la photo (centrage vertical)',
+  );
+  assert.ok(resume.y >= photo.y + photo.h - 0.05, 'résumé sous la rangée photo');
+  assert.ok(contact.y >= resume.y + resume.h - 0.05, 'contact sous résumé');
+  assert.equal(resume.style?.show_section_title, false);
+  assert.equal(identity.style?.lock_geometry, true);
+});
+
+test('classic sidebar : cascade resserre les blocs (pas de trous après shrink)', () => {
+  const cv = {
+    prenom: 'L',
+    nom: 'V',
+    titre_professionnel: 'PO',
+    telephone: '06',
+    email: 'a@b.fr',
+    resume: 'Résumé.',
+    experiences: [{ entreprise: 'A', poste: 'B', bullet_points: ['x'] }],
+    formations: [{ etablissement: 'E', diplome: 'D', date: '2023' }],
+    projets: [{ nom: 'P', description: 'D' }],
+    competences: {
+      techniques: ['Python', 'Lire'],
+      logiciels: ['Excel', 'Claude'],
+      autres: ['Permis B'],
+      langues: [
+        { langue: 'Français', niveau: 'Natif' },
+        { langue: 'Japonais', niveau: 'C2' },
+      ],
+    },
+    certifications: [{ nom: 'Cert', organisme: 'AXEL', date: '2026' }],
+    photo_url: 'https://example.com/p.jpg',
+  };
+  const { layout } = adaptCanvasLayoutForCv(cv, createCanvasLayoutForTemplate({ id: 'classic' }), {
+    preserveReplicaGeometry: true,
+    templateId: 'classic',
+  });
+  const side = layout.pages[0].blocks
+    .filter((b) => b.style?.zone === 'sidebar-light')
+    .sort((a, b) => (Number(a.y) || 0) - (Number(b.y) || 0));
+  assert.ok(side.length >= 4, `sidebar trop courte: ${side.length}`);
+  for (let i = 1; i < side.length; i += 1) {
+    const prev = side[i - 1];
+    const gap = side[i].y - (prev.y + prev.h);
+    assert.ok(
+      gap >= -0.05 && gap < 1.5,
+      `gap sidebar ${prev.type}→${side[i].type}: ${gap.toFixed(1)}mm`,
+    );
+  }
+});
+
+test('minimal : contact sous identity sans overlap (hauteur nom+titre)', () => {
+  const blocks = createCanvasLayoutForTemplate({ id: 'minimal' }).pages[0].blocks;
+  const identity = blocks.find((b) => b.type === 'identity');
+  const contact = blocks.find((b) => b.type === 'contact');
+  assert.ok(contact.y >= identity.y + identity.h + 1, `gap trop serré: id.h=${identity.h} contact.y=${contact.y}`);
+});
+
+test('adaptCanvasLayoutForCv : freeform sans replica_cascade ne cascade pas', () => {
+  const freeformNoCascade = {
+    version: 3,
+    format: 'A4',
+    grid: 'free',
+    unit: 'mm',
+    freeform: true,
+    pages: [{
+      id: 'p1',
+      blocks: [
+        {
+          id: 'exp', type: 'experiences', bind: 'experiences',
+          x: 10, y: 40, w: 90, h: 20, z: 3, style: { zone: 'main' },
+        },
+        {
+          id: 'side', type: 'formations', bind: 'formations',
+          x: 110, y: 40, w: 80, h: 30, z: 3, style: { zone: 'sidebar' },
+        },
+      ],
+    }],
+    theme: {},
+  };
+  const cv = {
+    experiences: [{ entreprise: 'A', poste: 'B', bullet_points: ['x', 'y', 'z'] }],
+    formations: [{ etablissement: 'ESSEC', diplome: 'BBA', date: '2023' }],
+  };
+  const { layout } = adaptCanvasLayoutForCv(cv, freeformNoCascade, { forImport: true });
+  assert.notEqual(layout.replica_cascade, true);
+  const side = layout.pages[0].blocks.find((b) => b.id === 'side');
+  assert.ok(side, 'bloc sidebar conservé');
+  assert.equal(side.y, 40, 'colonne latérale non déplacée par cascade réplique');
 });
 
 test('reflowColumnBlocksOnPage : empile bien hors freeform (régression du flag)', () => {

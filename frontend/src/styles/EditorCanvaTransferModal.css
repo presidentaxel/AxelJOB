@@ -32,7 +32,7 @@
   margin-bottom: 4px;
   font-size: 0.68rem;
   font-weight: 700;
-  color: #4a154b;
+  color: var(--ds-color-text-link);
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
@@ -113,7 +113,7 @@
 }
 
 .editor-canva-transfer-modal__primary {
-  background: #4a154b !important;
-  border-color: #4a154b !important;
+  background: var(--ds-color-action-primary-bg) !important;
+  border-color: var(--ds-color-border-input-focus) !important;
   color: #fff !important;
 }

@@ -128,6 +128,115 @@ def test_annotate_structural_blocks_identity_and_heading():
     assert by_id["b3"]["type"] == "contact"
 
 
+def test_date_range_is_not_a_phone_annotation():
+    layout = {
+        "version": 3,
+        "pages": [
+            {
+                "height_mm": 297,
+                "blocks": [
+                    {
+                        "id": "dates",
+                        "type": "text",
+                        "x": 20,
+                        "y": 80,
+                        "w": 40,
+                        "h": 5,
+                        "content": "09/2019 - 06/2023",
+                    },
+                    {
+                        "id": "phone",
+                        "type": "text",
+                        "x": 20,
+                        "y": 30,
+                        "w": 50,
+                        "h": 5,
+                        "content": "+33 6 12 34 56 78",
+                    },
+                ],
+            }
+        ],
+    }
+    anns = annotate_structural_blocks(layout, {"telephone": "+33 6 12 34 56 78"})
+    by_id = {a["block_id"]: a for a in anns}
+    assert "dates" not in by_id
+    assert by_id["phone"]["type"] == "contact"
+    assert "telephone" in by_id["phone"]["bind"]
+
+
+def test_mixed_contact_line_is_not_replaced_by_a_widget():
+    layout = {
+        "version": 3,
+        "pages": [
+            {
+                "height_mm": 297,
+                "blocks": [
+                    {
+                        "id": "mixed",
+                        "type": "text",
+                        "x": 20,
+                        "y": 20,
+                        "w": 160,
+                        "h": 5,
+                        "content": (
+                            "12 rue des Lilas, 75011 Paris • +33 6 12 34 56 78 • "
+                            "ada@example.com - www.linkedin.com/in/ada"
+                        ),
+                    },
+                    {
+                        "id": "mail",
+                        "type": "text",
+                        "x": 20,
+                        "y": 30,
+                        "w": 60,
+                        "h": 5,
+                        "content": "ada@example.com",
+                    },
+                ],
+            }
+        ],
+    }
+    anns = annotate_structural_blocks(
+        layout,
+        {
+            "email": "ada@example.com",
+            "telephone": "+33 6 12 34 56 78",
+            "linkedin": "www.linkedin.com/in/ada",
+            "ville": "Paris",
+        },
+    )
+    by_id = {a["block_id"]: a for a in anns}
+    assert "mixed" not in by_id
+    assert by_id["mail"]["type"] == "contact"
+
+
+def test_email_plus_city_is_not_a_contact_widget():
+    layout = {
+        "version": 3,
+        "pages": [
+            {
+                "height_mm": 297,
+                "blocks": [
+                    {
+                        "id": "city",
+                        "type": "text",
+                        "x": 20,
+                        "y": 20,
+                        "w": 80,
+                        "h": 5,
+                        "content": "ada@example.com • Paris",
+                    }
+                ],
+            }
+        ],
+    }
+    anns = annotate_structural_blocks(
+        layout,
+        {"email": "ada@example.com", "ville": "Paris", "linkedin": "www.linkedin.com/in/ada"},
+    )
+    assert anns == []
+
+
 def test_split_profil_heading_goes_to_resume_not_identity():
     text = """Ada Lovelace
 ada@example.com
@@ -312,6 +421,67 @@ Built early algorithms
     assert fallback_calls, "Profil-only heading must call fallback_full"
     assert "fallback_full" in meta["section_passes"]
     assert len(cv.get("experiences") or []) >= 1
+
+
+def test_dated_jobs_without_experience_heading_trigger_fallback_full():
+    """Timeline sans titre Expériences : compétences/langues ne doivent pas court-circuiter les postes."""
+    text = """Louis Vedovato
+louis@example.com
+
+Harris Interactive | Mai 2024 - Août 2024
+Chargé d'étude junior
+Conception de questionnaires
+
+Compétences
+Techniques & Outils
+
+Langues
+Français : natif
+
+Formations
+ESSEC 2024
+"""
+    fallback_calls: list[str] = []
+
+    def fake_generate(prompt: str, _uid: str | None) -> dict:
+        low = prompt.lower()
+        if "mise en page" in low:
+            return {}
+        if "identité" in low or "contact" in low:
+            return {"prenom": "Louis", "nom": "Vedovato", "email": "louis@example.com"}
+        if "formations" in low:
+            return {"formations": [{"id": "form_1", "diplome": "ESSEC", "etablissement": "ESSEC"}]}
+        if "compétences" in low or "competences" in low:
+            if "français" in low or "francais" in low:
+                return {"competences": {"langues": [{"langue": "Français", "niveau": "natif"}]}}
+            return {"competences": {"techniques": ["Techniques & Outils"]}}
+        return {}
+
+    def fake_full(_full_text: str, _uid: str | None) -> dict:
+        fallback_calls.append("full")
+        return {
+            "cv": {
+                "prenom": "Louis",
+                "nom": "Vedovato",
+                "email": "louis@example.com",
+                "experiences": [
+                    {
+                        "id": "exp_1",
+                        "poste": "Chargé d'étude junior",
+                        "entreprise": "Harris Interactive",
+                        "date_debut": "Mai 2024",
+                        "date_fin": "Août 2024",
+                    }
+                ],
+            }
+        }
+
+    cv, _hints, meta = parse_cv_by_sections(text, "user-1", fake_generate, fallback_full=fake_full)
+    assert fallback_calls, "dated jobs without an Expériences heading must call fallback_full"
+    assert "fallback_full" in meta["section_passes"]
+    postes = [e.get("entreprise") for e in cv.get("experiences") or []]
+    assert "Harris Interactive" in postes
+    assert cv.get("email") == "louis@example.com"
 
 
 def test_layout_hints_quota_does_not_abort_parsed_cv():

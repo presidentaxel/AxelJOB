@@ -392,19 +392,29 @@ export function sanitizeLayoutV3(input, { idHelpers } = {}) {
   // Layout "libre" (copie fidèle d'un PDF importé) : positions absolues à
   // préserver telles quelles, on ne doit JAMAIS le re-flow en colonnes.
   if (safe.freeform === true) out.freeform = true;
+  // Répliques Stable→Beta : freeform + cascade colonne après auto-height.
+  if (safe.replica_cascade === true) out.replica_cascade = true;
   // Polices embarquées du PDF (@font-face data-URL) : rendu fidèle.
   if (Array.isArray(safe.fonts) && safe.fonts.length) {
     const fonts = safe.fonts
       .filter((f) => f && typeof f === 'object'
         && typeof f.family === 'string' && f.family
         && typeof f.src === 'string' && f.src)
-      .map((f) => ({
-        family: f.family,
-        weight: f.weight === 700 ? 700 : 400,
-        style: f.style === 'italic' ? 'italic' : 'normal',
-        format: typeof f.format === 'string' ? f.format : 'truetype',
-        src: f.src,
-      }));
+      .map((f) => {
+        const face = {
+          family: f.family,
+          weight: [100, 200, 300, 400, 500, 600, 700, 800, 900].includes(Number(f.weight))
+            ? Number(f.weight)
+            : 400,
+          style: f.style === 'italic' ? 'italic' : 'normal',
+          format: typeof f.format === 'string' ? f.format : 'truetype',
+          src: f.src,
+        };
+        if (typeof f.coverage === 'string' && f.coverage.length > 0 && f.coverage.length <= 2000) {
+          face.coverage = f.coverage;
+        }
+        return face;
+      });
     if (fonts.length) out.fonts = fonts;
   }
   return out;

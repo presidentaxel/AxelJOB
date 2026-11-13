@@ -252,6 +252,34 @@ test('schedule pendant saving garde le payload pour replay', async () => {
   assert.deepEqual(captured, [{ v: 1 }, { v: 2 }]);
 });
 
+test('dropPending pendant une sauvegarde ne relance pas un flush vide', async () => {
+  const clock = createFakeClock();
+  let releaseSave;
+  const started = new Promise((resolve) => {
+    releaseSave = resolve;
+  });
+  const payloads = [];
+  const sch = createAutoSaveScheduler({
+    saveFn: async (payload) => {
+      payloads.push(payload);
+      await started;
+    },
+    delayMs: 100,
+    now: clock.now,
+    setTimeoutFn: clock.setTimeoutFn,
+    clearTimeoutFn: clock.clearTimeoutFn,
+  });
+  sch.schedule({ v: 1 });
+  const flushing = sch.flush();
+  sch.dropPending();
+  releaseSave();
+  await flushing;
+  await clock.runAll();
+  assert.deepEqual(payloads, [{ v: 1 }]);
+  assert.equal(sch.getState().kind, 'idle');
+  assert.equal(sch.getState().hasPending, false);
+});
+
 test('dispose stoppe les timers en cours', () => {
   const clock = createFakeClock();
   let saveCalls = 0;

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import Button from '../ui/Button.jsx';
 
 import {
   apiGet,
@@ -10,6 +11,7 @@ import {
   prepareAppleDownloadWindow,
   saveBlobWithPreferredMethod,
 } from '../../api';
+import { CV_IMPORT_REQUEST_TIMEOUT_MS } from '../../lib/fetchWithDeadline.js';
 import CvImportLoadingOverlay from '../CvImportLoadingOverlay.jsx';
 import {
   cvFromImportPayload,
@@ -27,17 +29,6 @@ import {
   resolveImportPersistTemplateId,
   summarizeImportAdaptation,
 } from '../../lib/canvasCvImportAdapter.js';
-import { buildImportLayoutVariants } from '../../lib/importLayoutVariants.js';
-import { scoreImportLayoutVariants } from '../../lib/scoreImportLayoutVariants.js';
-import {
-  defaultImportVariantId,
-  importChooserToastMessage,
-  mergeBuiltAndScoredVariants,
-  resolveImportVariant,
-  sortImportVariantsForChooser,
-} from '../../lib/importLayoutChooser.js';
-import EditorImportLayoutChooserModal from './EditorImportLayoutChooserModal.jsx';
-import '../../styles/EditorImportLayoutChooserModal.css';
 import {
   applyCvFieldsFromRoot,
   readBlockContentFromRoot,
@@ -66,6 +57,8 @@ import {
   saveCanvasDraft,
   setActiveCanvasContext,
   setCanvasDraftPrefs,
+  getCanvasDraftUserId,
+  setCanvasDraftUserId,
   templateCanvasContextKey,
 } from '../../lib/canvasLayoutDrafts.js';
 import { resolveTemplateContextLayout } from '../../lib/canvasTemplateRestore.js';
@@ -112,6 +105,7 @@ import {
 import { isAtsSafe, sortTemplatesForEditor } from '../../lib/editorTemplateUtils.js';
 import { resetTemplateOptionsToDefaults } from '../../lib/templateOptionsSchema.js';
 import { reflowColumnBlocksOnPage } from '../../lib/layoutReflow.js';
+import { cleanupCanvasHeaderOverlays } from '../../lib/canvasHeaderOverlayCleanup.js';
 import { moveBlockToPage } from '../../lib/canvasPageTransfer.js';
 import { applyLayoutPagination } from '../../lib/layoutPagination.js';
 import { useAutoSave } from '../../lib/useAutoSave.js';
@@ -164,10 +158,13 @@ import {
   isDocxFidelityNoticeDismissed,
 } from '../../lib/canvasExportFormats.js';
 import {
+  EDITOR_FIRST_RUN_SURFACES,
   dismissEditorOnboarding,
   isEditorOnboardingDismissed,
-  shouldShowEditorOnboarding,
+  resolveEditorFirstRunSurface,
+  shouldLockCanvasScrollForFirstRun,
 } from '../../lib/editorOnboarding.js';
+import { decideBetaCanvasHydration } from '../../lib/canvasBetaHydration.js';
 import {
   listNonFaithfulBlocks,
   summarizeNonFaithfulBlocks,
@@ -190,7 +187,7 @@ import '../../styles/EditorCvImportModal.css';
  */
 
 function CvEditorBeta({
-  session: _session,
+  session,
   refreshKey = 0,
   templateId,
   templateOptions,
@@ -249,14 +246,15 @@ function CvEditorBeta({
   const [designBridgeError, setDesignBridgeError] = useState('');
   const profileTemplateIdRef = useRef('');
   const designBridgeSeededRef = useRef(false);
+  /** Réouvrir le startup si l’import (ouvert depuis ce panel) est annulé. */
+  const resumeStartupAfterImportRef = useRef(false);
   /** AXE-344 : peupler Beta depuis le profil onboarding (CV sans layout). */
   const pendingProfileSeedRef = useRef(false);
   const profileSeedDoneRef = useRef(false);
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [importLoading, setImportLoading] = useState(false);
-  const [importChooser, setImportChooser] = useState(null);
-  const [importChooserConfirming, setImportChooserConfirming] = useState(false);
   const [importStepIndex, setImportStepIndex] = useState(0);
+  const [importProgress, setImportProgress] = useState(0);
   const [importError, setImportError] = useState('');
   const [importToast, setImportToast] = useState('');
   const [editHintOpen, setEditHintOpen] = useState(false);
@@ -370,6 +368,23 @@ function CvEditorBeta({
     autoSaveRef.current = autoSave;
   }, [autoSave]);
 
+  const accountId = session?.user?.id || '';
+  const prevAccountIdRef = useRef(accountId);
+  const loadedForAccountRef = useRef('');
+  const draftSaveTimerRef = useRef(null);
+  useLayoutEffect(() => {
+    if (prevAccountIdRef.current !== accountId) {
+      if (draftSaveTimerRef.current) {
+        clearTimeout(draftSaveTimerRef.current);
+        draftSaveTimerRef.current = null;
+      }
+      loadedForAccountRef.current = '';
+      autoSaveRef.current?.discard?.();
+      prevAccountIdRef.current = accountId;
+    }
+    setCanvasDraftUserId(accountId);
+  }, [accountId]);
+
   const refreshCanvasDrafts = useCallback(() => {
     setCanvasDrafts(listCanvasDrafts(templatesList));
   }, [templatesList]);
@@ -379,12 +394,14 @@ function CvEditorBeta({
   }, [refreshCanvasDrafts]);
 
   const buildTemplateCanvasLayout = useCallback((template) => {
-    let next = template ? createCanvasLayoutForTemplate(template) : createCanvasLayoutBlank();
+    let next = template
+      ? createCanvasLayoutForTemplate(template, templateOptions)
+      : createCanvasLayoutBlank();
     for (let pi = 0; pi < (next.pages?.length || 0); pi += 1) {
       next = reflowColumnBlocksOnPage(next, pi);
     }
     return next;
-  }, []);
+  }, [templateOptions]);
 
   const saveCurrentCanvasDraft = useCallback(() => {
     const currentLayout = layoutRef.current;
@@ -397,17 +414,27 @@ function CvEditorBeta({
 
   useEffect(() => {
     if (!layout || !cv || profileLoadError) return undefined;
+    if (loadedForAccountRef.current !== accountId) return undefined;
+    const ownerId = accountId;
     const id = setTimeout(() => {
+      if (getCanvasDraftUserId() !== ownerId || loadedForAccountRef.current !== ownerId) return;
       saveCanvasDraft(activeLayoutContextKey, layout, {
         label: canvasContextLabel(activeLayoutContextKey, templatesList),
       });
       refreshCanvasDrafts();
     }, 250);
-    return () => clearTimeout(id);
-  }, [layout, activeLayoutContextKey, templatesList, refreshCanvasDrafts, cv, profileLoadError]);
+    draftSaveTimerRef.current = id;
+    return () => {
+      clearTimeout(id);
+      if (draftSaveTimerRef.current === id) draftSaveTimerRef.current = null;
+    };
+  }, [layout, activeLayoutContextKey, templatesList, refreshCanvasDrafts, cv, profileLoadError, accountId]);
 
   const openCanvasContext = useCallback((contextKey, nextLayout, persistExtras = {}) => {
-    const hydrated = migrateLayoutToV3(nextLayout || createCanvasLayoutBlank());
+    const hydrated = cleanupCanvasHeaderOverlays(
+      migrateLayoutToV3(nextLayout || createCanvasLayoutBlank()),
+      cv,
+    );
     layoutRef.current = hydrated;
     resetLayout(hydrated);
     setSelectedBlockIds([]);
@@ -434,6 +461,8 @@ function CvEditorBeta({
 
   useEffect(() => {
     let aborted = false;
+    setCanvasDraftUserId(accountId);
+    setCv(null);
     setLoading(true);
     setProfileLoadError(null);
     designBridgeSeededRef.current = false;
@@ -444,6 +473,7 @@ function CvEditorBeta({
     apiGet('/api/cv?profile=1')
       .then((data) => {
         if (aborted) return;
+        loadedForAccountRef.current = accountId;
         const incoming = data && typeof data === 'object' ? data : {};
         const { layout: rawLayout, ...cvPayload } = incoming;
         const baseCv = typeof defaultCv === 'function' ? defaultCv() : defaultCv;
@@ -451,26 +481,31 @@ function CvEditorBeta({
         setCv(mergedCv);
         // Source de vérité pour le pont : template du profil API (pas localStorage).
         profileTemplateIdRef.current = String(mergedCv.template_id || '').trim();
-        const hydratedLayout = rawLayout
-          ? migrateLayoutToV3(rawLayout)
-          : createBlankLayoutV3();
         const contextKey = getActiveCanvasContext();
         const templates = templatesListRef.current;
+        const draft = loadCanvasDraft(contextKey);
+        const hydration = decideBetaCanvasHydration({
+          hasLayoutField: Object.prototype.hasOwnProperty.call(incoming, 'layout'),
+          rawLayout,
+          seedableProfile: cvHasSeedableProfileContent(mergedCv),
+          localDraftLayout: draft?.layout || null,
+        });
+        const hydratedLayout = cleanupCanvasHeaderOverlays(
+          hydration.mode === 'draft'
+            ? migrateLayoutToV3(draft.layout)
+            : (rawLayout ? migrateLayoutToV3(rawLayout) : createBlankLayoutV3()),
+          mergedCv,
+        );
         setActiveLayoutContextKey(contextKey);
         setActiveCanvasContext(contextKey);
-        if (rawLayout) {
+        if (hydration.mode === 'server' || hydration.mode === 'draft') {
           saveCanvasDraft(contextKey, hydratedLayout, {
             label: canvasContextLabel(contextKey, templates),
           });
           setCanvasDrafts(listCanvasDrafts(templates));
-          pendingProfileSeedRef.current = false;
-          setStartupPromptOpen(false);
-        } else {
-          // Import onboarding = données sans layout → peupler Beta dès que templates OK.
-          const seedable = cvHasSeedableProfileContent(mergedCv);
-          pendingProfileSeedRef.current = seedable;
-          setStartupPromptOpen(!seedable);
         }
+        pendingProfileSeedRef.current = hydration.seed;
+        setStartupPromptOpen(hydration.startup);
         resetLayout(hydratedLayout);
         setLoading(false);
       })
@@ -480,8 +515,11 @@ function CvEditorBeta({
         setCv(null);
         setLoading(false);
       });
-    return () => { aborted = true; };
-  }, [resetLayout, refreshKey, profileLoadAttempt]);
+    return () => {
+      aborted = true;
+      if (loadedForAccountRef.current === accountId) loadedForAccountRef.current = '';
+    };
+  }, [resetLayout, refreshKey, profileLoadAttempt, accountId]);
 
   // Libellés des brouillons locaux quand la liste templates arrive (async) -
   // sans re-fetch ni reset du layout en cours (fix B).
@@ -519,7 +557,6 @@ function CvEditorBeta({
       openCanvasContext(IMPORTED_CANVAS_CONTEXT_KEY, seeded, {
         template_id: persistId,
       });
-      setImportToast('Canvas généré depuis ton profil');
     } catch {
       setStartupPromptOpen(true);
     }
@@ -534,15 +571,18 @@ function CvEditorBeta({
   ]);
 
   // Recompute l’offre Stable→Beta quand templatesList arrive (souvent après le GET cv).
+  // AXE-345 : canvas vide = le startup « Comment veux-tu commencer ? » gère
+  // « Appliquer mon design Stable » — pas d’auto-modal empilée.
   useEffect(() => {
     if (loading || profileLoadError || !cv) return;
     if (!Array.isArray(templatesList) || templatesList.length === 0) return;
     if (designBridgeSeededRef.current) return;
+    designBridgeSeededRef.current = true;
+    if (isEmptyLayoutV3(layoutRef.current)) return;
     const tid = String(
       profileTemplateIdRef.current || cv.template_id || templateId || '',
     ).trim();
     const offer = buildStableToBetaOffer(layoutRef.current, tid, templatesList);
-    designBridgeSeededRef.current = true;
     setDesignBridgeOffer(offer);
   }, [loading, profileLoadError, cv, templatesList, templateId]);
 
@@ -567,12 +607,18 @@ function CvEditorBeta({
 
   const handlePickBlankCanvas = useCallback(() => {
     // Reset explicite : ignorer le brouillon local et forcer layout null côté API.
+    resumeStartupAfterImportRef.current = false;
+    setDesignBridgeOffer(null);
+    setDesignBridgeError('');
     clearCanvasDraft(BLANK_CANVAS_CONTEXT_KEY);
     const blank = createBlankLayoutV3();
     openCanvasContext(BLANK_CANVAS_CONTEXT_KEY, blank);
   }, [openCanvasContext]);
 
   const handleChooseAtsSafeTemplate = useCallback(() => {
+    resumeStartupAfterImportRef.current = false;
+    setDesignBridgeOffer(null);
+    setDesignBridgeError('');
     setStartupPromptOpen(false);
     setSidebarSection('design');
   }, []);
@@ -602,10 +648,11 @@ function CvEditorBeta({
     if (!layout || !payload || profileLoadError) return;
     const nextCv = mergeHeaderComposerCv(cv, payload.values, payload.fields);
     handleCvChange(nextCv);
-    const { layout: nextLayout, placedIds } = applyHeaderComposerToLayout(layout, 0, {
+    const { layout: composedLayout, placedIds } = applyHeaderComposerToLayout(layout, 0, {
       variantId: payload.variantId,
       fields: payload.fields,
     });
+    const nextLayout = cleanupCanvasHeaderOverlays(composedLayout, nextCv);
     commitLayout(nextLayout);
     // Persister cv + layout ensemble (évite un flush avec l’ancien cv).
     if (nextCv) autoSave.schedule({ ...nextCv, layout: nextLayout });
@@ -647,11 +694,22 @@ function CvEditorBeta({
     setOnboardingDismissed(true);
   }, []);
 
-  const onboardingOpen = shouldShowEditorOnboarding({
+  const canvasEmpty = isEmptyLayoutV3(layout);
+  const importSurfaceOpen = Boolean(
+    importModalOpen || importLoading,
+  );
+  const firstRunSurface = resolveEditorFirstRunSurface({
     dismissed: onboardingDismissed,
     loading,
     startupPromptOpen,
+    importOpen: importSurfaceOpen,
+    designBridgeOpen: Boolean(designBridgeOffer),
+    canvasEmpty,
   });
+  const onboardingOpen = firstRunSurface === EDITOR_FIRST_RUN_SURFACES.ONBOARDING;
+  const lockCanvasScroll = shouldLockCanvasScrollForFirstRun(firstRunSurface);
+  const showStartupPanel = firstRunSurface === EDITOR_FIRST_RUN_SURFACES.STARTUP;
+  const showDesignBridge = firstRunSurface === EDITOR_FIRST_RUN_SURFACES.DESIGN_BRIDGE;
 
   const handleGenerateStarterCanvas = useCallback(() => {
     const templates = templatesList || [];
@@ -705,7 +763,10 @@ function CvEditorBeta({
     setDesignBridgeConfirming(true);
     setDesignBridgeError('');
     try {
-      const applied = applyStableDesignToCanvas(cv, template, { templatesList });
+      const applied = applyStableDesignToCanvas(cv, template, {
+        templatesList,
+        templateOptions,
+      });
       if (!applied.ok || !applied.layout) {
         setDesignBridgeError(
           applied.reason === 'no_canvas_spec'
@@ -722,7 +783,7 @@ function CvEditorBeta({
     } finally {
       setDesignBridgeConfirming(false);
     }
-  }, [cv, templateId, templatesList, onTemplateIdChange, openCanvasContext]);
+  }, [cv, templateId, templateOptions, templatesList, onTemplateIdChange, openCanvasContext]);
 
   const handleDismissDesignBridge = useCallback(() => {
     setDesignBridgeOffer(null);
@@ -741,6 +802,7 @@ function CvEditorBeta({
       return;
     }
     // Opt-in via modal (warnings + Garder tel quel) — pas d’apply direct.
+    resumeStartupAfterImportRef.current = false;
     setStartupPromptOpen(false);
     setDesignBridgeError('');
     setDesignBridgeOffer(offer);
@@ -763,7 +825,10 @@ function CvEditorBeta({
     let importSource;
 
     if (chosenVariant?.layout) {
-      finalLayout = ensureImportLayoutHasContent(chosenVariant.layout, nextCv);
+      finalLayout = cleanupCanvasHeaderOverlays(
+        ensureImportLayoutHasContent(chosenVariant.layout, nextCv),
+        nextCv,
+      );
       recommendedTemplateId = chosenVariant.recommendedTemplateId || '';
       contentBlockCount = countContentBlocks(finalLayout);
       blockCount = chosenVariant.blockCount
@@ -783,7 +848,10 @@ function CvEditorBeta({
         visionMeta,
         annotations,
       }));
-      finalLayout = ensureImportLayoutHasContent(finalLayout, nextCv);
+      finalLayout = cleanupCanvasHeaderOverlays(
+        ensureImportLayoutHasContent(finalLayout, nextCv),
+        nextCv,
+      );
       contentBlockCount = countContentBlocks(finalLayout);
     }
 
@@ -811,7 +879,6 @@ function CvEditorBeta({
         'Import incomplet : aucun contenu affichable. Réessayez avec un PDF texte, ou saisissez le CV manuellement.',
       );
       setImportModalOpen(true);
-      setImportChooser(null);
       return;
     }
 
@@ -832,9 +899,9 @@ function CvEditorBeta({
       onTemplateOptionsChange(nextTemplateOptions);
     }
     setCv(nextCv);
+    resumeStartupAfterImportRef.current = false;
     setStartupPromptOpen(false);
     setImportModalOpen(false);
-    setImportChooser(null);
     setImportError('');
     resetLayout(finalLayout);
     layoutRef.current = finalLayout;
@@ -860,9 +927,7 @@ function CvEditorBeta({
     } catch (err) {
       setLoadError(err?.message || 'Import réussi mais enregistrement échoué.');
     }
-    if (chosenVariant) {
-      setImportToast(importChooserToastMessage(chosenVariant));
-    } else {
+    if (!chosenVariant) {
       const label = recommendTemplateLabel(recTemplate?.id, templates);
       let sourceNote = '';
       if (importSource === 'structural') {
@@ -897,13 +962,15 @@ function CvEditorBeta({
 
   const runCvImport = useCallback(async (importFn) => {
     setImportModalOpen(false);
-    setImportChooser(null);
     setStartupPromptOpen(false);
     setImportLoading(true);
     setImportStepIndex(0);
+    setImportProgress(0);
     setImportError('');
     if (importCleanupRef.current) importCleanupRef.current();
-    importCleanupRef.current = startImportLoadingAnimation(setImportStepIndex);
+    importCleanupRef.current = startImportLoadingAnimation(setImportStepIndex, {
+      setProgress: setImportProgress,
+    });
     try {
       const result = await importFn();
       finishImportLoadingAnimation(setImportStepIndex);
@@ -914,59 +981,15 @@ function CvEditorBeta({
         visionMeta,
         importPolicy,
         blockAnnotations,
-        semanticMeta,
       } = extractImportApiResponse(result);
       const nextCv = cvFromImportPayload(rawCv);
-      const templates = templatesList || [];
-      const { variants: built } = buildImportLayoutVariants(nextCv, templates, {
-        templateId,
+      // Une seule sortie : la copie du document (variante « Design proche »).
+      await applyImportedCvToCanvas(nextCv, {
         layoutHints,
         visionLayout,
         visionMeta,
-        annotations: blockAnnotations,
-      });
-      let scoredRows = [];
-      let bestTotal = null;
-      try {
-        const scored = await scoreImportLayoutVariants(built, nextCv, {
-          includeLayout: true,
-        });
-        scoredRows = scored.variants || [];
-        bestTotal = scored.best_total;
-      } catch {
-        // Scoring optionnel pour le chooser : on affiche quand même les 3 layouts.
-        scoredRows = [];
-      }
-      const merged = sortImportVariantsForChooser(
-        mergeBuiltAndScoredVariants(built, scoredRows),
-      );
-      if (merged.length === 0) {
-        await applyImportedCvToCanvas(nextCv, {
-          layoutHints,
-          visionLayout,
-          visionMeta,
-          importPolicy,
-          annotations: blockAnnotations,
-        });
-        return;
-      }
-      // Affiche déjà le layout par défaut pendant le chooser (évite canvas vide).
-      const defaultId = defaultImportVariantId(merged);
-      const previewVariant = resolveImportVariant(merged, defaultId) || merged[0];
-      if (previewVariant?.layout) {
-        const previewLayout = ensureImportLayoutHasContent(previewVariant.layout, nextCv);
-        setCv(nextCv);
-        resetLayout(previewLayout);
-        layoutRef.current = previewLayout;
-      }
-      setImportChooser({
-        cv: nextCv,
-        variants: merged,
-        bestTotal,
-        selectedId: defaultId,
         importPolicy,
-        semanticMeta,
-        blockAnnotations,
+        annotations: blockAnnotations,
       });
     } catch (err) {
       setImportError(err?.message || 'Erreur lors de l\'import.');
@@ -978,48 +1001,11 @@ function CvEditorBeta({
         importCleanupRef.current = null;
       }
     }
-  }, [applyImportedCvToCanvas, templatesList, templateId, resetLayout]);
-
-  const handleImportChooserConfirm = useCallback(async (variant) => {
-    if (!importChooser?.cv || !variant?.layout) return;
-    setImportChooserConfirming(true);
-    try {
-      await applyImportedCvToCanvas(importChooser.cv, {
-        chosenVariant: variant,
-        importPolicy: importChooser.importPolicy,
-      });
-    } finally {
-      setImportChooserConfirming(false);
-    }
-  }, [importChooser, applyImportedCvToCanvas]);
-
-  const handleImportChooserCancel = useCallback(async () => {
-    if (!importChooser?.cv) {
-      setImportChooser(null);
-      return;
-    }
-    const designOrDefault = resolveImportVariant(
-      importChooser.variants,
-      'design',
-    );
-    setImportChooserConfirming(true);
-    try {
-      if (designOrDefault?.layout) {
-        await applyImportedCvToCanvas(importChooser.cv, {
-          chosenVariant: designOrDefault,
-          importPolicy: importChooser.importPolicy,
-        });
-      } else {
-        setImportChooser(null);
-      }
-    } finally {
-      setImportChooserConfirming(false);
-    }
-  }, [importChooser, applyImportedCvToCanvas]);
+  }, [applyImportedCvToCanvas]);
 
   const handleImportFile = useCallback((file) => {
     if (!file) return;
-    runCvImport(() => apiPostFile('/api/cv/import', file));
+    runCvImport(() => apiPostFile('/api/cv/import', file, 'file', { timeoutMs: CV_IMPORT_REQUEST_TIMEOUT_MS }));
   }, [runCvImport]);
 
   useEffect(() => {
@@ -1175,6 +1161,8 @@ function CvEditorBeta({
     for (const [blockId, newHmm] of pending.entries()) {
       const found = findBlock(next, blockId);
       if (!found?.block) continue;
+      if (found.block.style?.lock_geometry) continue;
+      if (found.block.style?.lock_height) continue;
       const cur = found.block.h ?? 0;
       if (Math.abs(newHmm - cur) < 0.4) continue;
       next = updateBlock(next, blockId, { h: newHmm });
@@ -1993,13 +1981,13 @@ function CvEditorBeta({
         <div className="cv-editor-beta-load-error-card">
           <h2 id="cv-beta-load-err-title">Profil inaccessible</h2>
           <p>{profileLoadError}</p>
-          <button
+          <Button
             type="button"
-            className="button button-primary"
+            variant="primary"
             onClick={() => setProfileLoadAttempt((k) => k + 1)}
           >
             Réessayer
-          </button>
+          </Button>
         </div>
       </div>
     );
@@ -2431,7 +2419,13 @@ function CvEditorBeta({
               )}
             </div>
           </div>
-          <main className="cv-editor-beta-canvas">
+          <main
+            className={
+              lockCanvasScroll
+                ? 'cv-editor-beta-canvas cv-editor-beta-canvas--overlay-lock'
+                : 'cv-editor-beta-canvas'
+            }
+          >
             <FreeCanvas
               layout={layout}
               cv={cv}
@@ -2465,6 +2459,7 @@ function CvEditorBeta({
               onSpillOverflow={handleSpillOverflow}
               onEmptyAddSection={handleEmptyAddSection}
               onEmptyChooseTemplate={handleEmptyChooseTemplate}
+              hideEmptyState={lockCanvasScroll}
             />
             {importToast && (
               <div className="cv-editor-beta-import-toast" role="status">
@@ -2475,8 +2470,14 @@ function CvEditorBeta({
               open={onboardingOpen}
               onDismiss={handleDismissOnboarding}
             />
-            {startupPromptOpen && (
-              <section className="cv-editor-beta-start-panel" role="dialog" aria-modal="true" aria-label="Démarrer le canvas">
+            {showStartupPanel && (
+              <section
+                className="cv-editor-beta-start-panel"
+                role="dialog"
+                aria-modal="true"
+                aria-label="Démarrer le canvas"
+                data-testid="editor-startup-panel"
+              >
                 <div className="cv-editor-beta-start-panel__backdrop" aria-hidden />
                 <div className="cv-editor-beta-start-panel__card">
                   <span className="cv-editor-beta-start-panel__eyebrow">Démarrer</span>
@@ -2491,6 +2492,8 @@ function CvEditorBeta({
                       onClick={() => {
                         clearCanvasSelection();
                         setImportError('');
+                        resumeStartupAfterImportRef.current = true;
+                        setStartupPromptOpen(false);
                         setImportModalOpen(true);
                       }}
                     >
@@ -2539,7 +2542,7 @@ function CvEditorBeta({
                 </div>
               </section>
             )}
-            {designBridgeOffer && !startupPromptOpen && (
+            {showDesignBridge && (
               <DesignModeBridgeModal
                 offer={designBridgeOffer}
                 confirming={designBridgeConfirming}
@@ -2591,9 +2594,14 @@ function CvEditorBeta({
       </footer>
 
       <EditorCvImportModal
-        open={importModalOpen && !importLoading && !importChooser}
+        open={importModalOpen && !importLoading}
         onClose={() => {
-          if (!importLoading) setImportModalOpen(false);
+          if (importLoading) return;
+          setImportModalOpen(false);
+          if (resumeStartupAfterImportRef.current && isEmptyLayoutV3(layoutRef.current)) {
+            resumeStartupAfterImportRef.current = false;
+            setStartupPromptOpen(true);
+          }
         }}
         onImportFile={handleImportFile}
         loading={importLoading}
@@ -2603,21 +2611,11 @@ function CvEditorBeta({
       {importLoading && (
         <CvImportLoadingOverlay
           stepIndex={importStepIndex}
+          progress={importProgress}
           title="Import & adaptation Canva en cours"
           subtitle="Analyse en cours - cela peut prendre jusqu'à une minute pour un PDF complexe."
         />
       )}
-
-      <EditorImportLayoutChooserModal
-        open={Boolean(importChooser) && !importLoading}
-        variants={importChooser?.variants || []}
-        bestTotal={importChooser?.bestTotal}
-        initialSelectedId={importChooser?.selectedId || ''}
-        policyNotice={importChooser?.importPolicy?.message || ''}
-        confirming={importChooserConfirming}
-        onConfirm={handleImportChooserConfirm}
-        onCancel={handleImportChooserCancel}
-      />
 
       <HeaderComposerModal
         open={headerComposerOpen}

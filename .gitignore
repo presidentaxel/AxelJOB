@@ -29,6 +29,7 @@ wheels/
 
 # Environnements virtuels
 .venv/
+.venv
 venv/
 ENV/
 env/

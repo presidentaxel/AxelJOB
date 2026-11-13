@@ -53,6 +53,8 @@ export function applyStableDesignToCanvas(cv, template, options = {}) {
   const result = buildAdaptedCanvasLayoutForCv(cv, template, {
     templatesList: options.templatesList,
     templateId: template.id,
+    preserveReplicaGeometry: true,
+    optionValues: options.optionValues || options.templateOptions || null,
   });
   return {
     ok: true,

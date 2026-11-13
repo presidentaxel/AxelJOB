@@ -125,6 +125,7 @@ export default function TemplateModal({
   templateId,
   onChangeTemplate,
   profileLayout = null,
+  includeBeta = false,
   onBetaUnavailable = null,
 }) {
   const ref = useRef(null);
@@ -149,7 +150,7 @@ export default function TemplateModal({
 
   if (!open) return null;
 
-  const catalog = withBetaCanvasTemplate(templates).filter((t) => !isCustomTemplate(t));
+  const catalog = withBetaCanvasTemplate(templates, { includeBeta }).filter((t) => !isCustomTemplate(t));
   const betaReady = hasUsableBetaCanvasLayout(profileLayout);
 
   const handleSelect = (t) => {
