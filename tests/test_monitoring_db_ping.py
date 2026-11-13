@@ -70,6 +70,25 @@ def _arm(monkeypatch: pytest.MonkeyPatch):
     return m, sent
 
 
+def test_dead_connection_is_dropped_before_retry() -> None:
+    import backend.monitoring_ops as m
+
+    class _Pool(_FlakyPool):
+        def __init__(self) -> None:
+            super().__init__()
+            self.checks = 0
+
+        def check(self) -> None:
+            self.checks += 1
+
+    pool = _Pool()
+    ok, err = m._select_one(pool)
+    assert ok is True
+    assert err == ""
+    assert pool.checks == 1
+    assert pool.calls == 2
+
+
 def test_retry_succeeds_after_a_dead_connection() -> None:
     import backend.monitoring_ops as m
 

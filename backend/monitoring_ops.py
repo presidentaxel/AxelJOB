@@ -436,16 +436,29 @@ def _checkout_database(pool: Any) -> Any:
         return pool.connection()
 
 
+def _drop_dead_connection(pool: Any) -> None:
+    """Le pool prod garde au moins une connexion. Sans ça, le second essai reprend la même, morte."""
+    check = getattr(pool, "check", None)
+    if not callable(check):
+        return
+    try:
+        check()
+    except Exception:
+        logger.debug("pool check after failed ping skipped", exc_info=True)
+
+
 def _select_one(pool: Any) -> tuple[bool, str]:
-    """SELECT 1, retenté une fois : une connexion rendue au pool est souvent morte."""
+    """SELECT 1, retenté une fois après avoir écarté la connexion morte."""
     last = ""
-    for _ in (1, 2):
+    for attempt in (1, 2):
         try:
             with _checkout_database(pool) as conn, conn.cursor() as cur:
                 cur.execute("SELECT 1")
             return True, ""
         except Exception as exc:
             last = type(exc).__name__
+            if attempt == 1:
+                _drop_dead_connection(pool)
     return False, last
 
 
