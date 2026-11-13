@@ -148,3 +148,6 @@ Branche `fix/*` depuis `main`, PR classique, merge indépendamment de #33.
 
 **L'agent Cursor peut-il push sur `main` ?**  
 Non - règle `.cursor/rules/pre-push-ci.mdc` + hooks.
+
+**Un merge dans `prod`, ça met le droplet à jour ?**  
+Oui, via `deploy-prod.yml` (push sur `prod` uniquement). Un merge dans `main` ne déploie pas.

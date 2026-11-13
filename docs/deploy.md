@@ -47,11 +47,17 @@ Resultat attendu :
 
 ## 4) Mise a jour
 
+Le chemin nominal est le CD : un push sur `prod` lance `.github/workflows/deploy-prod.yml` dans l'Environment GitHub `production`. Secrets : `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_SSH_KEY`. Le script est `scripts/deploy-prod.sh`. Il aligne `/opt/cv-bot` sur `origin/prod`, reconstruit les images et vérifie `/health` dans le conteneur backend.
+
+Un push sur `main` ne déploie pas.
+
+Fallback si le CD est down :
+
 ```bash
 cd /opt/cv-bot
-git pull origin main
-docker compose build
-docker compose up -d
+git fetch origin
+git checkout -f -B prod origin/prod
+bash scripts/deploy-prod.sh
 ```
 
 ## 5) Configuration critique
