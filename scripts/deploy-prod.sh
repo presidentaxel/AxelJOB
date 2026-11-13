@@ -57,9 +57,14 @@ if [[ "$SKIP_PULL" -eq 0 ]]; then
   [[ "$branch" == "prod" ]] || die "refuse après pull (HEAD=$branch, besoin prod)"
 fi
 
-dirty="$(git status --porcelain --untracked-files=no || true)"
-if [[ -n "$dirty" ]]; then
-  echo "$dirty" >&2
+# Les fichiers versionnés en CRLF apparaissent « modifiés » au checkout LF.
+# On ne bloque que s'il y a un vrai changement de contenu.
+content_dirty="$(
+  git diff --ignore-cr-at-eol --numstat
+  git diff --cached --ignore-cr-at-eol --numstat
+)"
+if [[ -n "${content_dirty//[[:space:]]/}" ]]; then
+  git status --porcelain --untracked-files=no >&2 || true
   die "working tree tracked dirty — refuser un deploy ambigu"
 fi
 
