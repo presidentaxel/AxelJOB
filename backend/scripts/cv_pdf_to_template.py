@@ -46,7 +46,7 @@ from dotenv import load_dotenv
 
 load_dotenv(PROJECT_ROOT / ".env")
 
-from backend.config import GEMINI_MODELS_VISION, USE_SUPABASE
+from backend.config import GEMINI_MODELS_VISION, USE_SUPABASE, gemini_client
 from backend.db import create_pending_custom_template, update_custom_template_content
 
 # Variables Jinja2 que le moteur de rendu CV injecte (le template doit les utiliser).
@@ -152,11 +152,10 @@ def generate_template_with_ai(
 ) -> tuple[str | None, str | None]:
     """Appelle Gemini avec l'image + prompt, retourne (html_content, css_content) ou (None, None)."""
     try:
-        from google import genai
         from google.genai import types
     except ImportError:
         return None, None
-    client = genai.Client(api_key=api_key)
+    client = gemini_client(api_key)
     image_part = types.Part.from_bytes(data=image_jpeg_bytes, mime_type="image/jpeg")
     contents = [image_part, CV_TEMPLATE_AI_PROMPT]
     for model_id in GEMINI_MODELS_VISION:

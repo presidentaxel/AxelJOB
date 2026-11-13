@@ -12,7 +12,7 @@ import time
 from collections.abc import Callable
 from typing import Any
 
-from backend.config import GEMINI_MODEL_DEFAULT
+from backend.config import GEMINI_MODEL_DEFAULT, gemini_client
 
 _KEY_RE = re.compile(r"AIza[0-9A-Za-z\-_]{8,}")
 _ALERT_REASONS = frozenset({"billing_prepay", "auth", "quota"})
@@ -163,11 +163,10 @@ def _status_code(exc: BaseException) -> int | None:
 
 
 def _default_generate() -> None:
-    from google import genai
     from google.genai import types
 
     key = os.environ.get("GEMINI_API_KEY", "").strip()
-    client = genai.Client(api_key=key)
+    client = gemini_client(key)
     client.models.generate_content(
         model=GEMINI_MODEL_DEFAULT,
         contents="ping",
