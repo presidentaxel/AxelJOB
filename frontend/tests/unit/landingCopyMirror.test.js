@@ -14,8 +14,8 @@ const ROOT = fileURLToPath(new URL('../..', import.meta.url));
 
 function norm(value) {
   return String(value)
-    .replace(/&amp;/g, '&')
     .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
     .replace(/\u2019/g, "'")
     .replace(/\s+/g, ' ')
     .trim();
