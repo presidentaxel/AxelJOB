@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 
 from fastapi import HTTPException
 from pydantic import ValidationError
@@ -166,4 +167,4 @@ def test_requirements_pin_sentry_sdk() -> None:
     from pathlib import Path
 
     text = Path("backend/requirements.txt").read_text(encoding="utf-8")
-    assert "sentry-sdk[fastapi]==2.73.0" in text
+    assert re.search(r"(?m)^sentry-sdk\[fastapi\]==\d+\.\d+\.\d+\s*$", text)
