@@ -22,3 +22,4 @@ Ce document suit l'avancement de la mise en conformite avec `docs/guide-bonnes-p
 - [ ] Les tests couvrent auth/permissions/endpoints sensibles
 - [ ] Les parcours critiques frontend sont verifies en E2E
 - [ ] Les docs de contribution et standards sont a jour
+- [ ] Image Open Graph : JPEG sans alpha, nom versionne, `npm run build` ne la regenere pas (AXE-909, voir `frontend/README.md`)
