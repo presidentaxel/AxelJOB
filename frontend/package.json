@@ -14,6 +14,7 @@
     "landing:critical": "node scripts/sync-landing-critical-css.mjs",
     "public-header:sync": "node scripts/sync-public-header.mjs",
     "build:brand-assets": "node scripts/generate-brand-assets.mjs",
+    "build:og-image": "node scripts/generate-og-image.mjs",
     "build:favicon-webp": "node scripts/favicon-webp.mjs",
     "lint": "eslint .",
     "lint:css-hex": "node scripts/lint-css-hex.mjs",
