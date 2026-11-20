@@ -37,10 +37,28 @@ def get_export_folder_name(entreprise: str, poste: str) -> str:
     return f"{ent} - {pos}" if ent else pos
 
 
-def _fiche_base_dir(base_dir: "str | Path | None") -> Path:
-    if base_dir:
-        return Path(base_dir).resolve()
+def _fiche_documents_dir() -> Path:
     return Path(__file__).resolve().parents[1] / "templates" / "documents"
+
+
+def _fiche_base_dir(base_dir: "str | Path | None") -> Path:
+    """Dossier qui contient ``fiche_poste_template.html``.
+
+    Les appelants passent souvent la racine du dépôt (``BASE_DIR``). Le
+    template est dans ``backend/templates/documents``, pas à la racine : un
+    ``FileSystemLoader`` sur ``/app`` lève ``TemplateNotFound`` et la fiche
+    n'est pas enregistrée.
+    """
+    documents = _fiche_documents_dir()
+    if not base_dir:
+        return documents
+    root = Path(base_dir).resolve()
+    if (root / "fiche_poste_template.html").is_file():
+        return root
+    nested = root / "backend" / "templates" / "documents"
+    if (nested / "fiche_poste_template.html").is_file():
+        return nested
+    return documents
 
 
 def _render_fiche_html(
