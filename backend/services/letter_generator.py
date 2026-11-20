@@ -6,7 +6,7 @@ import re
 from datetime import datetime
 from pathlib import Path
 
-from backend.config import GEMINI_MODEL_DEFAULT
+from backend.config import GEMINI_MODEL_DEFAULT, gemini_client
 
 LETTER_SYSTEM_PROMPT = """Tu es un expert en rédaction de lettres de motivation.
 Tu rédiges des lettres professionnelles, percutantes et personnalisées.
@@ -125,10 +125,9 @@ def generer_corps_lettre(
     api_key = os.environ.get("GEMINI_API_KEY")
     if not api_key:
         raise RuntimeError("GEMINI_API_KEY manquante pour générer la lettre.")
-    from google import genai
     from google.genai import types
 
-    client = genai.Client(api_key=api_key)
+    client = gemini_client(api_key)
     config = types.GenerateContentConfig(system_instruction=LETTER_SYSTEM_PROMPT, temperature=0.4)
     user = f"<cv>\n{_cv_resume_for_prompt(cv)}\n</cv>\n\n<fiche_poste>\nPoste visé : {poste}\nEntreprise : {entreprise}\n\n{(fiche_poste or '')[:3500].strip()}\n</fiche_poste>"
     r = client.models.generate_content(model=GEMINI_MODEL_DEFAULT, contents=user, config=config)

@@ -10,7 +10,7 @@ import os
 import re
 from pathlib import Path
 
-from backend.config import GEMINI_MODEL_DEFAULT
+from backend.config import GEMINI_MODEL_DEFAULT, gemini_client
 
 try:
     from dotenv import load_dotenv
@@ -212,7 +212,6 @@ def select_cv_content_for_a4(
         return None
 
     try:
-        from google import genai
         from google.genai import types
     except ImportError:
         return None
@@ -225,7 +224,7 @@ def select_cv_content_for_a4(
 
     ensure_budget(user_id)
 
-    client = genai.Client(api_key=api_key)
+    client = gemini_client(api_key)
     prompt = _build_select_prompt(cv, offre)
 
     r = client.models.generate_content(

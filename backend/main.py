@@ -54,6 +54,7 @@ from backend.config import (
     SUPPORT_EMAIL,
     USE_SUPABASE,
     USE_SUPABASE_PG,
+    gemini_client,
     supabase_data_mode_info,
     thread_pool_max_workers,
     trusted_host_names,
@@ -1112,10 +1113,9 @@ def _apply_linkedin_changes_with_ai(cv: dict, changes: list[dict], user_id: str 
             if api_key:
                 try:
                     ensure_budget(user_id)
-                    from google import genai
                     from google.genai import types
 
-                    client = genai.Client(api_key=api_key)
+                    client = gemini_client(api_key)
                     prompt = (
                         "Tu adaptes un texte issu de LinkedIn pour qu'il convienne à un CV français professionnel. "
                         "Garde le sens, enlève le ton réseau social, rends-le concis et percutant. "
@@ -1603,12 +1603,11 @@ def _parse_cv_text_with_ai(text: str, user_id: str | None = None) -> dict:
     if not api_key:
         raise HTTPException(status_code=500, detail="GEMINI_API_KEY manquante.")
 
-    from google import genai
     from google.genai import types
 
     from backend.services.adapter import _extract_json
 
-    client = genai.Client(api_key=api_key)
+    client = gemini_client(api_key)
     prompt = _CV_IMPORT_SYSTEM_PROMPT.strip() + "\n\n---\n\nTexte du CV :\n\n" + text[:8000]
     cfg = types.GenerateContentConfig(temperature=0.1)
 
@@ -1676,12 +1675,11 @@ def _parse_cv_import_with_ai(text: str, user_id: str | None = None) -> tuple[dic
         api_key = os.environ.get("GEMINI_API_KEY")
         if not api_key:
             raise HTTPException(status_code=500, detail="GEMINI_API_KEY manquante.")
-        from google import genai
         from google.genai import types
 
         from backend.services.adapter import _extract_json
 
-        client = genai.Client(api_key=api_key)
+        client = gemini_client(api_key)
         cfg = types.GenerateContentConfig(temperature=0.1)
         models_to_try = [GEMINI_MODEL_IMPORT]
         if GEMINI_MODEL_IMPORT_FALLBACK and GEMINI_MODEL_IMPORT_FALLBACK != GEMINI_MODEL_IMPORT:
