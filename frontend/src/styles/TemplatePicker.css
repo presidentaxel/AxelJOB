@@ -1,29 +1,117 @@
 /* TemplatePicker - compact bar above preview */
 
+/* --- Barre au-dessus de l'aperçu : réglages du design à gauche, export à droite --- */
 .tpl-bar {
+  container: tpl-bar / inline-size;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--ds-space-sm);
-  padding: var(--ds-space-sm) 0;
+  padding: var(--ds-space-sm) var(--ds-space-lg);
   flex-shrink: 0;
-  border-bottom: 1px solid var(--ds-color-border-default);
+  border-bottom: 1px solid var(--ds-color-border-subtle);
   background: transparent;
-  flex-wrap: wrap;
-  row-gap: var(--ds-space-sm);
 }
 
-.tpl-bar-left {
+.tpl-bar-left,
+.tpl-bar-right {
   display: flex;
-  gap: 6px;
   align-items: center;
-  flex-wrap: wrap;
+  gap: var(--ds-space-xs);
   min-width: 0;
 }
 
 .tpl-bar-right {
   position: relative;
+  flex-shrink: 0;
 }
+
+/* Trois boutons, un seul style : discret, même hauteur, bordure claire, fond de la barre. */
+.tpl-btn-open-modal,
+.tpl-gear,
+.tpl-btn-bar-extra {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ds-space-xs);
+  height: var(--ds-size-button-sm);
+  padding: 0 var(--ds-space-md);
+  border: 1px solid var(--ds-color-border-default);
+  border-radius: var(--ds-radius-action);
+  background: transparent;
+  color: var(--ds-color-text-default);
+  font-size: var(--ds-font-size-label-sm);
+  font-weight: var(--ds-font-weight-medium);
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background var(--ds-motion-duration-fast) var(--ds-motion-easing-standard),
+    border-color var(--ds-motion-duration-fast) var(--ds-motion-easing-standard);
+}
+
+.tpl-btn-open-modal:hover,
+.tpl-gear:hover,
+.tpl-gear--open,
+.tpl-btn-bar-extra:hover:not(:disabled) {
+  background: var(--ds-color-action-secondary-bg-hover);
+  border-color: var(--ds-color-border-input);
+}
+
+.tpl-btn-open-modal:focus-visible,
+.tpl-gear:focus-visible,
+.tpl-btn-bar-extra:focus-visible {
+  outline: 2px solid var(--ds-color-border-focus);
+  outline-offset: 2px;
+}
+
+.tpl-btn-bar-extra:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.tpl-btn-open-modal {
+  min-width: 0;
+}
+
+.tpl-btn-open-modal-icon,
+.tpl-btn-bar-extra-icon,
+.tpl-gear svg {
+  display: flex;
+  flex-shrink: 0;
+  color: var(--ds-color-text-subtle);
+}
+
+.tpl-btn-open-modal-label {
+  color: var(--ds-color-text-subtle);
+  font-weight: var(--ds-font-weight-regular);
+}
+
+.tpl-btn-open-modal-current {
+  min-width: 0;
+  max-width: 10rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: var(--ds-font-weight-semibold);
+}
+
+.tpl-btn-open-modal-chevron {
+  flex-shrink: 0;
+  color: var(--ds-color-text-subtle);
+}
+
+/* Barre étroite : on garde les icônes et le nom du modèle, pas les libellés. */
+@container tpl-bar (max-width: 440px) {
+  .tpl-btn-open-modal-label,
+  .tpl-bar-btn-label {
+    display: none;
+  }
+  .tpl-gear,
+  .tpl-btn-bar-extra {
+    padding: 0 var(--ds-space-sm);
+  }
+}
+
+
+
 
 /* Template chip */
 .tpl-chip {
@@ -139,30 +227,8 @@
   border-radius: 0.5px;
 }
 
-/* Gear button */
-.tpl-gear {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: var(--ds-size-button-sm);
-  height: var(--ds-size-button-sm);
-  border-radius: var(--ds-radius-action);
-  border: 1px solid transparent;
-  background: transparent;
-  color: var(--ds-color-text-muted);
-  cursor: pointer;
-}
 
-.tpl-gear:hover,
-.tpl-gear--open {
-  background: var(--ds-color-bg-subtle);
-  color: var(--ds-color-text-default);
-}
 
-.tpl-gear:focus-visible {
-  outline: 2px solid var(--ds-color-border-focus);
-  outline-offset: 2px;
-}
 
 /* Popover */
 .tpl-popover {
@@ -458,95 +524,18 @@
   border-color: var(--accent);
 }
 
-/* --- Bouton Template (ouvre la modale) --- */
-.tpl-btn-open-modal {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--ds-space-sm);
-  min-height: var(--ds-size-button-sm);
-  padding: 0 var(--ds-space-md);
-  border: 1px solid var(--ds-color-action-secondary-border);
-  border-radius: var(--ds-radius-action);
-  background: var(--ds-color-action-secondary-bg);
-  color: var(--ds-color-action-secondary-fg);
-  font-size: 0.8125rem;
-  font-weight: 500;
-  cursor: pointer;
-}
 
-.tpl-btn-open-modal:hover {
-  background: var(--ds-color-action-secondary-bg-hover);
-}
 
-.tpl-btn-open-modal:focus-visible {
-  outline: 2px solid var(--ds-color-border-focus);
-  outline-offset: 2px;
-}
 
-.tpl-btn-open-modal-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--ds-color-text-muted);
-}
 
-.tpl-btn-open-modal-label {
-  color: var(--ds-color-text-muted);
-}
 
-.tpl-btn-open-modal-current {
-  color: var(--ds-color-text-default);
-  font-weight: 500;
-  max-width: 8rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 
-.tpl-btn-open-modal-chevron {
-  flex-shrink: 0;
-  color: var(--ds-color-text-muted);
-}
 
-.tpl-btn-open-modal:hover .tpl-btn-open-modal-chevron {
-  transform: translateY(1px);
-}
 
-/* Bouton compagnon (ex. PDF CV de base) - aligné sur tpl-btn-open-modal */
-.tpl-btn-bar-extra {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--ds-space-sm);
-  min-height: var(--ds-size-button-sm);
-  padding: 0 var(--ds-space-md);
-  border: 1px solid var(--ds-color-action-secondary-border);
-  border-radius: var(--ds-radius-action);
-  background: var(--ds-color-action-secondary-bg);
-  color: var(--ds-color-action-secondary-fg);
-  font-size: 0.8125rem;
-  font-weight: 500;
-  cursor: pointer;
-  white-space: nowrap;
-}
 
-.tpl-btn-bar-extra:hover:not(:disabled) {
-  background: var(--ds-color-action-secondary-bg-hover);
-}
 
-.tpl-btn-bar-extra:focus-visible {
-  outline: 2px solid var(--ds-color-border-focus);
-  outline-offset: 2px;
-}
 
-.tpl-btn-bar-extra:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
 
-.tpl-btn-bar-extra-icon {
-  display: flex;
-  color: var(--ds-color-text-muted);
-}
 
 /* --- Modale templates --- */
 .tpl-modal-backdrop {

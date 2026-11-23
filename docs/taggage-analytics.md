@@ -645,9 +645,11 @@ Préfixe `app-nav-` (distinct de `nav-` marketing).
 | `app-nav-link-cv` | link | tertiary | topbar | `/app/cv` Adapter mon CV |
 | `app-nav-link-candidatures` | link | tertiary | topbar | `/app/postule` |
 | `app-nav-link-profil` | link | tertiary | topbar | `/app/profil` |
-| `app-nav-link-settings` | link | tertiary | topbar | `/app/settings` |
-| `app-nav-link-support` | link | tertiary | topbar | `/app/support` |
-| `app-nav-link-monitoring` | link | tertiary | topbar | `/app/monitoring` (compte support seulement) |
+| `app-nav-cta-settings` | cta | tertiary | menu compte (icône utilisateur) | `/app/compte/parametres` (AXE-1019) |
+| `app-nav-cta-support` | cta | tertiary | menu compte (icône utilisateur) | `/app/compte/support` (AXE-1019) |
+| `app-nav-link-settings` | link | tertiary | onglets page Compte | `/app/compte/parametres` |
+| `app-nav-link-support` | link | tertiary | onglets page Compte | `/app/compte/support` |
+| `app-nav-link-monitoring` | link | tertiary | menu compte (icône utilisateur) | `/app/monitoring` (compte support seulement, AXE-1019) |
 | `app-nav-cta-upgrade` | cta | primary | topbar right | Passer Pro (plan free) |
 | `app-nav-cta-pro` | cta | secondary | topbar right | Badge Pro (plan pro) |
 | `app-nav-cta-account` | cta | tertiary | menu compte | Ouvrir le menu |

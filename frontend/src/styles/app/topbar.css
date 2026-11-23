@@ -183,6 +183,10 @@
   transition: background 0.12s;
 }
 
+.topbar-account-menu-item:is(a) {
+  text-decoration: none; /* liens Paramètres / Support (AXE-1019) */
+}
+
 .topbar-account-menu-item:hover {
   background: var(--color-soft-stone);
 }

@@ -10,6 +10,10 @@ export const APP_ROUTES = {
   postule: `${APP_BASE}/postule`,
   profil: `${APP_BASE}/profil`,
   linkedin: `${APP_BASE}/linkedin`,
+  compte: `${APP_BASE}/compte`,
+  compteParametres: `${APP_BASE}/compte/parametres`,
+  compteSupport: `${APP_BASE}/compte/support`,
+  /** Anciennes URL, redirigées vers un onglet de la page Compte (AXE-1019). */
   settings: `${APP_BASE}/settings`,
   support: `${APP_BASE}/support`,
   monitoring: `${APP_BASE}/monitoring`,
@@ -33,8 +37,22 @@ export function getViewFromPathname(pathname) {
   if (pathname.startsWith(APP_ROUTES.postule)) return 'candidatures';
   if (pathname.startsWith(APP_ROUTES.profil)) return 'profil';
   if (pathname.startsWith(APP_ROUTES.linkedin)) return 'profil';
+  if (pathname.startsWith(APP_ROUTES.compteSupport)) return 'support';
+  if (pathname.startsWith(APP_ROUTES.compte)) return 'settings';
   if (pathname.startsWith(APP_ROUTES.settings)) return 'settings';
   if (pathname.startsWith(APP_ROUTES.support)) return 'support';
   if (pathname.startsWith(APP_ROUTES.monitoring)) return 'monitoring';
   return 'cv';
+}
+
+/**
+ * Anciennes URL Paramètres / Support et /app/compte nu → onglet de la page Compte.
+ * Renvoie null si aucune redirection n'est nécessaire.
+ */
+export function accountRedirectFor(pathname) {
+  if (!pathname) return null;
+  if (pathname.startsWith(APP_ROUTES.settings)) return APP_ROUTES.compteParametres;
+  if (pathname.startsWith(APP_ROUTES.support)) return APP_ROUTES.compteSupport;
+  if (pathname === APP_ROUTES.compte || pathname === `${APP_ROUTES.compte}/`) return APP_ROUTES.compteParametres;
+  return null;
 }

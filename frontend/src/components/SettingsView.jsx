@@ -596,11 +596,11 @@ export default function SettingsView({
       <SettingsSection
         id="settings-editor-title"
         title="Éditeur"
-        lead="Mode Beta et données locales (non synchronisées entre appareils)."
+        lead="Nouvel éditeur et données locales (non synchronisées entre appareils)."
       >
         <div className="settings-row">
           <div className="settings-row__text">
-            <strong>Mode Beta</strong>
+            <strong>Nouvel éditeur</strong>
             <p>Canvas libre, score ATS et barre d&apos;outils avancée.</p>
           </div>
           <BetaModeToggle />
@@ -638,7 +638,7 @@ export default function SettingsView({
             />
             <SettingsListRow
               label="Astuces éditeur"
-              detail="Bandeaux d'aide dans l'éditeur Beta"
+              detail="Bandeaux d'aide dans le nouvel éditeur"
               onClear={() => {
                 if (resetEditorHints()) showSuccess('Astuces éditeur réinitialisées.');
               }}

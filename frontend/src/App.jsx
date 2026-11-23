@@ -42,7 +42,8 @@ import { buildAdaptedPdfFilename } from './lib/pdfExportFilename';
 import { getPdfSaveStartInDirectoryHandle } from './lib/pdfExportStartDirIdb';
 import { HiDocumentText, HiArrowDownTray, HiClipboardDocumentList, HiPencilSquare, HiCheck, HiSwatch, HiChevronDown, HiChevronUp, HiPlus, HiOutlinePaperClip } from 'react-icons/hi2';
 import { lazyWithChunkReload } from './lib/lazyChunkReload';
-import { APP_DEFAULT_ROUTE, APP_ROUTES, getViewFromPathname, isKnownAppPathname } from './lib/appRoutes';
+import { APP_DEFAULT_ROUTE, APP_ROUTES, accountRedirectFor, getViewFromPathname, isKnownAppPathname } from './lib/appRoutes';
+import AccountTabs from './components/AccountTabs.jsx';
 import {
   ADAPT_CONTEXT_MAX_FILES,
   adaptContextFileError,
@@ -1384,6 +1385,12 @@ export default function App() {
       }
     }
   }, [session, pathname, authLoading, navigate, location.search, location.state]);
+
+  /* AXE-1019 : /app/settings, /app/support et /app/compte → onglet de la page Compte. */
+  useEffect(() => {
+    const dest = accountRedirectFor(pathname);
+    if (dest) navigate(dest + location.search, { replace: true, state: location.state });
+  }, [pathname, navigate, location.search, location.state]);
 
   /* /app sans sous-chemin reconnu → CV (évite état incohérent URL / contenu) */
   useEffect(() => {
@@ -4106,12 +4113,13 @@ export default function App() {
                   optionsPreviewLoading={false}
                   profileLayout={profileLayout}
                   onBetaUnavailable={() => {
-                    showError('Crée d’abord un design dans Profil → active le mode Beta, puis reviens choisir « Beta » ici.');
+                    showError('Crée d’abord un design dans Profil → active le nouvel éditeur, puis reviens choisir « Nouvel éditeur » ici.');
                   }}
-                  extraBarLeft={(
+                  barActions={(
                     <button
                       type="button"
                       className="tpl-btn-bar-extra"
+                      aria-label="Exporter en PDF"
                       onClick={downloadBaseCvPdf}
                       disabled={baseCvPdfLoading}
                       title="Télécharger ton CV de profil (sans adaptation) en PDF, avec le template et les options actuels"
@@ -4120,7 +4128,7 @@ export default function App() {
                       <span className="tpl-btn-bar-extra-icon" aria-hidden>
                         <HiArrowDownTray size={16} strokeWidth={2} />
                       </span>
-                      Exporter en PDF
+                      <span className="tpl-bar-btn-label">Exporter en PDF</span>
                     </button>
                   )}
                 />
@@ -4988,6 +4996,7 @@ export default function App() {
         </div>
 
         <div id="viewSettings" className={`view-panel app-page view-settings ${view === 'settings' ? 'active' : ''}`} style={{ display: view === 'settings' ? 'flex' : 'none' }} data-analytics-section="settings_page">
+          <AccountTabs />
           <header className="page-header">
             <div className="page-title-row">
               <h1 className="page-title">Paramètres</h1>
@@ -5012,6 +5021,7 @@ export default function App() {
         </div>
 
         <div id="viewSupport" className={`view-panel app-page view-support ${view === 'support' ? 'active' : ''}`} style={{ display: view === 'support' ? 'flex' : 'none' }} data-analytics-section="support_page">
+          <AccountTabs />
           <div className="support-hero">
             <h1 className="support-hero-title">Support</h1>
             <p className="support-hero-subtitle">
