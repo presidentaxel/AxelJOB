@@ -1614,6 +1614,14 @@
   line-height: 1.45;
 }
 
+/* Phrase d'intro sous le titre Profil (AXE-1018) */
+.profile-intro {
+  margin: 0 0 var(--ds-space-md);
+  color: var(--ds-color-text-muted);
+  font-size: var(--ds-font-size-body-sm);
+  line-height: var(--ds-font-line-height-body);
+}
+
 /* Listes de compétences : glisser-déposer (AXE-1022) */
 .profile-comp-handle {
   cursor: grab;

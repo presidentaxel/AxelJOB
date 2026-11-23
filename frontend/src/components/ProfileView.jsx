@@ -131,6 +131,17 @@ function moveListItem(list, index, direction) {
   return next;
 }
 
+/** Rubriques du profil, dans l'ordre d'un CV, avec une ligne d'aide chacune (AXE-1018). */
+const PROFILE_SECTIONS = [
+  { id: 'identite', label: 'Identité', desc: 'Nom, titre, coordonnées et résumé : l’en-tête de ton CV.' },
+  { id: 'experiences', label: 'Expériences', desc: 'Tes postes, du plus récent au plus ancien. L’IA les reformule pour chaque offre.' },
+  { id: 'formations', label: 'Formations', desc: 'Diplômes et écoles, du plus récent au plus ancien.' },
+  { id: 'competences', label: 'Compétences', desc: 'Compétences techniques, logiciels, langues et le reste.' },
+  { id: 'projets', label: 'Projets', desc: 'Projets personnels ou d’études à mettre en avant (facultatif).' },
+  { id: 'certifications', label: 'Certifications', desc: 'Certifications et attestations (facultatif).' },
+];
+const sectionDesc = (id) => PROFILE_SECTIONS.find((s) => s.id === id)?.desc;
+
 function OrderButtons({ index, total, onMove, label }) {
   return (
     <>
@@ -1074,6 +1085,10 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
         document.body,
       )}
 
+      <p className="profile-intro">
+        Ton CV de base : chaque adaptation part de ces informations. Plus il est complet, meilleures sont les adaptations.
+      </p>
+
       {message && <div className="profile-toast profile-toast--success" role="status">{message}</div>}
       {error && <div className="profile-toast profile-toast--error" role="alert">{error}</div>}
 
@@ -1081,12 +1096,7 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
 
       <nav className="profile-section-nav" aria-label="Rubriques du profil">
         {[
-          { id: 'identite', label: 'Identité' },
-          { id: 'experiences', label: 'Expériences' },
-          { id: 'formations', label: 'Formations' },
-          { id: 'certifications', label: 'Certifications' },
-          { id: 'projets', label: 'Projets' },
-          { id: 'competences', label: 'Compétences' },
+          ...PROFILE_SECTIONS,
           ...(usage?.plan === 'pro' && !usage?.paywall_disabled ? [{ id: 'abonnement', label: 'Abonnement' }] : []),
         ].map((section) => (
           <button
@@ -1103,6 +1113,7 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
       {profileSection === 'identite' && (
       <section className="profile-section-panel">
         <h2 className="ds-label-md">Identité</h2>
+        <p className="profile-section-desc">{sectionDesc('identite')}</p>
         <div className="profile-photo-row profile-photo-row-simple">
           <div className="profile-photo-preview">
             {(cv.photo_url || '').trim() ? (
@@ -1204,6 +1215,7 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
       {profileSection === 'experiences' && (
       <section className="profile-section-panel">
         <h2 className="ds-label-md">Expériences</h2>
+        <p className="profile-section-desc">{sectionDesc('experiences')}</p>
         <div className="profile-section-head">
           <button type="button" className="btn btn-add" onClick={addExp}>+ Ajouter une expérience</button>
         </div>
@@ -1247,6 +1259,7 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
       {profileSection === 'formations' && (
       <section className="profile-section-panel">
         <h2 className="ds-label-md">Formations</h2>
+        <p className="profile-section-desc">{sectionDesc('formations')}</p>
         <div className="profile-section-head">
           <button type="button" className="btn btn-add" onClick={addFormation}>+ Ajouter</button>
         </div>
@@ -1273,6 +1286,7 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
       {profileSection === 'certifications' && (
       <section className="profile-section-panel">
         <h2 className="ds-label-md">Certifications</h2>
+        <p className="profile-section-desc">{sectionDesc('certifications')}</p>
         <div className="profile-section-head">
           <button type="button" className="btn btn-add" onClick={addCertification}>+ Ajouter</button>
         </div>
@@ -1298,6 +1312,7 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
       {profileSection === 'projets' && (
       <section className="profile-section-panel">
         <h2 className="ds-label-md">Projets</h2>
+        <p className="profile-section-desc">{sectionDesc('projets')}</p>
         <div className="profile-section-head">
           <button type="button" className="btn btn-add" onClick={addProjet}>+ Ajouter</button>
         </div>
@@ -1320,6 +1335,7 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
       {profileSection === 'competences' && (
       <section className="profile-section-panel">
         <h2 className="ds-label-md">Compétences</h2>
+        <p className="profile-section-desc">{sectionDesc('competences')}</p>
         <div className="profile-card">
           <h3 className="sidebar-category">Compétences techniques</h3>
           {(comp.techniques || []).map((item, i, list) => (
