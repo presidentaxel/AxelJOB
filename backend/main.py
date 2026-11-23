@@ -2246,6 +2246,9 @@ def _check_custom_template_access(user_id: str | None, template_id: str | None):
 def api_create_checkout_session(request: Request):
     """Crée une session Stripe Checkout pour le plan Pro. Redirection vers Stripe."""
     user_id = _require_user_id(request)
+    # Évite un second abonnement payé (deux onglets). Cache plan de 30 s : acceptable ici.
+    if get_user_plan(user_id) == "pro" or get_paywall_disabled(user_id):
+        raise HTTPException(status_code=409, detail="Tu es déjà abonné au plan Pro.")
     if not STRIPE_SECRET_KEY or not STRIPE_PRICE_ID_PRO_MONTHLY:
         raise HTTPException(status_code=503, detail="Paiement non configuré.")
     try:
