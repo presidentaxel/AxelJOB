@@ -185,7 +185,6 @@ Secrets minimum pour un local utile : `GEMINI_API_KEY`, `SUPABASE_URL`, `SUPABAS
 | `SENTRY_ENVIRONMENT` | Tag Sentry ; sinon `ENVIRONMENT` | Non |
 | `LOGO_DEV_TOKEN` | Token publishable Logo.dev | Non |
 | `WEASYPRINT_DLL_DIRECTORIES` | (Windows) Chemin DLL Pango/GTK | Windows only |
-| `CV_BOT_EXPORT_BASE` | Dossier racine export candidatures | Non |
 
 ### Frontend (`frontend/.env`)
 

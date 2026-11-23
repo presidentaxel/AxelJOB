@@ -750,46 +750,6 @@ Pas d'invention hors annonce / CV. Retourne UNIQUEMENT un JSON avec la clé : mo
     raise ValueError(f"Étape d'adaptation inconnue: {step_id}")
 
 
-def adapter_cv_by_selected_steps(
-    cv_base: dict,
-    offre: dict,
-    rapport: dict | None,
-    selected_steps: set[str],
-    user_id: str | None = None,
-    operation: str = "adapt",
-    output_policy: str | None = None,
-) -> dict:
-    """
-    Enchaîne des appels Gemini par étape (résumé -> expériences -> ATS) selon selected_steps.
-    Retourne un dict tweaks complet compatible avec _apply_tweaks (même forme que adapter_cv).
-    """
-    allowed = {"rewrite_resume", "rewrite_experiences", "optimize_ats"}
-    steps = [s for s in ADAPT_STEPS_ORDER if s in selected_steps and s in allowed]
-    if not steps:
-        raise ValueError("Aucune étape d'adaptation sélectionnée.")
-
-    merged = deepcopy(cv_base)
-    poste_acc = ""
-    for sid in steps:
-        delta = adapter_cv_for_step(
-            merged,
-            offre,
-            rapport,
-            sid,
-            user_id,
-            operation=f"{operation}_{sid}",
-            output_policy=output_policy,
-        )
-        merged = apply_partial_tweaks(
-            merged, delta, cv_base, output_policy=output_policy, offre=offre
-        )
-        if "poste_offre" in delta and str(delta.get("poste_offre") or "").strip():
-            poste_acc = str(delta.get("poste_offre") or "").strip()
-    if not poste_acc.strip():
-        poste_acc = (offre.get("titre") or "").strip()
-    return _tweaks_snapshot_from_cv(cv_base, merged, poste_acc)
-
-
 def _nettoyer_poste_offre(poste: str) -> str:
     """Retire les mots parasites souvent collés par les annonces (demande, offre, etc.) et (H/F)/(F/H)."""
     s = (poste or "").strip()
@@ -1080,48 +1040,3 @@ experiences: {json.dumps(exps, ensure_ascii=False)}
         return {"steps": safe_steps, "assistant_message": msg}
     except Exception:
         return default_out
-
-
-def shorten_text_to_fit(text: str, max_chars: int, user_id: str | None = None) -> dict:
-    """Raccourcit un passage pour qu'il tienne dans le canvas, sans inventer de faits."""
-    source = " ".join((text or "").split())
-    limit = max(12, min(int(max_chars or 80), 600))
-    if not source or len(source) <= limit:
-        return {"text": source, "impossible": False}
-    api_key = os.environ.get("GEMINI_API_KEY")
-    if not api_key:
-        return {"text": source, "impossible": True}
-    ensure_budget, record_and_check = _gemini_usage_guard()
-    try:
-        ensure_budget(user_id)
-        from google.genai import types
-    except Exception:
-        return {"text": source, "impossible": True}
-    prompt = (
-        "Raccourcis ce passage de CV pour qu'il tienne en "
-        f"{limit} caractères maximum, espaces compris. "
-        "Garde la langue, les faits déjà écrits, et un français naturel. "
-        "Pas de markdown. N'invente rien. "
-        "Si tu ne peux pas sans retirer un fait essentiel, mets impossible à true "
-        "et renvoie quand même le texte le plus court encore fidèle.\n"
-        'JSON uniquement: {"text": "...", "impossible": false}\n\n'
-        f"Passage:\n{source}"
-    )
-    try:
-        client = gemini_client(api_key)
-        response = client.models.generate_content(
-            model=GEMINI_MODEL_DEFAULT,
-            contents=prompt,
-            config=types.GenerateContentConfig(temperature=0.2),
-        )
-        record_and_check(user_id, "adapt_fit_text", response)
-        parsed = _extract_json(getattr(response, "text", "") or "")
-    except Exception:
-        _capture_adapt_failure(kind="fit_text", exc=None)
-        return {"text": source, "impossible": True}
-    if not isinstance(parsed, dict):
-        return {"text": source, "impossible": True}
-    shortened = " ".join(str(parsed.get("text") or "").split())
-    if not shortened or len(shortened) > limit:
-        return {"text": shortened or source, "impossible": True}
-    return {"text": shortened, "impossible": bool(parsed.get("impossible"))}
