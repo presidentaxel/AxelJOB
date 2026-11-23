@@ -107,6 +107,7 @@ Quand [AXE-317](https://linear.app/axel-project/issue/AXE-317) sera livre, un `p
 - Laisser Swagger/ReDoc desactive en production.
 - Garder les buckets Supabase prives par defaut.
 - Aligner `CV_BOT_API_BASE_URL` et `CV_BOT_FRONTEND_URL` sur les URLs publiques reelles.
+- Garder `UVICORN_WORKERS=1`. Les plans d'adaptation, la limite de frequence et plusieurs caches vivent dans la memoire du process : avec 2 workers, un plan cree par l'un est introuvable dans l'autre et chaque limite de frequence est doublee. Passer a Redis ou Supabase avant d'augmenter.
 
 > [!WARNING]
 > Ne pas deployer sans valider les variables d'environnement et le healthcheck.
