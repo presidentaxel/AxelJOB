@@ -177,3 +177,29 @@ class TestCvHtmlRenderSmoke(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestAutresSectionTitle(unittest.TestCase):
+    """AXE-1025 : le titre de la section « Autres » est personnalisable."""
+
+    def _cv(self, **extra):
+        repo = Path(__file__).resolve().parents[1]
+        cv = _sample_cv(repo / "docs" / "examples" / "cv_base_vierge.json")
+        cv["competences"] = {**(cv.get("competences") or {}), "autres": ["Piano", "Permis B"]}
+        return {**cv, **extra}
+
+    def test_custom_title_in_minimal_and_classic(self):
+        cv = self._cv(autres_titre="Centres d’intérêt")
+        minimal = render_cv_html(cv, for_preview=True, template_id="minimal")
+        classic = render_cv_html(cv, for_preview=True, template_id="classic")
+        self.assertIn("Centres d’intérêt", minimal)
+        self.assertIn("CENTRES D’INTÉRÊT", classic)
+        self.assertNotIn(">AUTRES<", classic)
+
+    def test_default_title_without_custom(self):
+        classic = render_cv_html(self._cv(), for_preview=True, template_id="classic")
+        self.assertIn(">AUTRES<", classic)
+
+    def test_title_is_escaped(self):
+        html = render_cv_html(self._cv(autres_titre="<b>x</b>"), template_id="minimal")
+        self.assertNotIn("<b>x</b>", html)
