@@ -1613,7 +1613,7 @@
   line-height: 1.45;
 }
 
-/* Logiciels & outils : glisser-déposer (AXE-1022) */
+/* Listes de compétences : glisser-déposer (AXE-1022) */
 .profile-comp-handle {
   cursor: grab;
   color: var(--ds-color-text-subtle);
