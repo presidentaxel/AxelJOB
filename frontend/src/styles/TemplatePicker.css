@@ -7,7 +7,7 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--ds-space-sm);
-  padding: var(--ds-space-sm) 0;
+  padding: var(--ds-space-sm) var(--ds-space-lg);
   flex-shrink: 0;
   border-bottom: 1px solid var(--ds-color-border-subtle);
   background: transparent;
@@ -26,7 +26,7 @@
   flex-shrink: 0;
 }
 
-/* Trois boutons, un seul style : discret, même hauteur, bordure claire. */
+/* Trois boutons, un seul style : discret, même hauteur, bordure claire, fond de la barre. */
 .tpl-btn-open-modal,
 .tpl-gear,
 .tpl-btn-bar-extra {
@@ -37,7 +37,7 @@
   padding: 0 var(--ds-space-md);
   border: 1px solid var(--ds-color-border-default);
   border-radius: var(--ds-radius-action);
-  background: var(--ds-color-bg-default);
+  background: transparent;
   color: var(--ds-color-text-default);
   font-size: var(--ds-font-size-label-sm);
   font-weight: var(--ds-font-weight-medium);
@@ -52,7 +52,7 @@
 .tpl-gear:hover,
 .tpl-gear--open,
 .tpl-btn-bar-extra:hover:not(:disabled) {
-  background: var(--ds-color-bg-subtle);
+  background: var(--ds-color-action-secondary-bg-hover);
   border-color: var(--ds-color-border-input);
 }
 
