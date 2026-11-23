@@ -645,8 +645,9 @@ Préfixe `app-nav-` (distinct de `nav-` marketing).
 | `app-nav-link-cv` | link | tertiary | topbar | `/app/cv` Adapter CV |
 | `app-nav-link-candidatures` | link | tertiary | topbar | `/app/postule` |
 | `app-nav-link-profil` | link | tertiary | topbar | `/app/profil` |
-| `app-nav-link-settings` | link | tertiary | topbar | `/app/settings` |
-| `app-nav-link-support` | link | tertiary | topbar | `/app/support` |
+| `app-nav-link-compte` | link | tertiary | topbar | `/app/compte` (Paramètres + Support, AXE-1019) |
+| `app-nav-link-settings` | link | tertiary | onglets page Compte | `/app/compte/parametres` |
+| `app-nav-link-support` | link | tertiary | onglets page Compte | `/app/compte/support` |
 | `app-nav-link-monitoring` | link | tertiary | topbar | `/app/monitoring` (compte support seulement) |
 | `app-nav-cta-upgrade` | cta | primary | topbar right | Passer Pro (plan free) |
 | `app-nav-cta-pro` | cta | secondary | topbar right | Badge Pro (plan pro) |

@@ -15,6 +15,7 @@ import {
   APP_BASE,
   APP_ROUTES,
   APP_DEFAULT_ROUTE,
+  accountRedirectFor,
   getViewFromPathname,
   isKnownAppPathname,
 } from '../../src/lib/appRoutes.js';
@@ -86,4 +87,21 @@ test('settings est positionné entre profil et support dans APP_ROUTES (ordre st
   assert.ok(idxProfil >= 0 && idxSettings >= 0 && idxSupport >= 0);
   assert.ok(idxProfil < idxSettings, 'settings doit venir après profil');
   assert.ok(idxSettings < idxSupport, 'settings doit venir avant support');
+});
+
+test('AXE-1019 : la page Compte choisit sa vue selon l’onglet', () => {
+  assert.equal(getViewFromPathname('/app/compte/parametres'), 'settings');
+  assert.equal(getViewFromPathname('/app/compte/support'), 'support');
+  assert.equal(getViewFromPathname('/app/compte'), 'settings');
+  assert.ok(isKnownAppPathname('/app/compte/support'));
+});
+
+test('AXE-1019 : anciennes URL redirigées vers le bon onglet', () => {
+  assert.equal(accountRedirectFor('/app/settings'), '/app/compte/parametres');
+  assert.equal(accountRedirectFor('/app/settings/export'), '/app/compte/parametres');
+  assert.equal(accountRedirectFor('/app/support'), '/app/compte/support');
+  assert.equal(accountRedirectFor('/app/compte'), '/app/compte/parametres');
+  assert.equal(accountRedirectFor('/app/compte/support'), null);
+  assert.equal(accountRedirectFor('/app/compte/parametres'), null);
+  assert.equal(accountRedirectFor('/app/cv'), null);
 });

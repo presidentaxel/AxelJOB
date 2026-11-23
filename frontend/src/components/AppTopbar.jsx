@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
-import { HiDocumentText, HiClipboardDocumentList, HiPencilSquare, HiChatBubbleLeftRight, HiChartBarSquare, HiCog6Tooth } from 'react-icons/hi2';
+import { HiDocumentText, HiClipboardDocumentList, HiPencilSquare, HiChartBarSquare, HiUserCircle } from 'react-icons/hi2';
 import { analyticsAttrs } from '../lib/analyticsAttrs.js';
 import TopbarPartnerCode from './TopbarPartnerCode';
 
@@ -59,13 +59,9 @@ export default function AppTopbar({
           <HiPencilSquare size={18} />
           <span>Profil</span>
         </NavLink>
-        <NavLink to="/app/settings" className={({ isActive }) => `topbar-link ${isActive ? 'active' : ''}`} {...analyticsAttrs('app-nav-link-settings', 'nav', 'tertiary', 'nav')}>
-          <HiCog6Tooth size={18} />
-          <span>Paramètres</span>
-        </NavLink>
-        <NavLink to="/app/support" className={({ isActive }) => `topbar-link ${isActive ? 'active' : ''}`} {...analyticsAttrs('app-nav-link-support', 'nav', 'tertiary', 'nav')}>
-          <HiChatBubbleLeftRight size={18} />
-          <span>Support</span>
+        <NavLink to="/app/compte" className={({ isActive }) => `topbar-link ${isActive ? 'active' : ''}`} {...analyticsAttrs('app-nav-link-compte', 'nav', 'tertiary', 'nav')}>
+          <HiUserCircle size={18} />
+          <span>Compte</span>
         </NavLink>
         {usage?.is_support && (
           <NavLink to="/app/monitoring" className={({ isActive }) => `topbar-link ${isActive ? 'active' : ''}`} {...analyticsAttrs('app-nav-link-monitoring', 'nav', 'tertiary', 'nav')}>
