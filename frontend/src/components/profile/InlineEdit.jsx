@@ -19,6 +19,8 @@ export default function InlineEdit({
   multiline = false,
   title,
   className = '',
+  onEnter,
+  inputProps,
 }) {
   const inputRef = useRef(null);
   const shown = (value ?? '').toString();
@@ -39,6 +41,7 @@ export default function InlineEdit({
   };
 
   const shared = {
+    ...inputProps,
     ref: inputRef,
     className: 'profile-inline-input',
     value: shown,
@@ -49,6 +52,14 @@ export default function InlineEdit({
       onChange(e.target.value);
       fitLine(e.target);
     },
+    // Entrée (hors saisie IME) : action de la liste, par ex. ajouter une ligne (AXE-1021).
+    onKeyDown: onEnter && !multiline
+      ? (e) => {
+        if (e.key !== 'Enter' || e.nativeEvent.isComposing) return;
+        e.preventDefault();
+        onEnter();
+      }
+      : undefined,
   };
 
   return (
