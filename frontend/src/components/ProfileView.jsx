@@ -768,6 +768,51 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
     const arr = (prev.competences?.[key] || []).filter((_, i) => i !== index);
     return { ...prev, competences: { ...(prev.competences || {}), [key]: arr } };
   });
+  const moveCompList = (key, index, offset) => setCv((prev) => ({
+    ...prev,
+    competences: { ...(prev.competences || {}), [key]: moveListItem(prev.competences?.[key] || [], index, offset) },
+  }));
+  /** Glisser-déposer dans les listes de compétences : { key, from, over } pendant le drag. */
+  const [compDrag, setCompDrag] = useState(null);
+  const compRowProps = (key, i, baseClass) => ({
+    className: [
+      baseClass,
+      compDrag?.key === key && compDrag.from === i ? 'profile-comp-row--dragging' : '',
+      compDrag?.key === key && compDrag.over === i && compDrag.from !== i ? 'profile-comp-row--over' : '',
+    ].filter(Boolean).join(' '),
+    onDragOver: (e) => {
+      if (compDrag?.key !== key) return;
+      e.preventDefault();
+      if (compDrag.over !== i) setCompDrag({ ...compDrag, over: i });
+    },
+    onDrop: (e) => {
+      e.preventDefault();
+      if (compDrag?.key === key && compDrag.from !== i) moveCompList(key, compDrag.from, i - compDrag.from);
+      setCompDrag(null);
+    },
+  });
+  const compDragHandle = (key, i) => (
+    <span
+      className="profile-comp-handle"
+      draggable
+      title="Glisser pour réordonner"
+      aria-hidden="true"
+      onDragStart={(e) => {
+        setCompDrag({ key, from: i, over: i });
+        e.dataTransfer.effectAllowed = 'move';
+        try {
+          e.dataTransfer.setData('text/plain', `${key}:${i}`); // Firefox exige une donnée
+          e.dataTransfer.setDragImage(e.currentTarget.parentElement, 0, 0);
+        } catch { /* ignore */ }
+      }}
+      onDragEnd={() => setCompDrag(null)}
+    >
+      ⋮⋮
+    </span>
+  );
+  const compOrderButtons = (key, i, total, label) => (
+    <OrderButtons index={i} total={total} onMove={(idx, dir) => moveCompList(key, idx, dir)} label={label} />
+  );
 
   const handleSave = async () => {
     setError('');
@@ -1248,9 +1293,11 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
         <h2 className="ds-label-md">Compétences</h2>
         <div className="profile-card">
           <h3 className="sidebar-category">Compétences techniques</h3>
-          {(comp.techniques || []).map((item, i) => (
-            <div key={i} className="profile-comp-row">
+          {(comp.techniques || []).map((item, i, list) => (
+            <div key={i} {...compRowProps('techniques', i, 'profile-comp-row')}>
+              {compDragHandle('techniques', i)}
               <InlineEdit value={typeof item === 'string' ? item : ''} onChange={(v) => updateCompList('techniques', i, v)} placeholder="ex. Python, Gestion de projet" />
+              {compOrderButtons('techniques', i, list.length, 'cette compétence')}
               <button type="button" className="btn btn-remove" onClick={() => removeCompList('techniques', i)} title="Supprimer">×</button>
             </div>
           ))}
@@ -1258,9 +1305,11 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
         </div>
         <div className="profile-card">
           <h3 className="sidebar-category">Logiciels & outils</h3>
-          {(comp.logiciels || []).map((item, i) => (
-            <div key={i} className="profile-comp-row">
+          {(comp.logiciels || []).map((item, i, list) => (
+            <div key={i} {...compRowProps('logiciels', i, 'profile-comp-row')}>
+              {compDragHandle('logiciels', i)}
               <InlineEdit value={typeof item === 'string' ? item : ''} onChange={(v) => updateCompList('logiciels', i, v)} placeholder="ex. Excel, React, Git" />
+              {compOrderButtons('logiciels', i, list.length, 'ce logiciel')}
               <button type="button" className="btn btn-remove" onClick={() => removeCompList('logiciels', i)} title="Supprimer">×</button>
             </div>
           ))}
@@ -1268,10 +1317,12 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
         </div>
         <div className="profile-card">
           <h3 className="sidebar-category">Langues</h3>
-          {(comp.langues || []).map((l, i) => (
-            <div key={i} className="profile-langue-row">
+          {(comp.langues || []).map((l, i, list) => (
+            <div key={i} {...compRowProps('langues', i, 'profile-langue-row')}>
+              {compDragHandle('langues', i)}
               <InlineEdit value={l?.langue || ''} onChange={(v) => updateCompList('langues', i, { ...l, langue: v })} placeholder="Langue" />
               <InlineEdit value={l?.niveau || ''} onChange={(v) => updateCompList('langues', i, { ...l, niveau: v })} placeholder="ex. Natif, Courant (C1)" />
+              {compOrderButtons('langues', i, list.length, 'cette langue')}
               <button type="button" className="btn btn-remove" onClick={() => removeCompList('langues', i)} title="Supprimer">×</button>
             </div>
           ))}
@@ -1279,9 +1330,11 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
         </div>
         <div className="profile-card">
           <h3 className="sidebar-category">Autres</h3>
-          {(comp.autres || []).map((item, i) => (
-            <div key={i} className="profile-comp-row">
+          {(comp.autres || []).map((item, i, list) => (
+            <div key={i} {...compRowProps('autres', i, 'profile-comp-row')}>
+              {compDragHandle('autres', i)}
               <InlineEdit value={typeof item === 'string' ? item : ''} onChange={(v) => updateCompList('autres', i, v)} placeholder="ex. Permis B, Piano" />
+              {compOrderButtons('autres', i, list.length, 'cet élément')}
               <button type="button" className="btn btn-remove" onClick={() => removeCompList('autres', i)} title="Supprimer">×</button>
             </div>
           ))}
