@@ -13,6 +13,8 @@ exclude = '''
   | \.pytest_cache
   | logs
   | adaptations
+  | wt-[^/]*
+  | [^/]*-wt
 )/
 '''
 
@@ -29,6 +31,8 @@ exclude = [
   "__pycache__",
   "logs",
   "adaptations",
+  "wt-*",
+  "*-wt",
 ]
 
 [tool.ruff.lint]
