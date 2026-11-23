@@ -642,7 +642,7 @@ Préfixe `app-nav-` (distinct de `nav-` marketing).
 
 | data-attr | type | level | Où | Intention |
 |---|---|---|---|---|
-| `app-nav-link-cv` | link | tertiary | topbar | `/app/cv` Adapter CV |
+| `app-nav-link-cv` | link | tertiary | topbar | `/app/cv` Adapter mon CV |
 | `app-nav-link-candidatures` | link | tertiary | topbar | `/app/postule` |
 | `app-nav-link-profil` | link | tertiary | topbar | `/app/profil` |
 | `app-nav-link-settings` | link | tertiary | topbar | `/app/settings` |
