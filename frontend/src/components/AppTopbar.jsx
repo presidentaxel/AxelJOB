@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
-import { NavLink } from 'react-router-dom';
-import { HiDocumentText, HiClipboardDocumentList, HiPencilSquare, HiChartBarSquare, HiUserCircle } from 'react-icons/hi2';
+import { Link, NavLink } from 'react-router-dom';
+import { HiDocumentText, HiClipboardDocumentList, HiPencilSquare, HiChartBarSquare } from 'react-icons/hi2';
 import { analyticsAttrs } from '../lib/analyticsAttrs.js';
+import { APP_ROUTES } from '../lib/appRoutes.js';
 import TopbarPartnerCode from './TopbarPartnerCode';
 
 import BetaModeToggle from './BetaModeToggle.jsx';
@@ -59,10 +60,6 @@ export default function AppTopbar({
           <HiPencilSquare size={18} />
           <span>Profil</span>
         </NavLink>
-        <NavLink to="/app/compte" className={({ isActive }) => `topbar-link ${isActive ? 'active' : ''}`} {...analyticsAttrs('app-nav-link-compte', 'nav', 'tertiary', 'nav')}>
-          <HiUserCircle size={18} />
-          <span>Compte</span>
-        </NavLink>
         {usage?.is_support && (
           <NavLink to="/app/monitoring" className={({ isActive }) => `topbar-link ${isActive ? 'active' : ''}`} {...analyticsAttrs('app-nav-link-monitoring', 'nav', 'tertiary', 'nav')}>
             <HiChartBarSquare size={18} />
@@ -91,13 +88,33 @@ export default function AppTopbar({
               aria-expanded={accountMenuOpen}
               aria-haspopup="menu"
               aria-controls="topbar-account-menu"
-              title="Compte et déconnexion"
+              title="Compte : paramètres, support, déconnexion"
               {...analyticsAttrs('app-nav-cta-account', 'account', 'tertiary', 'cta')}
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="8" r="4"/><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/></svg>
             </button>
             {accountMenuOpen && (
               <div id="topbar-account-menu" className="topbar-account-menu" role="menu" aria-label="Compte">
+                {/* AXE-1019 : accès à la page Compte (onglets Paramètres / Support). */}
+                <Link
+                  to={APP_ROUTES.compteParametres}
+                  className="topbar-account-menu-item"
+                  role="menuitem"
+                  onClick={() => setAccountMenuOpen(false)}
+                  {...analyticsAttrs('app-nav-cta-settings', 'account', 'tertiary', 'cta')}
+                >
+                  Paramètres
+                </Link>
+                <Link
+                  to={APP_ROUTES.compteSupport}
+                  className="topbar-account-menu-item"
+                  role="menuitem"
+                  onClick={() => setAccountMenuOpen(false)}
+                  {...analyticsAttrs('app-nav-cta-support', 'account', 'tertiary', 'cta')}
+                >
+                  Support
+                </Link>
+                <div className="topbar-account-menu-sep" role="separator" />
                 <TopbarPartnerCode
                   onSuccess={(res) => {
                     if (res?.bonus_added) onPromoRedeemed?.();
