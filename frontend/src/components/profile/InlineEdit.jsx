@@ -19,6 +19,9 @@ export default function InlineEdit({
   multiline = false,
   title,
   className = '',
+  onEnter,
+  onBackspaceEmpty,
+  inputProps,
 }) {
   const inputRef = useRef(null);
   const shown = (value ?? '').toString();
@@ -39,6 +42,7 @@ export default function InlineEdit({
   };
 
   const shared = {
+    ...inputProps,
     ref: inputRef,
     className: 'profile-inline-input',
     value: shown,
@@ -49,6 +53,19 @@ export default function InlineEdit({
       onChange(e.target.value);
       fitLine(e.target);
     },
+    // Listes (AXE-1021) : Entrée ajoute une ligne, Retour arrière sur champ vide revient en arrière.
+    onKeyDown: (onEnter || onBackspaceEmpty) && !multiline
+      ? (e) => {
+        if (e.nativeEvent.isComposing) return;
+        if (e.key === 'Enter' && onEnter) {
+          e.preventDefault();
+          onEnter();
+        } else if (e.key === 'Backspace' && onBackspaceEmpty && e.currentTarget.value === '') {
+          e.preventDefault();
+          onBackspaceEmpty();
+        }
+      }
+      : undefined,
   };
 
   return (
