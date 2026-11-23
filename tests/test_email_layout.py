@@ -92,7 +92,7 @@ def test_button_rejects_dangerous_schemes() -> None:
 def test_password_setup_email_has_a_real_button() -> None:
     out = password_setup_email_html("https://auth.test/recover?token=a&b=c")
     assert "Choisir un mot de passe" in out
-    assert 'bgcolor="#c23709"' in out
+    assert 'bgcolor="#be3c09"' in out
     assert "token=a&amp;b=c" in out
     assert "Un compte existe déjà" in out
 

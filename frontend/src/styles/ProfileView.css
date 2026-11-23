@@ -375,7 +375,7 @@
   font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: var(--ds-color-accent-editorial);
+  color: var(--ds-color-text-link); /* orange AA sur crème (AXE-1020) */
   background: var(--ds-color-bg-subtle);
   padding: 0.15rem 0.4rem;
   border-radius: var(--ds-radius-sm, 4px);
