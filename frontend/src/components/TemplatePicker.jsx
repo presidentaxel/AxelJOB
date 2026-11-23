@@ -468,7 +468,7 @@ function TemplateOptionsModal({
           <h2 id="tpl-options-modal-title" className="tpl-options-modal-title">Personnaliser le CV</h2>
           <p className="tpl-options-modal-sub">
             {betaMode
-              ? 'Le design Beta se règle dans l’éditeur canvas (Profil → mode Beta).'
+              ? 'Ce design se règle dans le nouvel éditeur (Profil → Nouvel éditeur).'
               : 'Les changements s’appliquent tout de suite à l’aperçu ; rien à valider.'}
           </p>
           <button type="button" className="tpl-options-modal-close" onClick={onClose} aria-label="Fermer">
@@ -479,7 +479,7 @@ function TemplateOptionsModal({
           <aside className="tpl-options-modal-settings">
             {betaMode ? (
               <p className="tpl-options-beta-hint">
-                Couleurs, blocs et typo du canvas Beta se modifient dans Profil avec le mode Beta activé.
+                Couleurs, blocs et typo se modifient dans Profil, avec le nouvel éditeur activé.
               </p>
             ) : (
               <OptionsPanel templateId={templateId} options={options} templateOptions={templateOptions} onChangeOptions={onChangeOptions} />
@@ -622,7 +622,7 @@ export default function TemplatePicker({
           className={`tpl-gear${optionsModalOpen ? ' tpl-gear--open' : ''}`}
           onClick={() => setOptionsModalOpen(true)}
           title={isBetaTemplate
-            ? 'Le design Beta se personnalise dans l’éditeur Beta'
+            ? 'Ce design se personnalise dans le nouvel éditeur'
             : 'Personnaliser le template (couleurs, typo)'}
         >
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

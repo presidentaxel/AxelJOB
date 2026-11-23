@@ -16,9 +16,9 @@ export const BETA_CANVAS_TEMPLATE_ID = 'beta';
 
 export const BETA_CANVAS_TEMPLATE = {
   id: BETA_CANVAS_TEMPLATE_ID,
-  name: 'Beta',
+  name: 'Nouvel éditeur',
   description:
-    'Ton design de l’éditeur Beta (canvas libre). Modifie-le sur Profil en mode Beta.',
+    'Ton design du nouvel éditeur (canvas libre). Modifie-le dans Profil, nouvel éditeur activé.',
   tags: ['beta', 'canvas', 'free-canvas'],
   options: [],
 };
