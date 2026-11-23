@@ -960,12 +960,13 @@ def count_applications(user_id: str | None = None) -> int:
 
 
 def _application_counts_toward_adaptation_quota(adaptation_id: str, payload: dict | None) -> bool:
-    """True si la ligne représente une adaptation CV IA (quota free / Pro), hors manuel et archivé."""
+    """True si la ligne représente une adaptation CV IA (quota free / Pro), hors manuel.
+
+    Une candidature archivée compte toujours : sinon archiver redonne des adaptations gratuites.
+    """
     if not adaptation_id or not isinstance(payload, dict):
         return False
     if adaptation_id.startswith("manual_"):
-        return False
-    if payload.get("archived"):
         return False
     fc = payload.get("full_cv")
     if not isinstance(fc, dict) or len(fc) == 0:
@@ -974,7 +975,7 @@ def _application_counts_toward_adaptation_quota(adaptation_id: str, payload: dic
 
 
 def count_quota_adaptations(user_id: str | None = None) -> int:
-    """Nombre d'adaptations CV sauvegardées (full_cv), non archivées, hors fiches manuelles « manual_* »."""
+    """Nombre d'adaptations CV sauvegardées (full_cv), archivées comprises, hors fiches manuelles « manual_* »."""
     uid = (user_id or "default").strip() or "default"
     sb = _get_supabase()
     if sb:

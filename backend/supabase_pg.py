@@ -685,7 +685,7 @@ def count_applications_for_user(uid: str) -> int:
 
 
 def count_quota_adaptations_for_user(uid: str) -> int:
-    """Candidatures IA (payload.full_cv) non archivées, hors suivi manuel (id manual_*)."""
+    """Candidatures IA (payload.full_cv), archivées comprises, hors suivi manuel (id manual_*)."""
     pool = get_pool()
     if not pool:
         return 0
@@ -696,7 +696,6 @@ def count_quota_adaptations_for_user(uid: str) -> int:
             SELECT COUNT(*)::int FROM public.applications
             WHERE user_id = %s
               AND left(id, 7) <> 'manual_'
-              AND COALESCE((payload->>'archived')::boolean, false) = false
               AND jsonb_typeof(payload->'full_cv') = 'object'
               AND payload->'full_cv' != '{}'::jsonb
             """,
