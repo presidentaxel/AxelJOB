@@ -8,13 +8,6 @@ from pathlib import Path
 _log = logging.getLogger("cv_bot.export")
 
 
-def get_export_base_path() -> Path:
-    import os
-
-    base = os.environ.get("CV_BOT_EXPORT_BASE", r"D:\ESSEC\03. ALTERNANCE")
-    return Path(base).resolve()
-
-
 def _sanitize_folder_name(s: str, max_len: int = 60) -> str:
     if not s:
         return ""
@@ -114,75 +107,6 @@ def generer_fiche_pdf_bytes(
         html_ch = _fiche_html_embed_stylesheet(fiche_html, root)
         pdf_bytes = html_to_simple_pdf_bytes_chromium(html_ch, root)
         return pdf_bytes, nom_fiche
-
-
-def export_dossier(
-    cv: dict,
-    poste: str,
-    entreprise: str,
-    description_fiche: str,
-    output_base: str | None = None,
-    template_id: str | None = None,
-    template_options: dict | None = None,
-    selection_a4: dict | None = None,
-) -> dict:
-    from backend.path_safety import (
-        resolve_export_output_base,
-        resolve_under_base,
-        safe_basename,
-        write_bytes_in_dir,
-    )
-
-    default_base = get_export_base_path()
-    base = resolve_export_output_base(output_base, default=default_base)
-    folder_name = get_export_folder_name(entreprise, poste)
-    try:
-        folder_path = resolve_under_base(base, folder_name)
-    except ValueError:
-        folder_path = resolve_under_base(base, "export")
-    folder_path.mkdir(parents=True, exist_ok=True)
-
-    offre = {"titre": poste, "entreprise": entreprise}
-    files_created = []
-    try:
-        from backend.services.cv_select_a4 import apply_selection_to_cv
-
-        cv_pdf = apply_selection_to_cv(cv, selection_a4)
-    except Exception:
-        cv_pdf = cv
-    from backend.services.generator import generer_pdf
-
-    cv_path = generer_pdf(
-        cv_pdf,
-        offre,
-        output_dir=str(folder_path),
-        template_id=template_id,
-        template_options=template_options,
-    )
-    files_created.append(Path(cv_path).name)
-
-    fiche_bytes, nom_fiche = generer_fiche_pdf_bytes(description_fiche, poste, entreprise)
-    fiche_path = write_bytes_in_dir(
-        folder_path, nom_fiche, fiche_bytes, default_name="Fiche de poste.pdf"
-    )
-    files_created.append(fiche_path.name)
-
-    from backend.services.letter_generator import generer_lettre_pdf
-
-    prenom = (cv.get("prenom") or "").strip()
-    nom = (cv.get("nom") or "").strip()
-    poste_safe = _sanitize_folder_name(poste or "")
-    nom_lettre = (
-        f"Motivation {prenom} {nom} - {poste_safe}.pdf"
-        if poste_safe
-        else f"Motivation {prenom} {nom}.pdf"
-    )
-    lettre_name = safe_basename(nom_lettre, default="Motivation.pdf")
-    generer_lettre_pdf(
-        cv, description_fiche or "", poste or "", entreprise or "", folder_path, lettre_name
-    )
-    files_created.append(lettre_name)
-    return {"folder": str(folder_path), "files": files_created}
 
 
 def export_dossier_as_zip(

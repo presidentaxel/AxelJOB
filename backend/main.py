@@ -428,17 +428,6 @@ class CvExportBody(PdfBody):
     format: str = "pdf"
 
 
-class ExportDossierBody(BaseModel):
-    cv: dict
-    titre: str = ""
-    entreprise: str = ""
-    description: str = ""
-    dossier: str | None = None
-    template_id: str | None = None
-    template_options: dict | None = None
-    selection_a4: dict | None = None
-
-
 class ExportDossierZipBody(BaseModel):
     cv: dict
     titre: str = ""
@@ -4803,48 +4792,6 @@ def api_cv_export(request: Request, body: CvExportBody):
             )
         err_msg = str(e).strip() or repr(e)
         raise HTTPException(status_code=500, detail=f"Erreur export ({fmt}): {err_msg}")
-
-
-@app.get("/api/export-default-dir")
-def api_export_default_dir():
-    try:
-        from backend.services.export_package import get_export_base_path
-
-        return {"path": str(get_export_base_path())}
-    except Exception:
-        return {"path": ""}
-
-
-@app.post("/api/export-dossier")
-def api_export_dossier(request: Request, body: ExportDossierBody):
-    if not (body.titre or "").strip():
-        raise HTTPException(status_code=400, detail="Indiquez l'intitulé du poste")
-    user_id = _get_user_id(request)
-    try:
-        from backend.services.export_package import export_dossier
-
-        result = export_dossier(
-            body.cv,
-            body.titre,
-            body.entreprise,
-            body.description,
-            output_base=body.dossier or None,
-            template_id=body.template_id,
-            template_options=body.template_options,
-            selection_a4=body.selection_a4,
-        )
-        _track_analytics(
-            request,
-            event_log.EVENT_EXPORT_DOSSIER,
-            user_id,
-            {"titre": body.titre or "", "entreprise": body.entreprise or ""},
-        )
-        return result
-    except Exception as e:
-        logger.exception(e)
-        raise HTTPException(
-            status_code=500, detail="Erreur interne. Réessaie ou contacte le support."
-        )
 
 
 @app.post("/api/export-dossier-zip")
