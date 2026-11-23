@@ -4095,7 +4095,7 @@ export default function App() {
                   optionsPreviewLoading={false}
                   profileLayout={profileLayout}
                   onBetaUnavailable={() => {
-                    showError('Crée d’abord un design dans Profil → active le mode Beta, puis reviens choisir « Beta » ici.');
+                    showError('Crée d’abord un design dans Profil → active le nouvel éditeur, puis reviens choisir « Nouvel éditeur » ici.');
                   }}
                   extraBarLeft={(
                     <button
