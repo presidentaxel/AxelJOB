@@ -292,3 +292,37 @@
     grid-template-columns: minmax(480px, 1fr) 360px;
   }
 }
+
+/* Page Compte : onglets Paramètres / Support (AXE-1019) */
+.account-tabs {
+  flex-shrink: 0;
+  display: flex;
+  gap: var(--ds-space-xs);
+  padding: 0 var(--ds-space-xl);
+  border-bottom: 1px solid var(--color-hairline);
+  background: var(--color-canvas);
+}
+
+.account-tab {
+  padding: var(--ds-space-md) var(--ds-space-sm);
+  margin-bottom: -1px;
+  border-bottom: 2px solid transparent;
+  color: var(--ds-color-text-muted);
+  font-size: var(--ds-font-size-label-md);
+  font-weight: var(--ds-font-weight-medium);
+  text-decoration: none;
+}
+
+.account-tab:hover {
+  color: var(--ds-color-text-default);
+}
+
+.account-tab--active {
+  color: var(--ds-color-text-default);
+  border-bottom-color: var(--ds-color-border-focus);
+}
+
+.account-tab:focus-visible {
+  outline: 2px solid var(--ds-color-border-focus);
+  outline-offset: -2px;
+}
