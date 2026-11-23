@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { Link, NavLink } from 'react-router-dom';
-import { HiDocumentText, HiClipboardDocumentList, HiPencilSquare, HiChartBarSquare } from 'react-icons/hi2';
+import { HiDocumentText, HiClipboardDocumentList, HiPencilSquare } from 'react-icons/hi2';
 import { analyticsAttrs } from '../lib/analyticsAttrs.js';
 import { APP_ROUTES } from '../lib/appRoutes.js';
 import TopbarPartnerCode from './TopbarPartnerCode';
@@ -60,12 +60,6 @@ export default function AppTopbar({
           <HiPencilSquare size={18} />
           <span>Profil</span>
         </NavLink>
-        {usage?.is_support && (
-          <NavLink to="/app/monitoring" className={({ isActive }) => `topbar-link ${isActive ? 'active' : ''}`} {...analyticsAttrs('app-nav-link-monitoring', 'nav', 'tertiary', 'nav')}>
-            <HiChartBarSquare size={18} />
-            <span>Monitoring</span>
-          </NavLink>
-        )}
       </nav>
       <div className="topbar-right">
         {session && <BetaModeToggle />}
@@ -114,6 +108,17 @@ export default function AppTopbar({
                 >
                   Support
                 </Link>
+                {usage?.is_support && (
+                  <Link
+                    to={APP_ROUTES.monitoring}
+                    className="topbar-account-menu-item"
+                    role="menuitem"
+                    onClick={() => setAccountMenuOpen(false)}
+                    {...analyticsAttrs('app-nav-link-monitoring', 'account', 'tertiary', 'nav')}
+                  >
+                    Monitoring
+                  </Link>
+                )}
                 <div className="topbar-account-menu-sep" role="separator" />
                 <TopbarPartnerCode
                   onSuccess={(res) => {
