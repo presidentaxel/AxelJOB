@@ -40,6 +40,7 @@ import {
 } from '../lib/profileAutoSaveGate.js';
 import Button from './ui/Button.jsx';
 import InlineEdit from './profile/InlineEdit.jsx';
+import { AUTRES_TITRE_MAX } from '../lib/cvTemplateCopy.js';
 import '../styles/ProfileView.css';
 import '../styles/TemplatePicker.css';
 import '../styles/DesignModeBridgeModal.css';
@@ -1278,7 +1279,13 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
           <button type="button" className="btn btn-add" onClick={() => addCompList('langues', { langue: '', niveau: '' })}>+ Ajouter</button>
         </div>
         <div className="profile-card">
-          <h3 className="sidebar-category">Autres</h3>
+          <h3 className="sidebar-category">{(cv.autres_titre || '').trim() || 'Autres'}</h3>
+          <InlineEdit
+            label="Titre de la section"
+            value={cv.autres_titre || ''}
+            onChange={(v) => setCv((prev) => ({ ...prev, autres_titre: v.slice(0, AUTRES_TITRE_MAX) }))}
+            placeholder="Autres (ex. Centres d’intérêt, Bénévolat)"
+          />
           {(comp.autres || []).map((item, i) => (
             <div key={i} className="profile-comp-row">
               <InlineEdit value={typeof item === 'string' ? item : ''} onChange={(v) => updateCompList('autres', i, v)} placeholder="ex. Permis B, Piano" />
