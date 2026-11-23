@@ -246,6 +246,7 @@ class TestStripeWebhook(unittest.TestCase):
             patch.object(main, "STRIPE_SECRET_KEY", "sk_test"),
             patch.dict("sys.modules", {"stripe": fake_stripe}),
             patch.object(main, "find_user_id_by_stripe_subscription_id", return_value="user_1"),
+            patch.object(main, "get_user_stripe_ids", return_value=("cus_123", "sub_456")),
             patch.object(main, "set_user_plan") as fake_set,
             patch.object(main, "ensure_stripe_customer"),
             patch.object(main, "_invalidate_stripe_caches_for_user"),
@@ -258,6 +259,54 @@ class TestStripeWebhook(unittest.TestCase):
         args, kwargs = fake_set.call_args
         self.assertEqual(args[0], "user_1")
         self.assertEqual(args[1], "free")
+
+    def test_deleting_another_subscription_keeps_pro(self):
+        """AXE-1105 : la fin d'un ancien abonnement ne repasse pas en free un compte qui paie."""
+        event = {
+            "type": "customer.subscription.deleted",
+            "id": "evt_old_sub",
+            "data": {"object": {"id": "sub_old", "metadata": {"user_id": "user_1"}}},
+        }
+        req = _FakeRequest(body=json.dumps(event).encode())
+        fake_stripe = MagicMock()
+        fake_stripe.Webhook.construct_event.return_value = event
+        with (
+            patch.object(main, "STRIPE_WEBHOOK_SECRET", "whsec_test"),
+            patch.object(main, "STRIPE_SECRET_KEY", "sk_test"),
+            patch.dict("sys.modules", {"stripe": fake_stripe}),
+            patch.object(main, "subscription_uses_free_price", return_value=False),
+            patch.object(main, "get_user_stripe_ids", return_value=("cus_123", "sub_current")),
+            patch.object(main, "set_user_plan") as fake_set,
+            self.assertLogs(main.logger, level="WARNING") as logs,
+        ):
+            out = self._run(main.api_stripe_webhook(req))
+        self.assertEqual(out, {"received": True})
+        fake_set.assert_not_called()
+        self.assertIn("sub_old", logs.output[0])
+
+    def test_deleted_subscription_without_stored_one_reverts_to_free(self):
+        event = {
+            "type": "customer.subscription.deleted",
+            "id": "evt_no_stored",
+            "data": {"object": {"id": "sub_x", "metadata": {"user_id": "user_1"}}},
+        }
+        req = _FakeRequest(body=json.dumps(event).encode())
+        fake_stripe = MagicMock()
+        fake_stripe.Webhook.construct_event.return_value = event
+        with (
+            patch.object(main, "STRIPE_WEBHOOK_SECRET", "whsec_test"),
+            patch.object(main, "STRIPE_SECRET_KEY", "sk_test"),
+            patch.dict("sys.modules", {"stripe": fake_stripe}),
+            patch.object(main, "subscription_uses_free_price", return_value=False),
+            patch.object(main, "get_user_stripe_ids", return_value=("cus_123", None)),
+            patch.object(main, "set_user_plan") as fake_set,
+            patch.object(main, "ensure_stripe_customer"),
+            patch.object(main, "_invalidate_stripe_caches_for_user"),
+            patch.object(main, "_invalidate_usage_cache"),
+        ):
+            out = self._run(main.api_stripe_webhook(req))
+        self.assertEqual(out, {"received": True})
+        self.assertEqual(fake_set.call_args[0][:2], ("user_1", "free"))
 
     def test_free_price_deletion_does_not_reset_the_plan(self):
         event = {

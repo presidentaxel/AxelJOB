@@ -2535,11 +2535,21 @@ async def api_stripe_webhook(request: Request):
                     _stripe_attr(sub, "id"),
                 )
             elif uid:
+                deleted_sub_id = (_stripe_attr(sub, "id") or "").strip()
+                _, stored_sub_id = await asyncio.to_thread(get_user_stripe_ids, uid)
+                if stored_sub_id and deleted_sub_id and stored_sub_id != deleted_sub_id:
+                    # Ancien abonnement (ex. second paiement) : celui enregistré paie encore.
+                    logger.warning(
+                        "Abonnement Stripe terminé ignoré : user %s garde %s (terminé : %s)",
+                        uid,
+                        stored_sub_id,
+                        deleted_sub_id,
+                    )
+                    return {"received": True}
                 await asyncio.to_thread(set_user_plan, uid, "free", stripe_subscription_id="")
                 await asyncio.to_thread(ensure_stripe_customer, uid)
                 _invalidate_stripe_caches_for_user(uid)
                 _invalidate_usage_cache(uid)
-                deleted_sub_id = (_stripe_attr(sub, "id") or "").strip()
                 if deleted_sub_id:
                     _STRIPE_SNAPSHOT_CACHE.invalidate(deleted_sub_id)
                 logger.info("User %s set to free after Stripe subscription deleted", uid)
