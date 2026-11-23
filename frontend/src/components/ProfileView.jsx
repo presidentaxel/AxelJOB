@@ -760,10 +760,38 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
     arr[index] = typeof current === 'object' && current !== null ? { ...current, ...value } : value;
     return { ...prev, competences: { ...(prev.competences || {}), [key]: arr } };
   });
-  const addCompList = (key, emptyItem) => setCv((prev) => {
-    const arr = [...(prev.competences?.[key] || []), emptyItem];
-    return { ...prev, competences: { ...(prev.competences || {}), [key]: arr } };
-  });
+  /** Champ à focaliser au rendu suivant (AXE-1021), via son attribut data-comp-input. */
+  const [compFocus, setCompFocus] = useState(null);
+  useEffect(() => {
+    if (!compFocus) return;
+    const el = document.querySelector(`[data-comp-input="${compFocus}"]`);
+    if (el) {
+      el.focus();
+      const len = el.value?.length ?? 0;
+      try { el.setSelectionRange(len, len); } catch { /* ignore */ }
+    }
+    setCompFocus(null);
+  }, [compFocus]);
+  /** Insère une ligne vide à `index` et y place le curseur. */
+  const insertCompItem = (key, index, emptyItem) => {
+    setCv((prev) => {
+      const arr = [...(prev.competences?.[key] || [])];
+      arr.splice(index, 0, emptyItem);
+      return { ...prev, competences: { ...(prev.competences || {}), [key]: arr } };
+    });
+    setCompFocus(`${key}-${index}-${key === 'langues' ? 'langue' : 'value'}`);
+  };
+  /** Retour arrière sur une ligne vide : la supprime et revient à la fin de la ligne d'avant. */
+  const compBackspace = (key, i) => () => {
+    if (i === 0) return;
+    removeCompList(key, i);
+    setCompFocus(`${key}-${i - 1}-${key === 'langues' ? 'niveau' : 'value'}`);
+  };
+  /** Entrée sur une ligne remplie : nouvelle ligne juste en dessous. Ligne vide : rien. */
+  const compEnter = (key, i, filled, emptyItem) => () => {
+    if (!filled) return;
+    insertCompItem(key, i + 1, emptyItem);
+  };
   const removeCompList = (key, index) => setCv((prev) => {
     const arr = (prev.competences?.[key] || []).filter((_, i) => i !== index);
     return { ...prev, competences: { ...(prev.competences || {}), [key]: arr } };
@@ -1296,49 +1324,49 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
           {(comp.techniques || []).map((item, i, list) => (
             <div key={i} {...compRowProps('techniques', i, 'profile-comp-row')}>
               {compDragHandle('techniques', i)}
-              <InlineEdit value={typeof item === 'string' ? item : ''} onChange={(v) => updateCompList('techniques', i, v)} placeholder="ex. Python, Gestion de projet" />
+              <InlineEdit value={typeof item === 'string' ? item : ''} onChange={(v) => updateCompList('techniques', i, v)} placeholder="ex. Python, Gestion de projet" onEnter={compEnter('techniques', i, typeof item === 'string' && item.trim(), '')} onBackspaceEmpty={compBackspace('techniques', i)} inputProps={{ 'data-comp-input': `techniques-${i}-value` }} />
               {compOrderButtons('techniques', i, list.length, 'cette compétence')}
               <button type="button" className="btn btn-remove" onClick={() => removeCompList('techniques', i)} title="Supprimer">×</button>
             </div>
           ))}
-          <button type="button" className="btn btn-add" onClick={() => addCompList('techniques', '')}>+ Ajouter</button>
+          <button type="button" className="btn btn-add" onClick={() => insertCompItem('techniques', (comp.techniques || []).length, '')}>+ Ajouter</button>
         </div>
         <div className="profile-card">
           <h3 className="sidebar-category">Logiciels & outils</h3>
           {(comp.logiciels || []).map((item, i, list) => (
             <div key={i} {...compRowProps('logiciels', i, 'profile-comp-row')}>
               {compDragHandle('logiciels', i)}
-              <InlineEdit value={typeof item === 'string' ? item : ''} onChange={(v) => updateCompList('logiciels', i, v)} placeholder="ex. Excel, React, Git" />
+              <InlineEdit value={typeof item === 'string' ? item : ''} onChange={(v) => updateCompList('logiciels', i, v)} placeholder="ex. Excel, React, Git" onEnter={compEnter('logiciels', i, typeof item === 'string' && item.trim(), '')} onBackspaceEmpty={compBackspace('logiciels', i)} inputProps={{ 'data-comp-input': `logiciels-${i}-value` }} />
               {compOrderButtons('logiciels', i, list.length, 'ce logiciel')}
               <button type="button" className="btn btn-remove" onClick={() => removeCompList('logiciels', i)} title="Supprimer">×</button>
             </div>
           ))}
-          <button type="button" className="btn btn-add" onClick={() => addCompList('logiciels', '')}>+ Ajouter</button>
+          <button type="button" className="btn btn-add" onClick={() => insertCompItem('logiciels', (comp.logiciels || []).length, '')}>+ Ajouter</button>
         </div>
         <div className="profile-card">
           <h3 className="sidebar-category">Langues</h3>
           {(comp.langues || []).map((l, i, list) => (
             <div key={i} {...compRowProps('langues', i, 'profile-langue-row')}>
               {compDragHandle('langues', i)}
-              <InlineEdit value={l?.langue || ''} onChange={(v) => updateCompList('langues', i, { ...l, langue: v })} placeholder="Langue" />
-              <InlineEdit value={l?.niveau || ''} onChange={(v) => updateCompList('langues', i, { ...l, niveau: v })} placeholder="ex. Natif, Courant (C1)" />
+              <InlineEdit value={l?.langue || ''} onChange={(v) => updateCompList('langues', i, { ...l, langue: v })} placeholder="Langue" onEnter={() => setCompFocus(`langues-${i}-niveau`)} onBackspaceEmpty={(l?.niveau || '') === '' ? compBackspace('langues', i) : undefined} inputProps={{ 'data-comp-input': `langues-${i}-langue` }} />
+              <InlineEdit value={l?.niveau || ''} onChange={(v) => updateCompList('langues', i, { ...l, niveau: v })} placeholder="ex. Natif, Courant (C1)" onEnter={compEnter('langues', i, `${l?.langue || ''}${l?.niveau || ''}`.trim(), { langue: '', niveau: '' })} onBackspaceEmpty={() => setCompFocus(`langues-${i}-langue`)} inputProps={{ 'data-comp-input': `langues-${i}-niveau` }} />
               {compOrderButtons('langues', i, list.length, 'cette langue')}
               <button type="button" className="btn btn-remove" onClick={() => removeCompList('langues', i)} title="Supprimer">×</button>
             </div>
           ))}
-          <button type="button" className="btn btn-add" onClick={() => addCompList('langues', { langue: '', niveau: '' })}>+ Ajouter</button>
+          <button type="button" className="btn btn-add" onClick={() => insertCompItem('langues', (comp.langues || []).length, { langue: '', niveau: '' })}>+ Ajouter</button>
         </div>
         <div className="profile-card">
           <h3 className="sidebar-category">Autres</h3>
           {(comp.autres || []).map((item, i, list) => (
             <div key={i} {...compRowProps('autres', i, 'profile-comp-row')}>
               {compDragHandle('autres', i)}
-              <InlineEdit value={typeof item === 'string' ? item : ''} onChange={(v) => updateCompList('autres', i, v)} placeholder="ex. Permis B, Piano" />
+              <InlineEdit value={typeof item === 'string' ? item : ''} onChange={(v) => updateCompList('autres', i, v)} placeholder="ex. Permis B, Piano" onEnter={compEnter('autres', i, typeof item === 'string' && item.trim(), '')} onBackspaceEmpty={compBackspace('autres', i)} inputProps={{ 'data-comp-input': `autres-${i}-value` }} />
               {compOrderButtons('autres', i, list.length, 'cet élément')}
               <button type="button" className="btn btn-remove" onClick={() => removeCompList('autres', i)} title="Supprimer">×</button>
             </div>
           ))}
-          <button type="button" className="btn btn-add" onClick={() => addCompList('autres', '')}>+ Ajouter</button>
+          <button type="button" className="btn btn-add" onClick={() => insertCompItem('autres', (comp.autres || []).length, '')}>+ Ajouter</button>
         </div>
       </section>
       )}
