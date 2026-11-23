@@ -269,7 +269,7 @@ export default function CvEditablePreview({
     };
   }, [templateId, cv, effectiveCss, previewHtmlWithInlineCss, layoutRefreshKey]);
 
-  const st = cvTemplateCopy(cv?.langue);
+  const st = cvTemplateCopy(cv?.langue, cv?.autres_titre);
 
   const handleBlur = useCallback(() => {
     if (!containerRef.current || !onChange) return;

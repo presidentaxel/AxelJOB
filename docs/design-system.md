@@ -40,9 +40,9 @@ Valeurs relevées sur le site du CRM (octobre 2026), à faire valider par l’é
 | `neutral.200` / `.300` | `#e6dccb` / `#d9ccb6` | traits décoratifs chauds |
 | `neutral.400` / `.350` | `#b9bcc2` / `#8d929a` | texte courant / discret sur bande sombre |
 | `neutral.850` / `.800` | `#2a3240` / `#1a2331` | trait et carte relevée sur bande sombre |
-| `orange.500` | `#fe5126` | **orange de marque** : accents, puces, aplats décoratifs, texte ≥ 24 px |
-| `orange.600` | `#c23709` | **orange d’action** : fond de CTA, focus (blanc dessus 5,5:1) |
-| `orange.700` | `#a62f08` | texte et liens orange, hover des CTA |
+| `orange.500` | `#ff7a45` | **orange de marque** : accents, puces, icônes, aplats décoratifs. Pas en couleur de texte sur fond clair (blanc 2,59:1) |
+| `orange.600` | `#be3c09` | **orange d’action** : fond de CTA, focus (blanc dessus 5,5:1) |
+| `orange.700` | `#a23408` | texte et liens orange, hover des CTA |
 | `orange.50` | `#ffe8df` | teinte orange pâle (pastille d’icône, fond accent) |
 | `amber.500` / `sun.200` | `#fb9c24` / `#fde7c4` | secondaire chaud / surlignage d’un mot de titre |
 
