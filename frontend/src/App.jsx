@@ -4095,12 +4095,13 @@ export default function App() {
                   optionsPreviewLoading={false}
                   profileLayout={profileLayout}
                   onBetaUnavailable={() => {
-                    showError('Crée d’abord un design dans Profil → active le mode Beta, puis reviens choisir « Beta » ici.');
+                    showError('Crée d’abord un design dans Profil → active le nouvel éditeur, puis reviens choisir « Nouvel éditeur » ici.');
                   }}
-                  extraBarLeft={(
+                  barActions={(
                     <button
                       type="button"
                       className="tpl-btn-bar-extra"
+                      aria-label="Exporter en PDF"
                       onClick={downloadBaseCvPdf}
                       disabled={baseCvPdfLoading}
                       title="Télécharger ton CV de profil (sans adaptation) en PDF, avec le template et les options actuels"
@@ -4109,7 +4110,7 @@ export default function App() {
                       <span className="tpl-btn-bar-extra-icon" aria-hidden>
                         <HiArrowDownTray size={16} strokeWidth={2} />
                       </span>
-                      Exporter en PDF
+                      <span className="tpl-bar-btn-label">Exporter en PDF</span>
                     </button>
                   )}
                 />

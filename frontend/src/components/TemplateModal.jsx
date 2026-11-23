@@ -183,7 +183,7 @@ export default function TemplateModal({
                     template={{
                       ...t,
                       disabledReason: disabled
-                        ? 'Crée d’abord un design dans Profil → mode Beta.'
+                        ? 'Crée d’abord un design dans Profil → Nouvel éditeur.'
                         : t.description,
                     }}
                     isSelected={templateId === t.id}
