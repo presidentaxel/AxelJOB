@@ -40,6 +40,7 @@ import {
 } from '../lib/profileAutoSaveGate.js';
 import Button from './ui/Button.jsx';
 import InlineEdit from './profile/InlineEdit.jsx';
+import { appendUniqueItem } from '../lib/appendUniqueItem.js';
 import '../styles/ProfileView.css';
 import '../styles/TemplatePicker.css';
 import '../styles/DesignModeBridgeModal.css';
@@ -768,6 +769,23 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
     const arr = (prev.competences?.[key] || []).filter((_, i) => i !== index);
     return { ...prev, competences: { ...(prev.competences || {}), [key]: arr } };
   });
+  /** Champ « ajouter un logiciel » : Entrée ajoute et vide le champ (AXE-1021). */
+  const [newLogiciel, setNewLogiciel] = useState('');
+  const newLogicielRef = useRef(null);
+  const submitNewLogiciel = () => {
+    if (!newLogiciel.trim()) {
+      newLogicielRef.current?.focus();
+      return;
+    }
+    setCv((prev) => ({
+      ...prev,
+      competences: {
+        ...(prev.competences || {}),
+        logiciels: appendUniqueItem(prev.competences?.logiciels, newLogiciel),
+      },
+    }));
+    setNewLogiciel('');
+  };
 
   const handleSave = async () => {
     setError('');
@@ -1264,7 +1282,23 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
               <button type="button" className="btn btn-remove" onClick={() => removeCompList('logiciels', i)} title="Supprimer">×</button>
             </div>
           ))}
-          <button type="button" className="btn btn-add" onClick={() => addCompList('logiciels', '')}>+ Ajouter</button>
+          <div className="profile-comp-row profile-comp-add">
+            <input
+              ref={newLogicielRef}
+              className="ds-input"
+              type="text"
+              value={newLogiciel}
+              onChange={(e) => setNewLogiciel(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key !== 'Enter' || e.nativeEvent.isComposing) return;
+                e.preventDefault();
+                submitNewLogiciel();
+              }}
+              placeholder="Ajouter un logiciel, puis Entrée"
+              aria-label="Ajouter un logiciel ou un outil"
+            />
+            <button type="button" className="btn btn-add" onClick={submitNewLogiciel}>+ Ajouter</button>
+          </div>
         </div>
         <div className="profile-card">
           <h3 className="sidebar-category">Langues</h3>

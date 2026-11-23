@@ -1612,3 +1612,12 @@
   margin: 0.75rem 0 0;
   line-height: 1.45;
 }
+
+/* Logiciels & outils : champ d'ajout (AXE-1021) */
+.profile-comp-add {
+  margin-top: var(--ds-space-xs);
+}
+.profile-comp-add .ds-input {
+  flex: 1;
+  min-width: 0;
+}
