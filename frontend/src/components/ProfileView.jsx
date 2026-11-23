@@ -356,14 +356,14 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
       }
       setMessage(
         templateChanged
-          ? `Template Stable « ${offer.templateLabel || offer.templateId} » appliqué`
-          : 'Préférences Stable conservées',
+          ? `Modèle de l’éditeur classique « ${offer.templateLabel || offer.templateId} » appliqué`
+          : 'Préférences de l’éditeur classique conservées',
       );
       setTimeout(() => setMessage(''), 2500);
       setDesignBridgeOffer(null);
       onSaveSuccess?.();
     } catch (e) {
-      setError(e.message || 'Impossible d’appliquer le template Stable.');
+      setError(e.message || 'Impossible d’appliquer le modèle de l’éditeur classique.');
     } finally {
       setDesignBridgeConfirming(false);
     }
@@ -1415,7 +1415,7 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
             optionsPreviewLoading={profilePreviewLoading}
             profileLayout={cv?.layout}
             onBetaUnavailable={() => {
-              setError('Crée d’abord un design en activant le mode Beta (canvas), puis choisis « Beta » ici.');
+              setError('Crée d’abord un design en activant le nouvel éditeur, puis choisis « Nouvel éditeur » ici.');
             }}
             extraBarLeft={(
               <button

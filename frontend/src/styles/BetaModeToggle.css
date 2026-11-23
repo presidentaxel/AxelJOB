@@ -100,14 +100,14 @@
 }
 
 /* En dessous de 720px, on cache les labels textuels et ne garde que
- * le toggle + le badge BETA quand actif (la topbar est déjà chargée). */
+ * le toggle + le badge NEW quand actif (la topbar est déjà chargée). */
 @media (max-width: 720px) {
   .beta-mode-toggle-label-left,
   .beta-mode-toggle-label-right {
     display: none;
   }
   .beta-mode-toggle--on::after {
-    content: 'BETA';
+    content: 'NEW';
     background: var(--ds-color-action-primary-bg);
     color: white;
     padding: 0.1rem 0.35rem;
