@@ -173,6 +173,7 @@
 
 .profile-preview-title {
   margin: 0 0 0.75rem;
+  padding-inline: var(--ds-space-lg); /* aligné sur la barre du modèle */
   color: var(--ds-color-text-muted);
 }
 

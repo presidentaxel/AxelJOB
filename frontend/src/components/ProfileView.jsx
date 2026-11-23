@@ -1498,10 +1498,11 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
             onBetaUnavailable={() => {
               setError('Crée d’abord un design en activant le nouvel éditeur, puis choisis « Nouvel éditeur » ici.');
             }}
-            extraBarLeft={(
+            barActions={(
               <button
                 type="button"
                 className="tpl-btn-bar-extra"
+                aria-label="Exporter en PDF"
                 onClick={downloadBaseCvPdf}
                 disabled={baseCvPdfLoading || loading}
                 title="Télécharger ton CV de profil (tel qu’affiché dans l’aperçu) en PDF"
@@ -1510,7 +1511,7 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
                 <span className="tpl-btn-bar-extra-icon" aria-hidden>
                   <HiArrowDownTray size={16} strokeWidth={2} />
                 </span>
-                Exporter en PDF
+                <span className="tpl-bar-btn-label">Exporter en PDF</span>
               </button>
             )}
           />
