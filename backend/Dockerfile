@@ -50,5 +50,6 @@ ENV MALLOC_ARENA_MAX=2
 
 EXPOSE 8000
 
-# UVICORN_WORKERS=1 recommandé sur petit VPS (RAM) ; augmenter seulement si ressources suffisantes
+# UVICORN_WORKERS doit rester à 1 : voir docs/deploy.md, section 6.
+# shortcut: état en mémoire (plans d'adaptation, rate limit, caches), passer à Redis/Supabase avant >1 worker
 CMD ["sh", "-c", "uvicorn backend.main:app --host 0.0.0.0 --port 8000 --workers ${UVICORN_WORKERS:-1} --proxy-headers --forwarded-allow-ips '*'"]

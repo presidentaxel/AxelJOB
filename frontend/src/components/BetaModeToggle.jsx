@@ -26,13 +26,13 @@ export default function BetaModeToggle() {
   return (
     <label
       className={`beta-mode-toggle ${enabled ? 'beta-mode-toggle--on' : ''}`}
-      title="Bascule entre la version stable actuelle et la nouvelle expérience Beta (édition inline, score ATS, nouvelle mise en page). Réversible à tout moment."
+      title="Bascule entre l’éditeur classique et le nouvel éditeur (édition directe sur le CV, score ATS, mise en page libre). Réversible à tout moment."
     >
-      <span className="beta-mode-toggle-label-left">Stable</span>
+      <span className="beta-mode-toggle-label-left">Classique</span>
       <input
         type="checkbox"
         role="switch"
-        aria-label={enabled ? 'Désactiver le mode Beta' : 'Activer le mode Beta'}
+        aria-label={enabled ? 'Revenir à l’éditeur classique' : 'Activer le nouvel éditeur'}
         aria-checked={enabled}
         checked={enabled}
         onChange={handleChange}
@@ -43,7 +43,7 @@ export default function BetaModeToggle() {
         <span className="beta-mode-toggle-thumb" />
       </span>
       <span className="beta-mode-toggle-label-right">
-        Beta
+        Nouvel éditeur
         {enabled && <span className="beta-mode-toggle-badge">NEW</span>}
       </span>
     </label>

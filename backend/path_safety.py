@@ -72,39 +72,6 @@ def write_bytes_in_dir(
     return target
 
 
-def resolve_export_output_base(output_base: str | None, *, default: Path) -> Path:
-    """Resolve export directory under ``default`` only (no arbitrary user paths).
-
-    Accepts:
-    - empty / None → ``default``
-    - exact string equal to ``default`` (client round-trip of ``/api/export-default-dir``)
-    - relative segments under ``default`` (validated via ``resolve_under_base``)
-
-    Rejects traversal, ``~``, and absolute paths other than ``default``.
-    """
-    default_abs = os.path.abspath(str(default))
-    default_path = Path(default_abs)
-    if not output_base or not str(output_base).strip():
-        return default_path
-    raw = str(output_base).strip().replace("\\", "/")
-    if not raw or ".." in raw or raw.startswith("~"):
-        return default_path
-    # Round-trip of the known default path (no Path(user).resolve() — CodeQL).
-    if raw.rstrip("/") == default_abs.rstrip("/\\").replace("\\", "/") or raw.rstrip("/") == str(
-        default
-    ).rstrip("/\\").replace("\\", "/"):
-        return default_path
-    if os.path.isabs(raw) or (len(raw) > 1 and raw[1] == ":"):
-        return default_path
-    parts = [p for p in raw.split("/") if p and p != "."]
-    if not parts:
-        return default_path
-    try:
-        return resolve_under_base(default_path, *parts)
-    except ValueError:
-        return default_path
-
-
 def adaptation_json_path(adaptations_dir: Path, adaptation_id: str) -> Path:
     if not is_safe_id_segment(adaptation_id):
         raise ValueError("invalid adaptation_id")

@@ -44,7 +44,7 @@ export default function ProfileViewSwitcher(props) {
     return <ProfileView {...props} />;
   }
   return (
-    <Suspense fallback={<div className="cv-editor-beta cv-editor-beta--loading"><p>Chargement de l’éditeur Beta…</p></div>}>
+    <Suspense fallback={<div className="cv-editor-beta cv-editor-beta--loading"><p>Chargement du nouvel éditeur…</p></div>}>
       <CvEditorBeta {...props} />
     </Suspense>
   );

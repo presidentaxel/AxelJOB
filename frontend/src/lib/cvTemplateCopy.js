@@ -61,6 +61,13 @@ const COPY = {
   },
 };
 
-export function cvTemplateCopy(langue) {
-  return COPY[langue === 'en' ? 'en' : 'fr'];
+/** Longueur max du titre personnalisé de la section « Autres » (même limite côté backend). */
+export const AUTRES_TITRE_MAX = 60;
+
+/** `autresTitre` : titre personnalisé de la section « Autres » (AXE-1025), sinon titre par défaut. */
+export function cvTemplateCopy(langue, autresTitre) {
+  const base = COPY[langue === 'en' ? 'en' : 'fr'];
+  const custom = String(autresTitre ?? '').trim().slice(0, AUTRES_TITRE_MAX);
+  if (!custom) return base;
+  return { ...base, other: custom.toLocaleUpperCase(), other_title: custom };
 }

@@ -382,11 +382,6 @@ class AdaptLocalizeBody(BaseModel):
     preview_seq: int | None = None
 
 
-class AdaptPlanExplainBody(BaseModel):
-    plan_id: str | None = None
-    selected_step_ids: list[str] | None = None
-
-
 class AdaptPlanUpdateBody(BaseModel):
     selected_step_ids: list[str] | None = None
 
@@ -395,11 +390,6 @@ class AdaptRefineBody(BaseModel):
     cv: dict
     instruction: str = ""
     documents_context: str = ""
-
-
-class AdaptFitTextBody(BaseModel):
-    text: str = ""
-    max_chars: int = 80
 
 
 class RenderHtmlBody(BaseModel):
@@ -426,17 +416,6 @@ class CvExportBody(PdfBody):
     """Export multi-format (AXE-330) — mêmes champs que PdfBody + format."""
 
     format: str = "pdf"
-
-
-class ExportDossierBody(BaseModel):
-    cv: dict
-    titre: str = ""
-    entreprise: str = ""
-    description: str = ""
-    dossier: str | None = None
-    template_id: str | None = None
-    template_options: dict | None = None
-    selection_a4: dict | None = None
 
 
 class ExportDossierZipBody(BaseModel):
@@ -675,6 +654,36 @@ def _enforce_free_adaptations_quota(user_id: str | None) -> None:
         raise HTTPException(
             status_code=402,
             detail="Vous avez épuisé vos adaptations gratuites. Passez en Pro pour des adaptations illimitées.",
+        )
+
+
+def _enforce_free_limits(
+    user_id: str | None, adaptation_id: str | None = None, *, check_quota: bool = True
+) -> None:
+    """Règles du plan gratuit, dans cet ordre : ancre implicite, quota d'adaptations (402),
+    plafond de candidatures actives (403).
+
+    ``adaptation_id`` : si cette adaptation existe déjà (même offre), elle ne compte pas comme
+    une nouvelle candidature pour le plafond. Pro / paywall_disabled passent toujours.
+    """
+    uid = user_id or "default"
+    if user_id:
+        ensure_implicit_free_adaptation_anchor(user_id)
+    plan = get_user_plan(uid)
+    no_paywall = get_paywall_disabled(uid)
+    if check_quota:
+        _enforce_free_adaptations_quota(user_id)
+    if plan != "free" or no_paywall:
+        return
+    if adaptation_id and get_adaptation(adaptation_id, user_id=user_id):
+        return
+    if count_active_applications(uid) >= FREE_APPLICATIONS_LIMIT:
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                f"Plafond gratuit atteint : {FREE_APPLICATIONS_LIMIT} candidatures actives "
+                "(archive d'anciennes entrées ou passe en Pro pour un suivi illimité)."
+            ),
         )
 
 
@@ -2257,6 +2266,9 @@ def _check_custom_template_access(user_id: str | None, template_id: str | None):
 def api_create_checkout_session(request: Request):
     """Crée une session Stripe Checkout pour le plan Pro. Redirection vers Stripe."""
     user_id = _require_user_id(request)
+    # Évite un second abonnement payé (deux onglets). Cache plan de 30 s : acceptable ici.
+    if get_user_plan(user_id) == "pro" or get_paywall_disabled(user_id):
+        raise HTTPException(status_code=409, detail="Tu es déjà abonné au plan Pro.")
     if not STRIPE_SECRET_KEY or not STRIPE_PRICE_ID_PRO_MONTHLY:
         raise HTTPException(status_code=503, detail="Paiement non configuré.")
     try:
@@ -2546,11 +2558,21 @@ async def api_stripe_webhook(request: Request):
                     _stripe_attr(sub, "id"),
                 )
             elif uid:
+                deleted_sub_id = (_stripe_attr(sub, "id") or "").strip()
+                _, stored_sub_id = await asyncio.to_thread(get_user_stripe_ids, uid)
+                if stored_sub_id and deleted_sub_id and stored_sub_id != deleted_sub_id:
+                    # Ancien abonnement (ex. second paiement) : celui enregistré paie encore.
+                    logger.warning(
+                        "Abonnement Stripe terminé ignoré : user %s garde %s (terminé : %s)",
+                        uid,
+                        stored_sub_id,
+                        deleted_sub_id,
+                    )
+                    return {"received": True}
                 await asyncio.to_thread(set_user_plan, uid, "free", stripe_subscription_id="")
                 await asyncio.to_thread(ensure_stripe_customer, uid)
                 _invalidate_stripe_caches_for_user(uid)
                 _invalidate_usage_cache(uid)
-                deleted_sub_id = (_stripe_attr(sub, "id") or "").strip()
                 if deleted_sub_id:
                     _STRIPE_SNAPSHOT_CACHE.invalidate(deleted_sub_id)
                 logger.info("User %s set to free after Stripe subscription deleted", uid)
@@ -3712,47 +3734,6 @@ def api_adapt_plan_patch(request: Request, plan_id: str, body: AdaptPlanUpdateBo
     return {"plan_id": pid, "todo": updated_todo}
 
 
-@app.post("/api/adapt-plan-explain")
-def api_adapt_plan_explain(request: Request, body: AdaptPlanExplainBody):
-    user_id = _get_user_id(request)
-    check_rate_limit(user_id, rate_limit_max_adapt())
-    selected = _normalize_selected_step_ids(body.selected_step_ids)
-    steps_source = [dict(s) for s in ADAPT_TODO_DEFAULT_STEPS]
-    if not selected and (body.plan_id or "").strip():
-        payload = _get_adapt_plan((body.plan_id or "").strip(), user_id)
-        todo = payload.get("todo") if isinstance(payload.get("todo"), list) else []
-        if todo:
-            steps_source = [
-                {
-                    "id": str(step.get("id") or ""),
-                    "title": str(step.get("title") or ""),
-                    "reason": str(step.get("reason") or ""),
-                    "enabled": bool(step.get("enabled")),
-                }
-                for step in todo
-                if isinstance(step, dict) and str(step.get("id") or "").strip()
-            ]
-        for step in todo:
-            if isinstance(step, dict) and bool(step.get("enabled")):
-                sid = str(step.get("id") or "").strip()
-                if sid:
-                    selected.add(sid)
-    details = []
-    for step in steps_source:
-        if step["id"] in selected:
-            details.append({"id": step["id"], "title": step["title"], "reason": step["reason"]})
-    if not details:
-        details = [
-            {
-                "id": "none",
-                "title": "Aucune étape active",
-                "reason": "Active au moins une étape pour lancer l'adaptation.",
-            }
-        ]
-    summary = "Plan validé. On exécute uniquement les étapes actives, dans l'ordre, sans modifier les autres sections."
-    return {"summary": summary, "details": details}
-
-
 def _cv_working_from_lang_meta(cv_base: dict, lang_meta: dict, user_id: str | None) -> dict:
     """CV dans la langue choisie, sans adaptation ATS. Police / template inchangés."""
     from backend.services.cv_language import (
@@ -3794,24 +3775,8 @@ def _adapt_run_prepare(request: Request, body: AdaptRunBody) -> dict:
         raise HTTPException(status_code=400, detail=str(e))
     selected_steps = _normalize_selected_step_ids(body.selected_step_ids)
     uid = user_id or "default"
-    if user_id:
-        ensure_implicit_free_adaptation_anchor(user_id)
-    plan = get_user_plan(uid)
-    no_paywall = get_paywall_disabled(uid)
-    _enforce_free_adaptations_quota(user_id)
     adaptation_id = _adaptation_id_from_user_and_offer(user_id, description)
-    if plan == "free" and not no_paywall:
-        if (
-            not get_adaptation(adaptation_id, user_id=user_id)
-            and count_active_applications(uid) >= FREE_APPLICATIONS_LIMIT
-        ):
-            raise HTTPException(
-                status_code=403,
-                detail=(
-                    f"Plafond gratuit atteint : {FREE_APPLICATIONS_LIMIT} candidatures actives "
-                    "(archive d'anciennes entrées ou passe en Pro pour un suivi illimité)."
-                ),
-            )
+    _enforce_free_limits(user_id, adaptation_id)
     _track_analytics(
         request,
         event_log.EVENT_ADAPTATION_STARTED,
@@ -4092,47 +4057,6 @@ def _stream_render_adapt_final_preview(request: Request, body: AdaptRunBody, dat
     )
 
 
-@app.post("/api/adapt-run")
-def api_adapt_run(request: Request, body: AdaptRunBody):
-    prep = _adapt_run_prepare(request, body)
-    from backend.services.adapter import adapter_cv_by_selected_steps
-
-    try:
-        tweaks = adapter_cv_by_selected_steps(
-            prep["cv_working"],
-            prep["offre"],
-            prep["rapport"],
-            prep["selected_steps"],
-            prep["user_id"],
-            operation="adapt",
-            output_policy=prep.get("output_policy"),
-        )
-    except GeminiQuotaExceeded:
-        raise HTTPException(
-            status_code=429, detail="Quota temporairement atteint. Réessaie plus tard."
-        )
-    except Exception as e:
-        logger.exception(e)
-        _track_analytics(
-            request, event_log.EVENT_ADAPTATION_FAILED, prep["user_id"], {"error": str(e)}
-        )
-        raise HTTPException(status_code=500, detail="Erreur lors de l'adaptation. Réessaie.")
-    cv_working = prep.get("cv_working") or prep["cv_base"]
-    if "rewrite_resume" not in prep["selected_steps"]:
-        tweaks["resume"] = cv_working.get("resume", "")
-    if "rewrite_experiences" not in prep["selected_steps"]:
-        tweaks["experiences"] = _keep_original_experiences_tweaks(cv_working)
-    if "optimize_ats" not in prep["selected_steps"]:
-        tweaks["mots_cles_cache"] = cv_working.get("mots_cles_cache", "")
-    merged = _apply_tweaks(
-        cv_working,
-        tweaks,
-        output_policy=prep.get("output_policy"),
-        offre=prep["offre"],
-    )
-    return _adapt_run_finalize_result(request, body, prep, merged, tweaks)
-
-
 @app.post("/api/adapt-run-stream")
 async def api_adapt_run_stream(request: Request, body: AdaptRunBody):
     from backend.services.adapter import (
@@ -4350,25 +4274,8 @@ def api_adapt(request: Request, body: AdaptBody):
         check_user_input_for_injection(description=description)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    uid = user_id or "default"
-    if user_id:
-        ensure_implicit_free_adaptation_anchor(user_id)
-    plan = get_user_plan(uid)
-    no_paywall = get_paywall_disabled(uid)
-    _enforce_free_adaptations_quota(user_id)
     adaptation_id = _adaptation_id_from_user_and_offer(user_id, description)
-    if plan == "free" and not no_paywall:
-        if (
-            not get_adaptation(adaptation_id, user_id=user_id)
-            and count_active_applications(uid) >= FREE_APPLICATIONS_LIMIT
-        ):
-            raise HTTPException(
-                status_code=403,
-                detail=(
-                    f"Plafond gratuit atteint : {FREE_APPLICATIONS_LIMIT} candidatures actives "
-                    "(archive d'anciennes entrées ou passe en Pro pour un suivi illimité)."
-                ),
-            )
+    _enforce_free_limits(user_id, adaptation_id)
     _track_analytics(
         request,
         event_log.EVENT_ADAPTATION_STARTED,
@@ -4534,23 +4441,6 @@ def api_adapt(request: Request, body: AdaptBody):
         "export_hints": export_hints,
         **lang_meta,
     }
-
-
-@app.post("/api/adapt-fit-text")
-def api_adapt_fit_text(request: Request, body: AdaptFitTextBody):
-    """Raccourcit un passage qui déborderait sur la ligne suivante du canvas."""
-    user_id = _get_user_id(request)
-    check_rate_limit(user_id, rate_limit_max_adapt())
-    text = (body.text or "").strip()
-    if not text:
-        raise HTTPException(status_code=400, detail="Texte requis.")
-    try:
-        check_user_input_for_injection(description=text)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    from backend.services.adapter import shorten_text_to_fit
-
-    return shorten_text_to_fit(text, body.max_chars, user_id=user_id)
 
 
 @app.post("/api/adapt-refine")
@@ -4805,48 +4695,6 @@ def api_cv_export(request: Request, body: CvExportBody):
         raise HTTPException(status_code=500, detail=f"Erreur export ({fmt}): {err_msg}")
 
 
-@app.get("/api/export-default-dir")
-def api_export_default_dir():
-    try:
-        from backend.services.export_package import get_export_base_path
-
-        return {"path": str(get_export_base_path())}
-    except Exception:
-        return {"path": ""}
-
-
-@app.post("/api/export-dossier")
-def api_export_dossier(request: Request, body: ExportDossierBody):
-    if not (body.titre or "").strip():
-        raise HTTPException(status_code=400, detail="Indiquez l'intitulé du poste")
-    user_id = _get_user_id(request)
-    try:
-        from backend.services.export_package import export_dossier
-
-        result = export_dossier(
-            body.cv,
-            body.titre,
-            body.entreprise,
-            body.description,
-            output_base=body.dossier or None,
-            template_id=body.template_id,
-            template_options=body.template_options,
-            selection_a4=body.selection_a4,
-        )
-        _track_analytics(
-            request,
-            event_log.EVENT_EXPORT_DOSSIER,
-            user_id,
-            {"titre": body.titre or "", "entreprise": body.entreprise or ""},
-        )
-        return result
-    except Exception as e:
-        logger.exception(e)
-        raise HTTPException(
-            status_code=500, detail="Erreur interne. Réessaie ou contacte le support."
-        )
-
-
 @app.post("/api/export-dossier-zip")
 def api_export_dossier_zip(request: Request, body: ExportDossierZipBody):
     if not (body.titre or "").strip():
@@ -4970,18 +4818,7 @@ def api_application_create(request: Request, body: ApplicationCreateBody):
         raise HTTPException(status_code=400, detail="Renseigne au moins le poste ou l'entreprise.")
     if body.statut not in STATUTS_CANDIDATURE:
         raise HTTPException(status_code=400, detail="Statut invalide")
-    ensure_implicit_free_adaptation_anchor(user_id)
-    plan = get_user_plan(uid)
-    no_pw = get_paywall_disabled(uid)
-    if plan == "free" and not no_pw:
-        if count_active_applications(uid) >= FREE_APPLICATIONS_LIMIT:
-            raise HTTPException(
-                status_code=403,
-                detail=(
-                    f"Plafond gratuit atteint : {FREE_APPLICATIONS_LIMIT} candidatures actives "
-                    "(archive d'anciennes entrées ou passe en Pro pour un suivi illimité)."
-                ),
-            )
+    _enforce_free_limits(user_id, check_quota=False)
     application_id = "manual_" + uuid_module.uuid4().hex[:12]
     now_iso = datetime.now(timezone.utc).isoformat()
     payload = {

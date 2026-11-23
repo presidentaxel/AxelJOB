@@ -3,10 +3,8 @@ import { Link } from 'react-router-dom';
 import { apiGet, apiPost } from '../api';
 import { supabase } from '../lib/supabase';
 import {
-  STORAGE_EXPORT_DIR,
   STORAGE_PDF_EXPORT_FILENAME_PATTERN,
   STORAGE_PRE_EXPORT_TEMPLATE_OPTIONS_DONE,
-  STORAGE_PDF_EXPORT_START_DIR_LABEL,
 } from '../constants';
 import {
   buildAdaptedPdfFilename,
@@ -88,22 +86,6 @@ export default function SettingsView({
       return DEFAULT_PDF_EXPORT_FILENAME_PATTERN;
     }
   });
-
-  const [exportDossier, setExportDossier] = useState(() => {
-    try {
-      return localStorage.getItem(STORAGE_EXPORT_DIR) || '';
-    } catch {
-      return '';
-    }
-  });
-
-  const exportDirLabel = useMemo(() => {
-    try {
-      return localStorage.getItem(STORAGE_PDF_EXPORT_START_DIR_LABEL) || '';
-    } catch {
-      return '';
-    }
-  }, []);
 
   const draftUserId = session?.user?.id || '';
   const [localSummary, setLocalSummary] = useState(() => getLocalDataSummary(draftUserId));
@@ -274,14 +256,11 @@ export default function SettingsView({
     try {
       localStorage.setItem(STORAGE_PDF_EXPORT_FILENAME_PATTERN, trimmedPattern);
       setPdfPattern(trimmedPattern);
-      const trimmedDir = exportDossier.trim();
-      if (trimmedDir) localStorage.setItem(STORAGE_EXPORT_DIR, trimmedDir);
-      else localStorage.removeItem(STORAGE_EXPORT_DIR);
       showSuccess('Préférences d’export enregistrées.');
     } catch {
       setError('Impossible d’enregistrer les préférences d’export.');
     }
-  }, [pdfPattern, exportDossier]);
+  }, [pdfPattern]);
 
   const insertPdfVariable = useCallback((token) => {
     const input = pdfPatternInputRef.current;
@@ -555,7 +534,7 @@ export default function SettingsView({
       <SettingsSection
         id="settings-export-title"
         title="Export PDF"
-        lead="Nom de fichier et dossier suggéré à l’enregistrement d’un CV adapté."
+        lead="Nom de fichier suggéré à l’enregistrement d’un CV adapté."
       >
         <div className="settings-export-layout">
           <div className="settings-export-layout__col">
@@ -580,23 +559,6 @@ export default function SettingsView({
             <p className="settings-preview">
               Aperçu
               <code>{profileLoading ? '…' : pdfExportFilenameExample}</code>
-            </p>
-          </div>
-          <div className="settings-export-layout__col">
-            <label className="settings-field">
-              Dossier d&apos;export (suggestion)
-              <input
-                className="ds-input"
-                type="text"
-                value={exportDossier}
-                onChange={(e) => setExportDossier(e.target.value)}
-                placeholder="Ex. Entreprise - Poste"
-                spellCheck={false}
-              />
-            </label>
-            <p className="settings-field-hint">
-              Mémorisé sur cet appareil.
-              {exportDirLabel ? <> Dernier dossier navigateur&nbsp;: <strong>{exportDirLabel}</strong></> : null}
             </p>
           </div>
         </div>
@@ -634,11 +596,11 @@ export default function SettingsView({
       <SettingsSection
         id="settings-editor-title"
         title="Éditeur"
-        lead="Mode Beta et données locales (non synchronisées entre appareils)."
+        lead="Nouvel éditeur et données locales (non synchronisées entre appareils)."
       >
         <div className="settings-row">
           <div className="settings-row__text">
-            <strong>Mode Beta</strong>
+            <strong>Nouvel éditeur</strong>
             <p>Canvas libre, score ATS et barre d&apos;outils avancée.</p>
           </div>
           <BetaModeToggle />
@@ -676,7 +638,7 @@ export default function SettingsView({
             />
             <SettingsListRow
               label="Astuces éditeur"
-              detail="Bandeaux d'aide dans l'éditeur Beta"
+              detail="Bandeaux d'aide dans le nouvel éditeur"
               onClear={() => {
                 if (resetEditorHints()) showSuccess('Astuces éditeur réinitialisées.');
               }}

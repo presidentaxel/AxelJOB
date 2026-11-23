@@ -40,6 +40,7 @@ import {
 } from '../lib/profileAutoSaveGate.js';
 import Button from './ui/Button.jsx';
 import InlineEdit from './profile/InlineEdit.jsx';
+import { AUTRES_TITRE_MAX } from '../lib/cvTemplateCopy.js';
 import '../styles/ProfileView.css';
 import '../styles/TemplatePicker.css';
 import '../styles/DesignModeBridgeModal.css';
@@ -129,6 +130,17 @@ function moveListItem(list, index, direction) {
   next.splice(target, 0, item);
   return next;
 }
+
+/** Rubriques du profil, dans l'ordre d'un CV, avec une ligne d'aide chacune (AXE-1018). */
+const PROFILE_SECTIONS = [
+  { id: 'identite', label: 'Identité', desc: 'Nom, titre, coordonnées et résumé : l’en-tête de ton CV.' },
+  { id: 'experiences', label: 'Expériences', desc: 'Tes postes, du plus récent au plus ancien. L’IA les reformule pour chaque offre.' },
+  { id: 'formations', label: 'Formations', desc: 'Diplômes et écoles, du plus récent au plus ancien.' },
+  { id: 'competences', label: 'Compétences', desc: 'Compétences techniques, logiciels, langues et le reste.' },
+  { id: 'projets', label: 'Projets', desc: 'Projets personnels ou d’études à mettre en avant (facultatif).' },
+  { id: 'certifications', label: 'Certifications', desc: 'Certifications et attestations (facultatif).' },
+];
+const sectionDesc = (id) => PROFILE_SECTIONS.find((s) => s.id === id)?.desc;
 
 function OrderButtons({ index, total, onMove, label }) {
   return (
@@ -356,14 +368,14 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
       }
       setMessage(
         templateChanged
-          ? `Template Stable « ${offer.templateLabel || offer.templateId} » appliqué`
-          : 'Préférences Stable conservées',
+          ? `Modèle de l’éditeur classique « ${offer.templateLabel || offer.templateId} » appliqué`
+          : 'Préférences de l’éditeur classique conservées',
       );
       setTimeout(() => setMessage(''), 2500);
       setDesignBridgeOffer(null);
       onSaveSuccess?.();
     } catch (e) {
-      setError(e.message || 'Impossible d’appliquer le template Stable.');
+      setError(e.message || 'Impossible d’appliquer le modèle de l’éditeur classique.');
     } finally {
       setDesignBridgeConfirming(false);
     }
@@ -760,14 +772,87 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
     arr[index] = typeof current === 'object' && current !== null ? { ...current, ...value } : value;
     return { ...prev, competences: { ...(prev.competences || {}), [key]: arr } };
   });
-  const addCompList = (key, emptyItem) => setCv((prev) => {
-    const arr = [...(prev.competences?.[key] || []), emptyItem];
-    return { ...prev, competences: { ...(prev.competences || {}), [key]: arr } };
-  });
+  /** Champ à focaliser au rendu suivant (AXE-1021), via son attribut data-comp-input. */
+  const [compFocus, setCompFocus] = useState(null);
+  useEffect(() => {
+    if (!compFocus) return;
+    const el = document.querySelector(`[data-comp-input="${compFocus}"]`);
+    if (el) {
+      el.focus();
+      const len = el.value?.length ?? 0;
+      try { el.setSelectionRange(len, len); } catch { /* ignore */ }
+    }
+    setCompFocus(null);
+  }, [compFocus]);
+  /** Insère une ligne vide à `index` et y place le curseur. */
+  const insertCompItem = (key, index, emptyItem) => {
+    setCv((prev) => {
+      const arr = [...(prev.competences?.[key] || [])];
+      arr.splice(index, 0, emptyItem);
+      return { ...prev, competences: { ...(prev.competences || {}), [key]: arr } };
+    });
+    setCompFocus(`${key}-${index}-${key === 'langues' ? 'langue' : 'value'}`);
+  };
+  /** Retour arrière sur une ligne vide : la supprime et revient à la fin de la ligne d'avant. */
+  const compBackspace = (key, i) => () => {
+    if (i === 0) return;
+    removeCompList(key, i);
+    setCompFocus(`${key}-${i - 1}-${key === 'langues' ? 'niveau' : 'value'}`);
+  };
+  /** Entrée sur une ligne remplie : nouvelle ligne juste en dessous. Ligne vide : rien. */
+  const compEnter = (key, i, filled, emptyItem) => () => {
+    if (!filled) return;
+    insertCompItem(key, i + 1, emptyItem);
+  };
   const removeCompList = (key, index) => setCv((prev) => {
     const arr = (prev.competences?.[key] || []).filter((_, i) => i !== index);
     return { ...prev, competences: { ...(prev.competences || {}), [key]: arr } };
   });
+  const moveCompList = (key, index, offset) => setCv((prev) => ({
+    ...prev,
+    competences: { ...(prev.competences || {}), [key]: moveListItem(prev.competences?.[key] || [], index, offset) },
+  }));
+  /** Glisser-déposer dans les listes de compétences : { key, from, over } pendant le drag. */
+  const [compDrag, setCompDrag] = useState(null);
+  const compRowProps = (key, i, baseClass) => ({
+    className: [
+      baseClass,
+      compDrag?.key === key && compDrag.from === i ? 'profile-comp-row--dragging' : '',
+      compDrag?.key === key && compDrag.over === i && compDrag.from !== i ? 'profile-comp-row--over' : '',
+    ].filter(Boolean).join(' '),
+    onDragOver: (e) => {
+      if (compDrag?.key !== key) return;
+      e.preventDefault();
+      if (compDrag.over !== i) setCompDrag({ ...compDrag, over: i });
+    },
+    onDrop: (e) => {
+      e.preventDefault();
+      if (compDrag?.key === key && compDrag.from !== i) moveCompList(key, compDrag.from, i - compDrag.from);
+      setCompDrag(null);
+    },
+  });
+  const compDragHandle = (key, i) => (
+    <span
+      className="profile-comp-handle"
+      draggable
+      title="Glisser pour réordonner"
+      aria-hidden="true"
+      onDragStart={(e) => {
+        setCompDrag({ key, from: i, over: i });
+        e.dataTransfer.effectAllowed = 'move';
+        try {
+          e.dataTransfer.setData('text/plain', `${key}:${i}`); // Firefox exige une donnée
+          e.dataTransfer.setDragImage(e.currentTarget.parentElement, 0, 0);
+        } catch { /* ignore */ }
+      }}
+      onDragEnd={() => setCompDrag(null)}
+    >
+      ⋮⋮
+    </span>
+  );
+  const compOrderButtons = (key, i, total, label) => (
+    <OrderButtons index={i} total={total} onMove={(idx, dir) => moveCompList(key, idx, dir)} label={label} />
+  );
 
   const handleSave = async () => {
     setError('');
@@ -1000,6 +1085,10 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
         document.body,
       )}
 
+      <p className="profile-intro">
+        Ton CV de base : chaque adaptation part de ces informations. Plus il est complet, meilleures sont les adaptations.
+      </p>
+
       {message && <div className="profile-toast profile-toast--success" role="status">{message}</div>}
       {error && <div className="profile-toast profile-toast--error" role="alert">{error}</div>}
 
@@ -1007,12 +1096,7 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
 
       <nav className="profile-section-nav" aria-label="Rubriques du profil">
         {[
-          { id: 'identite', label: 'Identité' },
-          { id: 'experiences', label: 'Expériences' },
-          { id: 'formations', label: 'Formations' },
-          { id: 'certifications', label: 'Certifications' },
-          { id: 'projets', label: 'Projets' },
-          { id: 'competences', label: 'Compétences' },
+          ...PROFILE_SECTIONS,
           ...(usage?.plan === 'pro' && !usage?.paywall_disabled ? [{ id: 'abonnement', label: 'Abonnement' }] : []),
         ].map((section) => (
           <button
@@ -1029,6 +1113,7 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
       {profileSection === 'identite' && (
       <section className="profile-section-panel">
         <h2 className="ds-label-md">Identité</h2>
+        <p className="profile-section-desc">{sectionDesc('identite')}</p>
         <div className="profile-photo-row profile-photo-row-simple">
           <div className="profile-photo-preview">
             {(cv.photo_url || '').trim() ? (
@@ -1130,6 +1215,7 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
       {profileSection === 'experiences' && (
       <section className="profile-section-panel">
         <h2 className="ds-label-md">Expériences</h2>
+        <p className="profile-section-desc">{sectionDesc('experiences')}</p>
         <div className="profile-section-head">
           <button type="button" className="btn btn-add" onClick={addExp}>+ Ajouter une expérience</button>
         </div>
@@ -1173,6 +1259,7 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
       {profileSection === 'formations' && (
       <section className="profile-section-panel">
         <h2 className="ds-label-md">Formations</h2>
+        <p className="profile-section-desc">{sectionDesc('formations')}</p>
         <div className="profile-section-head">
           <button type="button" className="btn btn-add" onClick={addFormation}>+ Ajouter</button>
         </div>
@@ -1199,6 +1286,7 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
       {profileSection === 'certifications' && (
       <section className="profile-section-panel">
         <h2 className="ds-label-md">Certifications</h2>
+        <p className="profile-section-desc">{sectionDesc('certifications')}</p>
         <div className="profile-section-head">
           <button type="button" className="btn btn-add" onClick={addCertification}>+ Ajouter</button>
         </div>
@@ -1224,6 +1312,7 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
       {profileSection === 'projets' && (
       <section className="profile-section-panel">
         <h2 className="ds-label-md">Projets</h2>
+        <p className="profile-section-desc">{sectionDesc('projets')}</p>
         <div className="profile-section-head">
           <button type="button" className="btn btn-add" onClick={addProjet}>+ Ajouter</button>
         </div>
@@ -1246,46 +1335,61 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
       {profileSection === 'competences' && (
       <section className="profile-section-panel">
         <h2 className="ds-label-md">Compétences</h2>
+        <p className="profile-section-desc">{sectionDesc('competences')}</p>
         <div className="profile-card">
           <h3 className="sidebar-category">Compétences techniques</h3>
-          {(comp.techniques || []).map((item, i) => (
-            <div key={i} className="profile-comp-row">
-              <InlineEdit value={typeof item === 'string' ? item : ''} onChange={(v) => updateCompList('techniques', i, v)} placeholder="ex. Python, Gestion de projet" />
+          {(comp.techniques || []).map((item, i, list) => (
+            <div key={i} {...compRowProps('techniques', i, 'profile-comp-row')}>
+              {compDragHandle('techniques', i)}
+              <InlineEdit value={typeof item === 'string' ? item : ''} onChange={(v) => updateCompList('techniques', i, v)} placeholder="ex. Python, Gestion de projet" onEnter={compEnter('techniques', i, typeof item === 'string' && item.trim(), '')} onBackspaceEmpty={compBackspace('techniques', i)} inputProps={{ 'data-comp-input': `techniques-${i}-value` }} />
+              {compOrderButtons('techniques', i, list.length, 'cette compétence')}
               <button type="button" className="btn btn-remove" onClick={() => removeCompList('techniques', i)} title="Supprimer">×</button>
             </div>
           ))}
-          <button type="button" className="btn btn-add" onClick={() => addCompList('techniques', '')}>+ Ajouter</button>
+          <button type="button" className="btn btn-add" onClick={() => insertCompItem('techniques', (comp.techniques || []).length, '')}>+ Ajouter</button>
         </div>
         <div className="profile-card">
           <h3 className="sidebar-category">Logiciels & outils</h3>
-          {(comp.logiciels || []).map((item, i) => (
-            <div key={i} className="profile-comp-row">
-              <InlineEdit value={typeof item === 'string' ? item : ''} onChange={(v) => updateCompList('logiciels', i, v)} placeholder="ex. Excel, React, Git" />
+          {(comp.logiciels || []).map((item, i, list) => (
+            <div key={i} {...compRowProps('logiciels', i, 'profile-comp-row')}>
+              {compDragHandle('logiciels', i)}
+              <InlineEdit value={typeof item === 'string' ? item : ''} onChange={(v) => updateCompList('logiciels', i, v)} placeholder="ex. Excel, React, Git" onEnter={compEnter('logiciels', i, typeof item === 'string' && item.trim(), '')} onBackspaceEmpty={compBackspace('logiciels', i)} inputProps={{ 'data-comp-input': `logiciels-${i}-value` }} />
+              {compOrderButtons('logiciels', i, list.length, 'ce logiciel')}
               <button type="button" className="btn btn-remove" onClick={() => removeCompList('logiciels', i)} title="Supprimer">×</button>
             </div>
           ))}
-          <button type="button" className="btn btn-add" onClick={() => addCompList('logiciels', '')}>+ Ajouter</button>
+          <button type="button" className="btn btn-add" onClick={() => insertCompItem('logiciels', (comp.logiciels || []).length, '')}>+ Ajouter</button>
         </div>
         <div className="profile-card">
           <h3 className="sidebar-category">Langues</h3>
-          {(comp.langues || []).map((l, i) => (
-            <div key={i} className="profile-langue-row">
-              <InlineEdit value={l?.langue || ''} onChange={(v) => updateCompList('langues', i, { ...l, langue: v })} placeholder="Langue" />
-              <InlineEdit value={l?.niveau || ''} onChange={(v) => updateCompList('langues', i, { ...l, niveau: v })} placeholder="ex. Natif, Courant (C1)" />
+          {(comp.langues || []).map((l, i, list) => (
+            <div key={i} {...compRowProps('langues', i, 'profile-langue-row')}>
+              {compDragHandle('langues', i)}
+              <InlineEdit value={l?.langue || ''} onChange={(v) => updateCompList('langues', i, { ...l, langue: v })} placeholder="Langue" onEnter={() => setCompFocus(`langues-${i}-niveau`)} onBackspaceEmpty={(l?.niveau || '') === '' ? compBackspace('langues', i) : undefined} inputProps={{ 'data-comp-input': `langues-${i}-langue` }} />
+              <InlineEdit value={l?.niveau || ''} onChange={(v) => updateCompList('langues', i, { ...l, niveau: v })} placeholder="ex. Natif, Courant (C1)" onEnter={compEnter('langues', i, `${l?.langue || ''}${l?.niveau || ''}`.trim(), { langue: '', niveau: '' })} onBackspaceEmpty={() => setCompFocus(`langues-${i}-langue`)} inputProps={{ 'data-comp-input': `langues-${i}-niveau` }} />
+              {compOrderButtons('langues', i, list.length, 'cette langue')}
               <button type="button" className="btn btn-remove" onClick={() => removeCompList('langues', i)} title="Supprimer">×</button>
             </div>
           ))}
-          <button type="button" className="btn btn-add" onClick={() => addCompList('langues', { langue: '', niveau: '' })}>+ Ajouter</button>
+          <button type="button" className="btn btn-add" onClick={() => insertCompItem('langues', (comp.langues || []).length, { langue: '', niveau: '' })}>+ Ajouter</button>
         </div>
         <div className="profile-card">
-          <h3 className="sidebar-category">Autres</h3>
-          {(comp.autres || []).map((item, i) => (
-            <div key={i} className="profile-comp-row">
-              <InlineEdit value={typeof item === 'string' ? item : ''} onChange={(v) => updateCompList('autres', i, v)} placeholder="ex. Permis B, Piano" />
+          <h3 className="sidebar-category">{(cv.autres_titre || '').trim() || 'Autres'}</h3>
+          <InlineEdit
+            label="Titre de la section"
+            value={cv.autres_titre || ''}
+            onChange={(v) => setCv((prev) => ({ ...prev, autres_titre: v.slice(0, AUTRES_TITRE_MAX) }))}
+            placeholder="Autres (ex. Centres d’intérêt, Bénévolat)"
+          />
+          {(comp.autres || []).map((item, i, list) => (
+            <div key={i} {...compRowProps('autres', i, 'profile-comp-row')}>
+              {compDragHandle('autres', i)}
+              <InlineEdit value={typeof item === 'string' ? item : ''} onChange={(v) => updateCompList('autres', i, v)} placeholder="ex. Permis B, Piano" onEnter={compEnter('autres', i, typeof item === 'string' && item.trim(), '')} onBackspaceEmpty={compBackspace('autres', i)} inputProps={{ 'data-comp-input': `autres-${i}-value` }} />
+              {compOrderButtons('autres', i, list.length, 'cet élément')}
               <button type="button" className="btn btn-remove" onClick={() => removeCompList('autres', i)} title="Supprimer">×</button>
             </div>
           ))}
-          <button type="button" className="btn btn-add" onClick={() => addCompList('autres', '')}>+ Ajouter</button>
+          <button type="button" className="btn btn-add" onClick={() => insertCompItem('autres', (comp.autres || []).length, '')}>+ Ajouter</button>
         </div>
       </section>
       )}
@@ -1415,12 +1519,13 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
             optionsPreviewLoading={profilePreviewLoading}
             profileLayout={cv?.layout}
             onBetaUnavailable={() => {
-              setError('Crée d’abord un design en activant le mode Beta (canvas), puis choisis « Beta » ici.');
+              setError('Crée d’abord un design en activant le nouvel éditeur, puis choisis « Nouvel éditeur » ici.');
             }}
-            extraBarLeft={(
+            barActions={(
               <button
                 type="button"
                 className="tpl-btn-bar-extra"
+                aria-label="Exporter en PDF"
                 onClick={downloadBaseCvPdf}
                 disabled={baseCvPdfLoading || loading}
                 title="Télécharger ton CV de profil (tel qu’affiché dans l’aperçu) en PDF"
@@ -1429,7 +1534,7 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
                 <span className="tpl-btn-bar-extra-icon" aria-hidden>
                   <HiArrowDownTray size={16} strokeWidth={2} />
                 </span>
-                Exporter en PDF
+                <span className="tpl-bar-btn-label">Exporter en PDF</span>
               </button>
             )}
           />

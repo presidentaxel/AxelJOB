@@ -16,6 +16,7 @@ Couvre :
 """
 
 import asyncio
+import contextlib
 import json
 import unittest
 from types import SimpleNamespace
@@ -137,6 +138,8 @@ class TestCreateCheckoutSession(unittest.TestCase):
             patch.object(main, "_require_user_id", return_value="user_1"),
             patch.object(main, "STRIPE_SECRET_KEY", "sk_test_xxx"),
             patch.object(main, "STRIPE_PRICE_ID_PRO_MONTHLY", "price_pro_monthly_123"),
+            patch.object(main, "get_user_plan", return_value="free"),
+            patch.object(main, "get_paywall_disabled", return_value=False),
             patch.object(main, "ensure_stripe_customer", return_value="cus_123"),
             patch.object(main, "_get_user_email_from_jwt", return_value="a@b.c"),
             patch.dict("sys.modules", {"stripe": fake_stripe}),
@@ -150,6 +153,25 @@ class TestCreateCheckoutSession(unittest.TestCase):
         self.assertEqual(params["client_reference_id"], "user_1")
         self.assertEqual(params["customer"], "cus_123")
         self.assertEqual(params["line_items"], [{"price": "price_pro_monthly_123", "quantity": 1}])
+
+    def test_create_checkout_session_returns_409_when_already_pro(self):
+        """AXE-1106 : un compte Pro (ou paywall_disabled) ne peut pas ouvrir un second paiement."""
+        for plan, no_paywall in (("pro", False), ("free", True)):
+            fake_stripe = MagicMock()
+            with (
+                self.subTest(plan=plan, paywall_disabled=no_paywall),
+                patch.object(main, "_require_user_id", return_value="user_1"),
+                patch.object(main, "STRIPE_SECRET_KEY", "sk_test_xxx"),
+                patch.object(main, "STRIPE_PRICE_ID_PRO_MONTHLY", "price_pro_monthly_123"),
+                patch.object(main, "get_user_plan", return_value=plan),
+                patch.object(main, "get_paywall_disabled", return_value=no_paywall),
+                patch.dict("sys.modules", {"stripe": fake_stripe}),
+                self.assertRaises(HTTPException) as ctx,
+            ):
+                main.api_create_checkout_session(_FakeRequest())
+            self.assertEqual(ctx.exception.status_code, 409)
+            self.assertEqual(ctx.exception.detail, "Tu es déjà abonné au plan Pro.")
+            fake_stripe.StripeClient.assert_not_called()
 
     def test_create_checkout_session_requires_auth(self):
         req = _FakeRequest()
@@ -246,6 +268,7 @@ class TestStripeWebhook(unittest.TestCase):
             patch.object(main, "STRIPE_SECRET_KEY", "sk_test"),
             patch.dict("sys.modules", {"stripe": fake_stripe}),
             patch.object(main, "find_user_id_by_stripe_subscription_id", return_value="user_1"),
+            patch.object(main, "get_user_stripe_ids", return_value=("cus_123", "sub_456")),
             patch.object(main, "set_user_plan") as fake_set,
             patch.object(main, "ensure_stripe_customer"),
             patch.object(main, "_invalidate_stripe_caches_for_user"),
@@ -258,6 +281,54 @@ class TestStripeWebhook(unittest.TestCase):
         args, kwargs = fake_set.call_args
         self.assertEqual(args[0], "user_1")
         self.assertEqual(args[1], "free")
+
+    def test_deleting_another_subscription_keeps_pro(self):
+        """AXE-1105 : la fin d'un ancien abonnement ne repasse pas en free un compte qui paie."""
+        event = {
+            "type": "customer.subscription.deleted",
+            "id": "evt_old_sub",
+            "data": {"object": {"id": "sub_old", "metadata": {"user_id": "user_1"}}},
+        }
+        req = _FakeRequest(body=json.dumps(event).encode())
+        fake_stripe = MagicMock()
+        fake_stripe.Webhook.construct_event.return_value = event
+        with (
+            patch.object(main, "STRIPE_WEBHOOK_SECRET", "whsec_test"),
+            patch.object(main, "STRIPE_SECRET_KEY", "sk_test"),
+            patch.dict("sys.modules", {"stripe": fake_stripe}),
+            patch.object(main, "subscription_uses_free_price", return_value=False),
+            patch.object(main, "get_user_stripe_ids", return_value=("cus_123", "sub_current")),
+            patch.object(main, "set_user_plan") as fake_set,
+            self.assertLogs(main.logger, level="WARNING") as logs,
+        ):
+            out = self._run(main.api_stripe_webhook(req))
+        self.assertEqual(out, {"received": True})
+        fake_set.assert_not_called()
+        self.assertIn("sub_old", logs.output[0])
+
+    def test_deleted_subscription_without_stored_one_reverts_to_free(self):
+        event = {
+            "type": "customer.subscription.deleted",
+            "id": "evt_no_stored",
+            "data": {"object": {"id": "sub_x", "metadata": {"user_id": "user_1"}}},
+        }
+        req = _FakeRequest(body=json.dumps(event).encode())
+        fake_stripe = MagicMock()
+        fake_stripe.Webhook.construct_event.return_value = event
+        with (
+            patch.object(main, "STRIPE_WEBHOOK_SECRET", "whsec_test"),
+            patch.object(main, "STRIPE_SECRET_KEY", "sk_test"),
+            patch.dict("sys.modules", {"stripe": fake_stripe}),
+            patch.object(main, "subscription_uses_free_price", return_value=False),
+            patch.object(main, "get_user_stripe_ids", return_value=("cus_123", None)),
+            patch.object(main, "set_user_plan") as fake_set,
+            patch.object(main, "ensure_stripe_customer"),
+            patch.object(main, "_invalidate_stripe_caches_for_user"),
+            patch.object(main, "_invalidate_usage_cache"),
+        ):
+            out = self._run(main.api_stripe_webhook(req))
+        self.assertEqual(out, {"received": True})
+        self.assertEqual(fake_set.call_args[0][:2], ("user_1", "free"))
 
     def test_free_price_deletion_does_not_reset_the_plan(self):
         event = {
@@ -597,3 +668,49 @@ class TestStripePeriodEndOnItems(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestEnforceFreeLimits(unittest.TestCase):
+    """AXE-1102 : une seule fonction pour les règles du plan gratuit."""
+
+    def _limits(self, *, plan="free", no_paywall=False, quota_count=0, active=0, existing=None):
+        return (
+            patch.object(main, "ensure_implicit_free_adaptation_anchor"),
+            patch.object(main, "get_user_plan", return_value=plan),
+            patch.object(main, "get_paywall_disabled", return_value=no_paywall),
+            patch.object(main, "get_free_adaptation_count_anchor", return_value=0),
+            patch.object(main, "get_free_adaptation_bonus", return_value=0),
+            patch.object(main, "count_quota_adaptations", return_value=quota_count),
+            patch.object(main, "count_active_applications", return_value=active),
+            patch.object(main, "get_adaptation", return_value=existing),
+        )
+
+    def _call(self, patches, *args, **kwargs):
+        with contextlib.ExitStack() as stack:
+            for p in patches:
+                stack.enter_context(p)
+            main._enforce_free_limits(*args, **kwargs)
+
+    def test_pro_passes(self):
+        self._call(self._limits(plan="pro", quota_count=42, active=42), "u1", "adapt_x")
+
+    def test_free_at_quota_gets_402(self):
+        with self.assertRaises(HTTPException) as ctx:
+            self._call(self._limits(quota_count=3), "u1", "adapt_x")
+        self.assertEqual(ctx.exception.status_code, 402)
+
+    def test_free_at_applications_cap_gets_403(self):
+        with self.assertRaises(HTTPException) as ctx:
+            self._call(self._limits(active=main.FREE_APPLICATIONS_LIMIT), "u1", "adapt_x")
+        self.assertEqual(ctx.exception.status_code, 403)
+
+    def test_existing_adaptation_does_not_count_against_cap(self):
+        self._call(
+            self._limits(active=main.FREE_APPLICATIONS_LIMIT, existing={"full_cv": {}}),
+            "u1",
+            "adapt_x",
+        )
+
+    def test_manual_application_skips_quota(self):
+        # Création manuelle : quota épuisé mais plafond non atteint → autorisé.
+        self._call(self._limits(quota_count=99), "u1", check_quota=False)

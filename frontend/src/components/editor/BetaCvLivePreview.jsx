@@ -142,7 +142,7 @@ function BetaCvLivePreview({
         onConfirm={closeOverlap}
         onCancel={closeOverlap}
       />
-      <Suspense fallback={<p className="ds-body-md">Chargement de l’aperçu Beta…</p>}>
+      <Suspense fallback={<p className="ds-body-md">Chargement de l’aperçu…</p>}>
         <FreeCanvas
           layout={betaCanvas.layout}
           cv={betaCanvas.cv}

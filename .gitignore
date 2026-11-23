@@ -36,6 +36,7 @@ env/
 .mypy_cache/
 .ruff_cache/
 .pytest_cache/
+.coverage
 
 # IDE / OS
 .idea/
@@ -62,3 +63,7 @@ cv_base.json
 
 # Logs structurés (mémoire / analyse)
 logs/*.jsonl
+
+# Copies de travail (git worktree) laissées à la racine
+wt-*/
+*-wt/
