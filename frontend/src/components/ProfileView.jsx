@@ -764,7 +764,12 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
   const [compFocus, setCompFocus] = useState(null);
   useEffect(() => {
     if (!compFocus) return;
-    document.querySelector(`[data-comp-input="${compFocus}"]`)?.focus();
+    const el = document.querySelector(`[data-comp-input="${compFocus}"]`);
+    if (el) {
+      el.focus();
+      const len = el.value?.length ?? 0;
+      try { el.setSelectionRange(len, len); } catch { /* ignore */ }
+    }
     setCompFocus(null);
   }, [compFocus]);
   /** Insère une ligne vide à `index` et y place le curseur. */
@@ -775,6 +780,12 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
       return { ...prev, competences: { ...(prev.competences || {}), [key]: arr } };
     });
     setCompFocus(`${key}-${index}-${key === 'langues' ? 'langue' : 'value'}`);
+  };
+  /** Retour arrière sur une ligne vide : la supprime et revient à la fin de la ligne d'avant. */
+  const compBackspace = (key, i) => () => {
+    if (i === 0) return;
+    removeCompList(key, i);
+    setCompFocus(`${key}-${i - 1}-${key === 'langues' ? 'niveau' : 'value'}`);
   };
   /** Entrée sur une ligne remplie : nouvelle ligne juste en dessous. Ligne vide : rien. */
   const compEnter = (key, i, filled, emptyItem) => () => {
@@ -1313,7 +1324,7 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
           {(comp.techniques || []).map((item, i, list) => (
             <div key={i} {...compRowProps('techniques', i, 'profile-comp-row')}>
               {compDragHandle('techniques', i)}
-              <InlineEdit value={typeof item === 'string' ? item : ''} onChange={(v) => updateCompList('techniques', i, v)} placeholder="ex. Python, Gestion de projet" onEnter={compEnter('techniques', i, typeof item === 'string' && item.trim(), '')} inputProps={{ 'data-comp-input': `techniques-${i}-value` }} />
+              <InlineEdit value={typeof item === 'string' ? item : ''} onChange={(v) => updateCompList('techniques', i, v)} placeholder="ex. Python, Gestion de projet" onEnter={compEnter('techniques', i, typeof item === 'string' && item.trim(), '')} onBackspaceEmpty={compBackspace('techniques', i)} inputProps={{ 'data-comp-input': `techniques-${i}-value` }} />
               {compOrderButtons('techniques', i, list.length, 'cette compétence')}
               <button type="button" className="btn btn-remove" onClick={() => removeCompList('techniques', i)} title="Supprimer">×</button>
             </div>
@@ -1325,7 +1336,7 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
           {(comp.logiciels || []).map((item, i, list) => (
             <div key={i} {...compRowProps('logiciels', i, 'profile-comp-row')}>
               {compDragHandle('logiciels', i)}
-              <InlineEdit value={typeof item === 'string' ? item : ''} onChange={(v) => updateCompList('logiciels', i, v)} placeholder="ex. Excel, React, Git" onEnter={compEnter('logiciels', i, typeof item === 'string' && item.trim(), '')} inputProps={{ 'data-comp-input': `logiciels-${i}-value` }} />
+              <InlineEdit value={typeof item === 'string' ? item : ''} onChange={(v) => updateCompList('logiciels', i, v)} placeholder="ex. Excel, React, Git" onEnter={compEnter('logiciels', i, typeof item === 'string' && item.trim(), '')} onBackspaceEmpty={compBackspace('logiciels', i)} inputProps={{ 'data-comp-input': `logiciels-${i}-value` }} />
               {compOrderButtons('logiciels', i, list.length, 'ce logiciel')}
               <button type="button" className="btn btn-remove" onClick={() => removeCompList('logiciels', i)} title="Supprimer">×</button>
             </div>
@@ -1337,8 +1348,8 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
           {(comp.langues || []).map((l, i, list) => (
             <div key={i} {...compRowProps('langues', i, 'profile-langue-row')}>
               {compDragHandle('langues', i)}
-              <InlineEdit value={l?.langue || ''} onChange={(v) => updateCompList('langues', i, { ...l, langue: v })} placeholder="Langue" onEnter={() => setCompFocus(`langues-${i}-niveau`)} inputProps={{ 'data-comp-input': `langues-${i}-langue` }} />
-              <InlineEdit value={l?.niveau || ''} onChange={(v) => updateCompList('langues', i, { ...l, niveau: v })} placeholder="ex. Natif, Courant (C1)" onEnter={compEnter('langues', i, `${l?.langue || ''}${l?.niveau || ''}`.trim(), { langue: '', niveau: '' })} inputProps={{ 'data-comp-input': `langues-${i}-niveau` }} />
+              <InlineEdit value={l?.langue || ''} onChange={(v) => updateCompList('langues', i, { ...l, langue: v })} placeholder="Langue" onEnter={() => setCompFocus(`langues-${i}-niveau`)} onBackspaceEmpty={(l?.niveau || '') === '' ? compBackspace('langues', i) : undefined} inputProps={{ 'data-comp-input': `langues-${i}-langue` }} />
+              <InlineEdit value={l?.niveau || ''} onChange={(v) => updateCompList('langues', i, { ...l, niveau: v })} placeholder="ex. Natif, Courant (C1)" onEnter={compEnter('langues', i, `${l?.langue || ''}${l?.niveau || ''}`.trim(), { langue: '', niveau: '' })} onBackspaceEmpty={() => setCompFocus(`langues-${i}-langue`)} inputProps={{ 'data-comp-input': `langues-${i}-niveau` }} />
               {compOrderButtons('langues', i, list.length, 'cette langue')}
               <button type="button" className="btn btn-remove" onClick={() => removeCompList('langues', i)} title="Supprimer">×</button>
             </div>
@@ -1350,7 +1361,7 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
           {(comp.autres || []).map((item, i, list) => (
             <div key={i} {...compRowProps('autres', i, 'profile-comp-row')}>
               {compDragHandle('autres', i)}
-              <InlineEdit value={typeof item === 'string' ? item : ''} onChange={(v) => updateCompList('autres', i, v)} placeholder="ex. Permis B, Piano" onEnter={compEnter('autres', i, typeof item === 'string' && item.trim(), '')} inputProps={{ 'data-comp-input': `autres-${i}-value` }} />
+              <InlineEdit value={typeof item === 'string' ? item : ''} onChange={(v) => updateCompList('autres', i, v)} placeholder="ex. Permis B, Piano" onEnter={compEnter('autres', i, typeof item === 'string' && item.trim(), '')} onBackspaceEmpty={compBackspace('autres', i)} inputProps={{ 'data-comp-input': `autres-${i}-value` }} />
               {compOrderButtons('autres', i, list.length, 'cet élément')}
               <button type="button" className="btn btn-remove" onClick={() => removeCompList('autres', i)} title="Supprimer">×</button>
             </div>

@@ -20,6 +20,7 @@ export default function InlineEdit({
   title,
   className = '',
   onEnter,
+  onBackspaceEmpty,
   inputProps,
 }) {
   const inputRef = useRef(null);
@@ -52,12 +53,17 @@ export default function InlineEdit({
       onChange(e.target.value);
       fitLine(e.target);
     },
-    // Entrée (hors saisie IME) : action de la liste, par ex. ajouter une ligne (AXE-1021).
-    onKeyDown: onEnter && !multiline
+    // Listes (AXE-1021) : Entrée ajoute une ligne, Retour arrière sur champ vide revient en arrière.
+    onKeyDown: (onEnter || onBackspaceEmpty) && !multiline
       ? (e) => {
-        if (e.key !== 'Enter' || e.nativeEvent.isComposing) return;
-        e.preventDefault();
-        onEnter();
+        if (e.nativeEvent.isComposing) return;
+        if (e.key === 'Enter' && onEnter) {
+          e.preventDefault();
+          onEnter();
+        } else if (e.key === 'Backspace' && onBackspaceEmpty && e.currentTarget.value === '') {
+          e.preventDefault();
+          onBackspaceEmpty();
+        }
       }
       : undefined,
   };
