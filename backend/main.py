@@ -657,6 +657,36 @@ def _enforce_free_adaptations_quota(user_id: str | None) -> None:
         )
 
 
+def _enforce_free_limits(
+    user_id: str | None, adaptation_id: str | None = None, *, check_quota: bool = True
+) -> None:
+    """Règles du plan gratuit, dans cet ordre : ancre implicite, quota d'adaptations (402),
+    plafond de candidatures actives (403).
+
+    ``adaptation_id`` : si cette adaptation existe déjà (même offre), elle ne compte pas comme
+    une nouvelle candidature pour le plafond. Pro / paywall_disabled passent toujours.
+    """
+    uid = user_id or "default"
+    if user_id:
+        ensure_implicit_free_adaptation_anchor(user_id)
+    plan = get_user_plan(uid)
+    no_paywall = get_paywall_disabled(uid)
+    if check_quota:
+        _enforce_free_adaptations_quota(user_id)
+    if plan != "free" or no_paywall:
+        return
+    if adaptation_id and get_adaptation(adaptation_id, user_id=user_id):
+        return
+    if count_active_applications(uid) >= FREE_APPLICATIONS_LIMIT:
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                f"Plafond gratuit atteint : {FREE_APPLICATIONS_LIMIT} candidatures actives "
+                "(archive d'anciennes entrées ou passe en Pro pour un suivi illimité)."
+            ),
+        )
+
+
 def _safe_adaptation_id(adaptation_id: str) -> bool:
     from backend.path_safety import is_safe_id_segment
 
@@ -3745,24 +3775,8 @@ def _adapt_run_prepare(request: Request, body: AdaptRunBody) -> dict:
         raise HTTPException(status_code=400, detail=str(e))
     selected_steps = _normalize_selected_step_ids(body.selected_step_ids)
     uid = user_id or "default"
-    if user_id:
-        ensure_implicit_free_adaptation_anchor(user_id)
-    plan = get_user_plan(uid)
-    no_paywall = get_paywall_disabled(uid)
-    _enforce_free_adaptations_quota(user_id)
     adaptation_id = _adaptation_id_from_user_and_offer(user_id, description)
-    if plan == "free" and not no_paywall:
-        if (
-            not get_adaptation(adaptation_id, user_id=user_id)
-            and count_active_applications(uid) >= FREE_APPLICATIONS_LIMIT
-        ):
-            raise HTTPException(
-                status_code=403,
-                detail=(
-                    f"Plafond gratuit atteint : {FREE_APPLICATIONS_LIMIT} candidatures actives "
-                    "(archive d'anciennes entrées ou passe en Pro pour un suivi illimité)."
-                ),
-            )
+    _enforce_free_limits(user_id, adaptation_id)
     _track_analytics(
         request,
         event_log.EVENT_ADAPTATION_STARTED,
@@ -4260,25 +4274,8 @@ def api_adapt(request: Request, body: AdaptBody):
         check_user_input_for_injection(description=description)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    uid = user_id or "default"
-    if user_id:
-        ensure_implicit_free_adaptation_anchor(user_id)
-    plan = get_user_plan(uid)
-    no_paywall = get_paywall_disabled(uid)
-    _enforce_free_adaptations_quota(user_id)
     adaptation_id = _adaptation_id_from_user_and_offer(user_id, description)
-    if plan == "free" and not no_paywall:
-        if (
-            not get_adaptation(adaptation_id, user_id=user_id)
-            and count_active_applications(uid) >= FREE_APPLICATIONS_LIMIT
-        ):
-            raise HTTPException(
-                status_code=403,
-                detail=(
-                    f"Plafond gratuit atteint : {FREE_APPLICATIONS_LIMIT} candidatures actives "
-                    "(archive d'anciennes entrées ou passe en Pro pour un suivi illimité)."
-                ),
-            )
+    _enforce_free_limits(user_id, adaptation_id)
     _track_analytics(
         request,
         event_log.EVENT_ADAPTATION_STARTED,
@@ -4821,18 +4818,7 @@ def api_application_create(request: Request, body: ApplicationCreateBody):
         raise HTTPException(status_code=400, detail="Renseigne au moins le poste ou l'entreprise.")
     if body.statut not in STATUTS_CANDIDATURE:
         raise HTTPException(status_code=400, detail="Statut invalide")
-    ensure_implicit_free_adaptation_anchor(user_id)
-    plan = get_user_plan(uid)
-    no_pw = get_paywall_disabled(uid)
-    if plan == "free" and not no_pw:
-        if count_active_applications(uid) >= FREE_APPLICATIONS_LIMIT:
-            raise HTTPException(
-                status_code=403,
-                detail=(
-                    f"Plafond gratuit atteint : {FREE_APPLICATIONS_LIMIT} candidatures actives "
-                    "(archive d'anciennes entrées ou passe en Pro pour un suivi illimité)."
-                ),
-            )
+    _enforce_free_limits(user_id, check_quota=False)
     application_id = "manual_" + uuid_module.uuid4().hex[:12]
     now_iso = datetime.now(timezone.utc).isoformat()
     payload = {

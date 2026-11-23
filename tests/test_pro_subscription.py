@@ -16,6 +16,7 @@ Couvre :
 """
 
 import asyncio
+import contextlib
 import json
 import unittest
 from types import SimpleNamespace
@@ -667,3 +668,49 @@ class TestStripePeriodEndOnItems(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestEnforceFreeLimits(unittest.TestCase):
+    """AXE-1102 : une seule fonction pour les règles du plan gratuit."""
+
+    def _limits(self, *, plan="free", no_paywall=False, quota_count=0, active=0, existing=None):
+        return (
+            patch.object(main, "ensure_implicit_free_adaptation_anchor"),
+            patch.object(main, "get_user_plan", return_value=plan),
+            patch.object(main, "get_paywall_disabled", return_value=no_paywall),
+            patch.object(main, "get_free_adaptation_count_anchor", return_value=0),
+            patch.object(main, "get_free_adaptation_bonus", return_value=0),
+            patch.object(main, "count_quota_adaptations", return_value=quota_count),
+            patch.object(main, "count_active_applications", return_value=active),
+            patch.object(main, "get_adaptation", return_value=existing),
+        )
+
+    def _call(self, patches, *args, **kwargs):
+        with contextlib.ExitStack() as stack:
+            for p in patches:
+                stack.enter_context(p)
+            main._enforce_free_limits(*args, **kwargs)
+
+    def test_pro_passes(self):
+        self._call(self._limits(plan="pro", quota_count=42, active=42), "u1", "adapt_x")
+
+    def test_free_at_quota_gets_402(self):
+        with self.assertRaises(HTTPException) as ctx:
+            self._call(self._limits(quota_count=3), "u1", "adapt_x")
+        self.assertEqual(ctx.exception.status_code, 402)
+
+    def test_free_at_applications_cap_gets_403(self):
+        with self.assertRaises(HTTPException) as ctx:
+            self._call(self._limits(active=main.FREE_APPLICATIONS_LIMIT), "u1", "adapt_x")
+        self.assertEqual(ctx.exception.status_code, 403)
+
+    def test_existing_adaptation_does_not_count_against_cap(self):
+        self._call(
+            self._limits(active=main.FREE_APPLICATIONS_LIMIT, existing={"full_cv": {}}),
+            "u1",
+            "adapt_x",
+        )
+
+    def test_manual_application_skips_quota(self):
+        # Création manuelle : quota épuisé mais plafond non atteint → autorisé.
+        self._call(self._limits(quota_count=99), "u1", check_quota=False)
