@@ -37,7 +37,7 @@ import Button from './components/ui/Button.jsx';
 import Input from './components/ui/Input.jsx';
 import PasswordInput from './components/ui/PasswordInput.jsx';
 import AdaptLanguageChoiceDialog from './components/ui/AdaptLanguageChoiceDialog.jsx';
-import { CONTACT_EMAIL, STORAGE_EXPORT_DIR, STORAGE_EXPORT_ATS_BLOCK_SNOOZE, STORAGE_PRE_EXPORT_TEMPLATE_OPTIONS_DONE, STORAGE_PDF_EXPORT_FILENAME_PATTERN, STATUT_LABELS, KANBAN_COLUMNS, getExportFolderName } from './constants';
+import { CONTACT_EMAIL, STORAGE_EXPORT_ATS_BLOCK_SNOOZE, STORAGE_PRE_EXPORT_TEMPLATE_OPTIONS_DONE, STORAGE_PDF_EXPORT_FILENAME_PATTERN, STATUT_LABELS, KANBAN_COLUMNS, getExportFolderName } from './constants';
 import { buildAdaptedPdfFilename } from './lib/pdfExportFilename';
 import { getPdfSaveStartInDirectoryHandle } from './lib/pdfExportStartDirIdb';
 import { HiDocumentText, HiArrowDownTray, HiClipboardDocumentList, HiPencilSquare, HiCheck, HiSwatch, HiChevronDown, HiChevronUp, HiPlus, HiOutlinePaperClip } from 'react-icons/hi2';
@@ -782,7 +782,6 @@ export default function App() {
   const [exporting, setExporting] = useState(false);
   const [entrepriseNom, setEntrepriseNom] = useState('');
   const [posteNom, setPosteNom] = useState('');
-  const [exportDossierPath, setExportDossierPath] = useState('');
   const [applications, setApplications] = useState([]);
   const [showArchived, setShowArchived] = useState(false);
   const [applicationSearchQuery, setApplicationSearchQuery] = useState('');
@@ -1956,20 +1955,6 @@ export default function App() {
     }
   }, [view]);
 
-  // Export default dir : uniquement en app et sur la vue CV (pas sur la landing pour alléger le chemin critique)
-  useEffect(() => {
-    if (!pathname.startsWith('/app') || view !== 'cv') return;
-    const saved = localStorage.getItem(STORAGE_EXPORT_DIR);
-    if (saved) setExportDossierPath(saved);
-    else {
-      apiGet('/api/export-default-dir').then((data) => {
-        if (data.path) setExportDossierPath((p) => p || data.path);
-      }).catch(() => {
-        /* ignore */
-      });
-    }
-  }, [pathname, view]);
-
   useEffect(() => {
     if (supabase && !session) return;
     loadApplications();
@@ -3079,22 +3064,23 @@ export default function App() {
       }
     };
 
+    // Sans sélecteur de dossier (Firefox, Safari) : on télécharge le ZIP tel quel.
+    const pickerAvailable = typeof showDirectoryPicker === 'function';
+    const preopenedWindow = pickerAvailable ? null : prepareAppleDownloadWindow();
     try {
-      const pickerAvailable = typeof showDirectoryPicker === 'function';
-      const usePicker = pickerAvailable;
-      if (usePicker) {
-        const rootHandle = await showDirectoryPicker();
-        const folderName = getExportFolderName(entEff, posteEff);
+      const folderName = getExportFolderName(entEff, posteEff);
+      const rootHandle = pickerAvailable ? await showDirectoryPicker() : null;
+      const { blob } = await apiPostBlob('/api/export-dossier-zip', {
+        cv: lastAdaptedCv,
+        titre: posteEff,
+        entreprise: entEff,
+        description: annonce,
+        adaptation_id: lastAdaptationId || undefined,
+        selection_a4: lastSelectionA4 || undefined,
+        ...params,
+      });
+      if (rootHandle) {
         const subDir = await rootHandle.getDirectoryHandle(folderName, { create: true });
-        const { blob } = await apiPostBlob('/api/export-dossier-zip', {
-          cv: lastAdaptedCv,
-          titre: posteEff,
-          entreprise: entEff,
-          description: annonce,
-          adaptation_id: lastAdaptationId || undefined,
-          selection_a4: lastSelectionA4 || undefined,
-          ...params,
-        });
         const JSZip = (await import('jszip')).default;
         const zip = await JSZip.loadAsync(blob);
         const entries = Object.keys(zip.files).filter((n) => !zip.files[n].dir);
@@ -3115,20 +3101,13 @@ export default function App() {
         });
         await updateAppMeta();
       } else {
-        const data = await apiPost('/api/export-dossier', {
-          cv: lastAdaptedCv,
-          titre: posteEff,
-          entreprise: entEff,
-          description: annonce,
-          dossier: exportDossierPath.trim() || undefined,
-          selection_a4: lastSelectionA4 || undefined,
-          ...params,
-        });
-        if (exportDossierPath.trim()) localStorage.setItem(STORAGE_EXPORT_DIR, exportDossierPath.trim());
-        setRapport({ ...rapport, folder: data.folder, files: data.files || [] });
+        const zipName = `${folderName}.zip`;
+        await saveBlobWithPreferredMethod(blob, zipName, { preopenedWindow });
+        setRapport({ ...rapport, folder: zipName, files: [zipName] });
         await updateAppMeta();
       }
     } catch (e) {
+      if (preopenedWindow && !preopenedWindow.closed) preopenedWindow.close();
       if (e.name === 'AbortError') {
         hideError();
       } else {
@@ -4396,7 +4375,7 @@ export default function App() {
                           Export en cours…
                         </>
                       ) : (
-                        typeof showDirectoryPicker === 'function' ? 'Dossier complet (choisir un dossier…)' : 'Dossier complet'
+                        typeof showDirectoryPicker === 'function' ? 'Dossier complet (choisir un dossier…)' : 'Dossier complet (ZIP)'
                       )}
                     </Button>
                   </div>

@@ -1,5 +1,3 @@
-export const STORAGE_EXPORT_DIR = 'cv_bot_last_export_dir';
-
 /** Modèle de nom de fichier pour l’export PDF du CV adapté (vide = défaut « CV - Prénom Nom - Poste »). */
 export const STORAGE_PDF_EXPORT_FILENAME_PATTERN = 'cv_bot_pdf_export_filename_pattern';
 
