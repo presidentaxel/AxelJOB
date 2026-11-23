@@ -1612,3 +1612,21 @@
   margin: 0.75rem 0 0;
   line-height: 1.45;
 }
+
+/* Logiciels & outils : glisser-déposer (AXE-1022) */
+.profile-comp-handle {
+  cursor: grab;
+  color: var(--ds-color-text-subtle);
+  padding: 0 0.15rem;
+  user-select: none;
+  letter-spacing: -0.15em;
+}
+.profile-comp-handle:active {
+  cursor: grabbing;
+}
+.profile-comp-row--dragging {
+  opacity: 0.5;
+}
+.profile-comp-row--over {
+  box-shadow: inset 0 2px 0 0 var(--ds-color-border-focus);
+}

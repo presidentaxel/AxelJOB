@@ -768,6 +768,12 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
     const arr = (prev.competences?.[key] || []).filter((_, i) => i !== index);
     return { ...prev, competences: { ...(prev.competences || {}), [key]: arr } };
   });
+  const moveCompList = (key, index, offset) => setCv((prev) => ({
+    ...prev,
+    competences: { ...(prev.competences || {}), [key]: moveListItem(prev.competences?.[key] || [], index, offset) },
+  }));
+  /** Glisser-déposer des logiciels : { from, over } pendant le drag. */
+  const [logicielDrag, setLogicielDrag] = useState(null);
 
   const handleSave = async () => {
     setError('');
@@ -1258,9 +1264,44 @@ export default function ProfileView({ isActive = true, onSaveSuccess, session, r
         </div>
         <div className="profile-card">
           <h3 className="sidebar-category">Logiciels & outils</h3>
-          {(comp.logiciels || []).map((item, i) => (
-            <div key={i} className="profile-comp-row">
+          {(comp.logiciels || []).map((item, i, list) => (
+            <div
+              key={i}
+              className={[
+                'profile-comp-row',
+                logicielDrag?.from === i ? 'profile-comp-row--dragging' : '',
+                logicielDrag && logicielDrag.over === i && logicielDrag.from !== i ? 'profile-comp-row--over' : '',
+              ].filter(Boolean).join(' ')}
+              onDragOver={(e) => {
+                if (!logicielDrag) return;
+                e.preventDefault();
+                if (logicielDrag.over !== i) setLogicielDrag({ ...logicielDrag, over: i });
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                if (logicielDrag && logicielDrag.from !== i) moveCompList('logiciels', logicielDrag.from, i - logicielDrag.from);
+                setLogicielDrag(null);
+              }}
+            >
+              <span
+                className="profile-comp-handle"
+                draggable
+                title="Glisser pour réordonner"
+                aria-hidden="true"
+                onDragStart={(e) => {
+                  setLogicielDrag({ from: i, over: i });
+                  e.dataTransfer.effectAllowed = 'move';
+                  try {
+                    e.dataTransfer.setData('text/plain', String(i)); // Firefox exige une donnée
+                    e.dataTransfer.setDragImage(e.currentTarget.parentElement, 0, 0);
+                  } catch { /* ignore */ }
+                }}
+                onDragEnd={() => setLogicielDrag(null)}
+              >
+                ⋮⋮
+              </span>
               <InlineEdit value={typeof item === 'string' ? item : ''} onChange={(v) => updateCompList('logiciels', i, v)} placeholder="ex. Excel, React, Git" />
+              <OrderButtons index={i} total={list.length} onMove={(idx, dir) => moveCompList('logiciels', idx, dir)} label="ce logiciel" />
               <button type="button" className="btn btn-remove" onClick={() => removeCompList('logiciels', i)} title="Supprimer">×</button>
             </div>
           ))}
