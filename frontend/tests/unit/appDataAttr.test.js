@@ -66,6 +66,7 @@ const SUPPORT_TOPIC_IDS = [
 
 const SOURCE_FILES = [
   'src/components/AppTopbar.jsx',
+  'src/components/AccountTabs.jsx',
   'src/components/TopbarPartnerCode.jsx',
   'src/components/OnboardingWizard.jsx',
   'src/App.jsx',

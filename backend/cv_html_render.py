@@ -40,6 +40,10 @@ _CUSTOM_TEMPLATE_CACHE: dict[str, Any] = {}  # key = template_id → parsed jinj
 _CUSTOM_ENV: Any = None  # Environment partagé pour from_string
 
 
+# Longueur max du titre personnalisé de la section « Autres » (même limite côté profil).
+AUTRES_TITRE_MAX = 60
+
+
 def _invalidate_render_caches(template_id: str | None = None) -> None:
     """À appeler si un template perso est édité (le HTML peut avoir changé)."""
     with _RENDER_LOCK:
@@ -173,6 +177,10 @@ def render_cv_html(
 
     display_lang = resolve_cv_display_lang(cv)
     ctx["st"] = template_copy_for_lang(display_lang)
+    # Titre personnalisé de la section « Autres » (AXE-1025) : casse naturelle + version capitales.
+    autres_titre = str(cv.get("autres_titre") or "").strip()[:AUTRES_TITRE_MAX]
+    if autres_titre:
+        ctx["st"] = {**ctx["st"], "other": autres_titre.upper(), "other_title": autres_titre}
     ctx["html_lang"] = ctx["st"]["html_lang"]
     base_doc = base_cv or {}
     titre_cv = _strip_h_f((cv.get("titre_professionnel") or "").strip())

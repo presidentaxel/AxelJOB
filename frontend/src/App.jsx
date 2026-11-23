@@ -42,7 +42,8 @@ import { buildAdaptedPdfFilename } from './lib/pdfExportFilename';
 import { getPdfSaveStartInDirectoryHandle } from './lib/pdfExportStartDirIdb';
 import { HiDocumentText, HiArrowDownTray, HiClipboardDocumentList, HiPencilSquare, HiCheck, HiSwatch, HiChevronDown, HiChevronUp, HiPlus, HiOutlinePaperClip } from 'react-icons/hi2';
 import { lazyWithChunkReload } from './lib/lazyChunkReload';
-import { APP_DEFAULT_ROUTE, APP_ROUTES, getViewFromPathname, isKnownAppPathname } from './lib/appRoutes';
+import { APP_DEFAULT_ROUTE, APP_ROUTES, accountRedirectFor, getViewFromPathname, isKnownAppPathname } from './lib/appRoutes';
+import AccountTabs from './components/AccountTabs.jsx';
 import {
   ADAPT_CONTEXT_MAX_FILES,
   adaptContextFileError,
@@ -489,7 +490,7 @@ const SUPPORT_TOPICS = [
     route: '/app/cv',
     selector: '.cv-chat-input',
     title: 'Adapter mon CV à une offre',
-    description: 'Colle l\'annonce dans « Adapter un CV », envoie. L\'IA adapte ton CV. Tu peux affiner par message ou modifier le texte à la main.',
+    description: 'Colle l\'annonce dans « Adapter mon CV », envoie. L\'IA adapte ton CV. Tu peux affiner par message ou modifier le texte à la main.',
     bubbleTitle: 'Colle une offre ici',
     bubbleContent: 'C\'est ici que tout commence. Colle la fiche de poste et envoie : l\'IA adapte ton CV. Tu pourras affiner par message ou modifier le texte à la main.',
     position: 'top',
@@ -1384,6 +1385,12 @@ export default function App() {
       }
     }
   }, [session, pathname, authLoading, navigate, location.search, location.state]);
+
+  /* AXE-1019 : /app/settings, /app/support et /app/compte → onglet de la page Compte. */
+  useEffect(() => {
+    const dest = accountRedirectFor(pathname);
+    if (dest) navigate(dest + location.search, { replace: true, state: location.state });
+  }, [pathname, navigate, location.search, location.state]);
 
   /* /app sans sous-chemin reconnu → CV (évite état incohérent URL / contenu) */
   useEffect(() => {
@@ -3706,13 +3713,13 @@ export default function App() {
           <header className="page-header">
             <div className="page-title-row">
               <div className="page-title-row-left">
-                <h1 className="page-title">Adapter un CV</h1>
+                <h1 className="page-title">Adapter mon CV</h1>
                 <button type="button" className="page-tour-help" onClick={handleRestartTour} title="Revoir le tutoriel" aria-label="Revoir le tutoriel">
                   ?
                 </button>
               </div>
-              <p className="page-subtitle" title="Colle une offre d'emploi, l'IA adapte ton CV. Affine par chat, puis exporte en PDF.">
-                Colle une offre d&apos;emploi, l&apos;IA adapte ton CV. Affine par chat, puis exporte en PDF.
+              <p className="page-subtitle" title="Colle une offre d'emploi : l'IA adapte ton CV à ce poste, puis tu l'exportes en PDF.">
+                Colle une offre d&apos;emploi : l&apos;IA adapte ton CV à ce poste, puis tu l&apos;exportes en PDF.
               </p>
               <div className="page-title-row-actions">
                 <Button
@@ -3775,7 +3782,18 @@ export default function App() {
               <div className="cv-chat-messages" role="log">
                 {chatMessages.length === 0 && (
                   <div className="cv-chat-placeholder">
-                    <p>{annonce.trim() ? "Demande à l'IA d'ajuster ton CV (ex. « Mets plus en valeur mon expérience en React »)." : "Colle l'annonce ou décris le poste. L'IA adaptera ton CV. Tu pourras affiner par message."}</p>
+                    {annonce.trim() ? (
+                      <p>Demande à l&apos;IA d&apos;ajuster ton CV (ex. « Mets plus en valeur mon expérience en React »).</p>
+                    ) : (
+                      <>
+                        <p className="cv-chat-placeholder-title">Adapte ton CV à une offre en 3 étapes</p>
+                        <ol className="cv-chat-steps">
+                          <li><strong>Colle l&apos;annonce</strong> (texte ou lien) dans le champ en bas, puis envoie.</li>
+                          <li><strong>L&apos;IA adapte ton CV</strong> à partir de ton profil. L&apos;aperçu s&apos;affiche à côté.</li>
+                          <li><strong>Affine par message</strong> si besoin, puis télécharge le PDF.</li>
+                        </ol>
+                      </>
+                    )}
                     {usage && usage.plan === 'free' && (
                       <p className="usage-hint">{usage.adaptations_used} / {usage.adaptations_limit} adaptations gratuites</p>
                     )}
@@ -4095,12 +4113,13 @@ export default function App() {
                   optionsPreviewLoading={false}
                   profileLayout={profileLayout}
                   onBetaUnavailable={() => {
-                    showError('Crée d’abord un design dans Profil → active le mode Beta, puis reviens choisir « Beta » ici.');
+                    showError('Crée d’abord un design dans Profil → active le nouvel éditeur, puis reviens choisir « Nouvel éditeur » ici.');
                   }}
-                  extraBarLeft={(
+                  barActions={(
                     <button
                       type="button"
                       className="tpl-btn-bar-extra"
+                      aria-label="Exporter en PDF"
                       onClick={downloadBaseCvPdf}
                       disabled={baseCvPdfLoading}
                       title="Télécharger ton CV de profil (sans adaptation) en PDF, avec le template et les options actuels"
@@ -4109,7 +4128,7 @@ export default function App() {
                       <span className="tpl-btn-bar-extra-icon" aria-hidden>
                         <HiArrowDownTray size={16} strokeWidth={2} />
                       </span>
-                      Exporter en PDF
+                      <span className="tpl-bar-btn-label">Exporter en PDF</span>
                     </button>
                   )}
                 />
@@ -4481,7 +4500,7 @@ export default function App() {
                 data-zone="banner"
                 data-level="secondary"
               >
-                Adapter un CV
+                Adapter mon CV
               </Button>
               <span>.</span>
             </div>
@@ -4966,7 +4985,7 @@ export default function App() {
             {usage && usage.adaptations_used === 0 && (
               <div className="zero-adapt-banner zero-adapt-banner--compact" role="status">
                 <span>Pour adapter ton CV à une offre, va sur </span>
-                <button type="button" className="zero-adapt-banner-link" onClick={() => navigate('/app/cv')}>Adapter un CV</button>
+                <button type="button" className="zero-adapt-banner-link" onClick={() => navigate('/app/cv')}>Adapter mon CV</button>
                 <span> et colle l’annonce.</span>
               </div>
             )}
@@ -4977,6 +4996,7 @@ export default function App() {
         </div>
 
         <div id="viewSettings" className={`view-panel app-page view-settings ${view === 'settings' ? 'active' : ''}`} style={{ display: view === 'settings' ? 'flex' : 'none' }} data-analytics-section="settings_page">
+          <AccountTabs />
           <header className="page-header">
             <div className="page-title-row">
               <h1 className="page-title">Paramètres</h1>
@@ -5001,6 +5021,7 @@ export default function App() {
         </div>
 
         <div id="viewSupport" className={`view-panel app-page view-support ${view === 'support' ? 'active' : ''}`} style={{ display: view === 'support' ? 'flex' : 'none' }} data-analytics-section="support_page">
+          <AccountTabs />
           <div className="support-hero">
             <h1 className="support-hero-title">Support</h1>
             <p className="support-hero-subtitle">
@@ -5202,7 +5223,7 @@ export default function App() {
             <div className="linkedin-sync-modal" onClick={(e) => e.stopPropagation()}>
               <h3 id="first-offer-nudge-title">Colle une première offre</h3>
               <p className="profile-subtitle" style={{ marginTop: 0 }}>
-                C’est l’étape qui adapte ton CV à un poste réel. Va sur « Adapter un CV », colle le texte de l’annonce (ou le lien) dans le champ en bas, puis envoie.
+                C’est l’étape qui adapte ton CV à un poste réel. Va sur « Adapter mon CV », colle le texte de l’annonce (ou le lien) dans le champ en bas, puis envoie.
               </p>
               <div className="linkedin-sync-actions" style={{ marginTop: '1rem' }}>
                 <Button
