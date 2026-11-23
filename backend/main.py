@@ -382,11 +382,6 @@ class AdaptLocalizeBody(BaseModel):
     preview_seq: int | None = None
 
 
-class AdaptPlanExplainBody(BaseModel):
-    plan_id: str | None = None
-    selected_step_ids: list[str] | None = None
-
-
 class AdaptPlanUpdateBody(BaseModel):
     selected_step_ids: list[str] | None = None
 
@@ -395,11 +390,6 @@ class AdaptRefineBody(BaseModel):
     cv: dict
     instruction: str = ""
     documents_context: str = ""
-
-
-class AdaptFitTextBody(BaseModel):
-    text: str = ""
-    max_chars: int = 80
 
 
 class RenderHtmlBody(BaseModel):
@@ -3712,47 +3702,6 @@ def api_adapt_plan_patch(request: Request, plan_id: str, body: AdaptPlanUpdateBo
     return {"plan_id": pid, "todo": updated_todo}
 
 
-@app.post("/api/adapt-plan-explain")
-def api_adapt_plan_explain(request: Request, body: AdaptPlanExplainBody):
-    user_id = _get_user_id(request)
-    check_rate_limit(user_id, rate_limit_max_adapt())
-    selected = _normalize_selected_step_ids(body.selected_step_ids)
-    steps_source = [dict(s) for s in ADAPT_TODO_DEFAULT_STEPS]
-    if not selected and (body.plan_id or "").strip():
-        payload = _get_adapt_plan((body.plan_id or "").strip(), user_id)
-        todo = payload.get("todo") if isinstance(payload.get("todo"), list) else []
-        if todo:
-            steps_source = [
-                {
-                    "id": str(step.get("id") or ""),
-                    "title": str(step.get("title") or ""),
-                    "reason": str(step.get("reason") or ""),
-                    "enabled": bool(step.get("enabled")),
-                }
-                for step in todo
-                if isinstance(step, dict) and str(step.get("id") or "").strip()
-            ]
-        for step in todo:
-            if isinstance(step, dict) and bool(step.get("enabled")):
-                sid = str(step.get("id") or "").strip()
-                if sid:
-                    selected.add(sid)
-    details = []
-    for step in steps_source:
-        if step["id"] in selected:
-            details.append({"id": step["id"], "title": step["title"], "reason": step["reason"]})
-    if not details:
-        details = [
-            {
-                "id": "none",
-                "title": "Aucune étape active",
-                "reason": "Active au moins une étape pour lancer l'adaptation.",
-            }
-        ]
-    summary = "Plan validé. On exécute uniquement les étapes actives, dans l'ordre, sans modifier les autres sections."
-    return {"summary": summary, "details": details}
-
-
 def _cv_working_from_lang_meta(cv_base: dict, lang_meta: dict, user_id: str | None) -> dict:
     """CV dans la langue choisie, sans adaptation ATS. Police / template inchangés."""
     from backend.services.cv_language import (
@@ -4090,47 +4039,6 @@ def _stream_render_adapt_final_preview(request: Request, body: AdaptRunBody, dat
         template_options=topt,
         selection_a4=data.get("selection_a4"),
     )
-
-
-@app.post("/api/adapt-run")
-def api_adapt_run(request: Request, body: AdaptRunBody):
-    prep = _adapt_run_prepare(request, body)
-    from backend.services.adapter import adapter_cv_by_selected_steps
-
-    try:
-        tweaks = adapter_cv_by_selected_steps(
-            prep["cv_working"],
-            prep["offre"],
-            prep["rapport"],
-            prep["selected_steps"],
-            prep["user_id"],
-            operation="adapt",
-            output_policy=prep.get("output_policy"),
-        )
-    except GeminiQuotaExceeded:
-        raise HTTPException(
-            status_code=429, detail="Quota temporairement atteint. Réessaie plus tard."
-        )
-    except Exception as e:
-        logger.exception(e)
-        _track_analytics(
-            request, event_log.EVENT_ADAPTATION_FAILED, prep["user_id"], {"error": str(e)}
-        )
-        raise HTTPException(status_code=500, detail="Erreur lors de l'adaptation. Réessaie.")
-    cv_working = prep.get("cv_working") or prep["cv_base"]
-    if "rewrite_resume" not in prep["selected_steps"]:
-        tweaks["resume"] = cv_working.get("resume", "")
-    if "rewrite_experiences" not in prep["selected_steps"]:
-        tweaks["experiences"] = _keep_original_experiences_tweaks(cv_working)
-    if "optimize_ats" not in prep["selected_steps"]:
-        tweaks["mots_cles_cache"] = cv_working.get("mots_cles_cache", "")
-    merged = _apply_tweaks(
-        cv_working,
-        tweaks,
-        output_policy=prep.get("output_policy"),
-        offre=prep["offre"],
-    )
-    return _adapt_run_finalize_result(request, body, prep, merged, tweaks)
 
 
 @app.post("/api/adapt-run-stream")
@@ -4534,23 +4442,6 @@ def api_adapt(request: Request, body: AdaptBody):
         "export_hints": export_hints,
         **lang_meta,
     }
-
-
-@app.post("/api/adapt-fit-text")
-def api_adapt_fit_text(request: Request, body: AdaptFitTextBody):
-    """Raccourcit un passage qui déborderait sur la ligne suivante du canvas."""
-    user_id = _get_user_id(request)
-    check_rate_limit(user_id, rate_limit_max_adapt())
-    text = (body.text or "").strip()
-    if not text:
-        raise HTTPException(status_code=400, detail="Texte requis.")
-    try:
-        check_user_input_for_injection(description=text)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    from backend.services.adapter import shorten_text_to_fit
-
-    return shorten_text_to_fit(text, body.max_chars, user_id=user_id)
 
 
 @app.post("/api/adapt-refine")
