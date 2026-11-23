@@ -457,6 +457,24 @@ button.ats-score-trigger {
   padding: 0.5rem 0;
 }
 
+.cv-chat-placeholder-title {
+  margin: 0 0 var(--ds-space-sm);
+  color: var(--ds-color-text-default);
+  font-weight: var(--ds-font-weight-semibold);
+}
+
+.cv-chat-steps {
+  margin: 0;
+  padding-left: 1.25rem;
+  display: grid;
+  gap: var(--ds-space-xs);
+}
+
+.cv-chat-steps strong {
+  color: var(--ds-color-text-default);
+  font-weight: var(--ds-font-weight-semibold);
+}
+
 .cv-chat-placeholder .usage-hint {
   margin-top: 0.5rem;
   font-size: 0.8125rem;

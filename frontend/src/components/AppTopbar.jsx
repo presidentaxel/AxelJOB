@@ -50,7 +50,7 @@ export default function AppTopbar({
       <nav className="topbar-nav">
         <NavLink to="/app/cv" className={({ isActive }) => `topbar-link ${isActive ? 'active' : ''}`} {...analyticsAttrs('app-nav-link-cv', 'nav', 'tertiary', 'nav')}>
           <HiDocumentText size={18} />
-          <span>Adapter CV</span>
+          <span>Adapter mon CV</span>
         </NavLink>
         <NavLink to="/app/postule" className={({ isActive }) => `topbar-link ${isActive ? 'active' : ''}`} {...analyticsAttrs('app-nav-link-candidatures', 'nav', 'tertiary', 'nav')}>
           <HiClipboardDocumentList size={18} />
